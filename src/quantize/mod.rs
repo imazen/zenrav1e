@@ -318,16 +318,7 @@ impl QuantizationContext {
     // zero everything else.
     // This threshold is such that `abs(coeff) < deadzone` implies:
     // (abs(coeff << log_tx_scale) + ac_offset_eob) / ac_quant == 0
-    //
-    // For QM, use the minimum weight (steepest quantization) for deadzone.
-    // This is conservative — keeps more coefficients alive for QM evaluation.
-    let effective_ac_quant = match qm {
-      Some(qm_tbl) => {
-        let min_wt = qm_tbl.iter().skip(1).copied().min().unwrap_or(32) as u32;
-        ((self.ac_quant.get() as u32 * min_wt + 16) >> 5) as usize
-      }
-      None => self.ac_quant.get() as usize,
-    };
+    let effective_ac_quant = self.ac_quant.get() as usize;
     let deadzone = T::cast_from(
       (effective_ac_quant
         - (self.ac_offset_eob as usize).min(effective_ac_quant))
@@ -409,15 +400,27 @@ impl QuantizationContext {
     // Rather than zeroing the tail in scan order, assume that qcoeffs is
     // pre-filled with zeros.
 
-    // Check the eob is correct
-    debug_assert_eq!(
-      usize::from(eob),
-      scan
+    // When QM is enabled, per-position weights can cause the actual eob to
+    // differ from the deadzone-predicted eob. Recompute from quantized data.
+    let eob = if qm.is_some() {
+      let actual = scan
         .iter()
         .rposition(|&i| qcoeffs[i as usize] != T::cast_from(0))
         .map(|n| n + 1)
-        .unwrap_or(0)
-    );
+        .unwrap_or(0) as u16;
+      actual
+    } else {
+      // Without QM the deadzone prediction is exact
+      debug_assert_eq!(
+        usize::from(eob),
+        scan
+          .iter()
+          .rposition(|&i| qcoeffs[i as usize] != T::cast_from(0))
+          .map(|n| n + 1)
+          .unwrap_or(0)
+      );
+      eob
+    };
 
     eob
   }
