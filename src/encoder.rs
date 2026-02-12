@@ -1710,8 +1710,10 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   };
   let eob = ts.qc.quantize_with_qm(coeffs, qcoeffs, tx_size, tx_type, qm);
   let eob = if fi.config.enable_trellis && eob > 1 {
+    let plane_type = if p == 0 { 0 } else { 1 };
     crate::quantize::trellis::optimize(
       qcoeffs, coeffs, &ts.qc, tx_size, tx_type, fi.lambda, qm, eob,
+      &*cw.fc, plane_type,
     )
   } else {
     eob

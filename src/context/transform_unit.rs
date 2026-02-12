@@ -843,7 +843,7 @@ impl ContextWriter<'_> {
     mag as usize
   }
 
-  fn get_nz_map_ctx_from_stats(
+  pub(crate) fn get_nz_map_ctx_from_stats(
     stats: usize,
     coeff_idx: usize, // raster order
     bhl: usize,
@@ -882,7 +882,7 @@ impl ContextWriter<'_> {
       }
   }
 
-  fn get_nz_map_ctx(
+  pub(crate) fn get_nz_map_ctx(
     levels: &[u8], coeff_idx: usize, bhl: usize, area: usize, scan_idx: usize,
     is_eob: bool, tx_size: TxSize, tx_class: TxClass,
   ) -> usize {

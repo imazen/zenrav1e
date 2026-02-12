@@ -13,16 +13,27 @@
 //! 2. **Level round-down**: Reduces interior coefficient levels by 1 where
 //!    the rate-distortion trade-off is favorable.
 //!
-//! Uses rav1e's RDO lambda and an approximate AV1 rate model.
-//! Purely encoder-side — produces valid AV1 bitstream.
+//! Uses rav1e's RDO lambda and CDF-based rate estimation from the actual
+//! AV1 entropy coder state. Purely encoder-side — produces valid AV1 bitstream.
 
+use crate::context::{
+  av1_get_coded_tx_size, tx_type_to_class, CDFContext, ContextWriter, TxClass,
+  TxClass::*, BR_CDF_SIZE, COEFF_BASE_RANGE, NUM_BASE_LEVELS, TX_PAD_2D,
+  TX_PAD_HOR, TX_PAD_TOP,
+};
 use crate::quantize::qm_tables::AOM_QM_BITS;
 use crate::quantize::QuantizationContext;
 use crate::scan_order::av1_scan_orders;
 use crate::transform::{TxSize, TxType};
 use crate::util::*;
 
-/// Optimize quantized coefficients using rate-distortion optimization.
+/// EC_PROB_SHIFT from ec.rs — lower 6 bits of CDF entries hold adaptation count.
+const EC_PROB_SHIFT: u32 = 6;
+
+/// CDF probability total after shifting: 32768 >> 6 = 512.
+const CDF_TOTAL: u32 = 32768 >> EC_PROB_SHIFT;
+
+/// Optimize quantized coefficients using CDF-based rate-distortion optimization.
 ///
 /// `qcoeffs`: quantized coefficients (modified in-place)
 /// `coeffs`: original transform-domain coefficients (pre-quantization)
@@ -32,11 +43,14 @@ use crate::util::*;
 /// `lambda`: Lagrangian multiplier from RDO
 /// `qm`: optional quantization matrix weights
 /// `eob`: current end-of-block position (1-based, in scan order)
+/// `fc`: CDF context (frozen snapshot — not updated during trellis)
+/// `plane_type`: 0 for luma, 1 for chroma
 ///
 /// Returns the new eob after optimization.
 pub fn optimize<T: Coefficient>(
   qcoeffs: &mut [T], coeffs: &[T], qc: &QuantizationContext, tx_size: TxSize,
   tx_type: TxType, lambda: f64, qm: Option<&[u8]>, eob: u16,
+  fc: &CDFContext, plane_type: usize,
 ) -> u16 {
   let scan = &av1_scan_orders[tx_size as usize][tx_type as usize].scan;
   let n = eob as usize;
@@ -48,155 +62,234 @@ pub fn optimize<T: Coefficient>(
   let log_tx_scale = crate::quantize::get_log_tx_scale(tx_size);
   let ac_quant = qc.ac_quant() as u32;
 
-  // Lambda calibration for trellis:
-  //
-  // rav1e's RDO: cost = ScaledDist + lambda * rate_bits
-  //   where ScaledDist = raw_sse >> tx_dist_scale_bits * bias * dist_scale
-  //   and tx_dist_scale_bits = 2*(3 - log_tx_scale)
-  //
-  // For AVIF (no temporal RDO), bias ≈ 1.0 and dist_scale ≈ 1.0.
-  // So ScaledDist ≈ raw_sse >> (6 - 2*lts) per coefficient.
-  //
-  // Our trellis distortion: sq_err returns (shifted_err²) >> (2*lts),
-  // which equals raw_err² (the lts shifts cancel). This is 2^(6-2*lts)
-  // times larger than rav1e's ScaledDist per coefficient.
-  //
-  // To match rav1e's R-D trade-off:
-  //   our_dist + lambda_trellis * rate = 0
-  //   ⟺ rav1e_dist * scale + lambda_trellis * rate = 0
-  //   ⟺ rav1e_dist + (lambda_trellis/scale) * rate = 0
-  //   Setting lambda_trellis/scale = lambda gives:
-  //   lambda_trellis = lambda * scale = lambda * 2^(6-2*lts)
+  // Lambda calibration: our distortion is 2^(6-2*lts) times rav1e's ScaledDist.
+  // See previous comments in git history for full derivation.
   let tx_dist_scale = (1u64 << (6 - 2 * log_tx_scale)) as f64;
   let lambda_trellis = lambda * tx_dist_scale;
 
-  // Phase 1: EOB optimization via backward scan.
-  // At each position, compute the cost of setting the new EOB here
-  // (zeroing everything from this position to the current EOB).
-  // The cost includes distortion increase from zeroing minus rate savings.
-  //
-  // Key: when we shrink EOB, we save not just the coefficient coding cost
-  // but also the EOB signaling overhead (which uses a variable-length code).
-  //
-  // AV1 EOB coding: hierarchical prefix code where cost ≈ 2*log2(eob) bits.
-  // So shrinking EOB from 47 to 30 saves roughly 2*(log2(47)-log2(30)) ≈ 1.3 bits.
+  let tx_class = tx_type_to_class[tx_type as usize];
+  let txs_ctx = ContextWriter::get_txsize_entropy_ctx(tx_size);
+  let bhl = ContextWriter::get_txb_bhl(tx_size);
+  let coded_size = av1_get_coded_tx_size(tx_size);
+  let area = coded_size.area();
+  let height = coded_size.height();
+  let stride = height + TX_PAD_HOR;
 
-  let eob_bits_current = eob_coding_cost(n);
+  // Build padded levels buffer from current quantized coefficients.
+  // Same layout as txb_init_levels: column-major with TX_PAD_HOR padding.
+  let mut levels_buf = [0u8; TX_PAD_2D];
+  let levels = &mut levels_buf[TX_PAD_TOP * stride..];
+  init_levels(qcoeffs, height, levels, stride);
 
-  let mut best_new_eob = n;
-  let mut best_net_cost = 0.0f64; // relative to keeping everything
+  // Pre-compute contexts for each scan position.
+  // sig_ctx: non-EOB significance context (0..25 for 2D)
+  // eob_ctx: EOB context (0..3, based on scan position quartile)
+  // br_ctx:  base range context (0..20)
+  let mut sig_ctx = [0usize; 32 * 32];
+  let mut eob_ctx_arr = [0usize; 32 * 32];
+  let mut br_ctx_arr = [0usize; 32 * 32];
 
-  // Accumulated distortion from zeroing trailing coefficients
-  let mut dist_delta_sum = 0.0f64;
-  // Accumulated rate from coding the trailing coefficients (saved if zeroed)
-  let mut rate_sum = 0.0f64;
-
-  // Track context for rate estimation
-  // Build the context state at each position in a forward pass first
-  let mut states = vec![0u8; n + 1]; // states[i] = state BEFORE position i
-  states[0] = 2; // assume large-level context before DC
   for i in 0..n {
-    let scan_pos = scan[i] as usize;
-    let level = i32::cast_from(qcoeffs[scan_pos]).unsigned_abs();
-    states[i + 1] = match level {
-      0 => 0,
-      1 => 1,
-      _ => 2,
-    };
+    let pos = scan[i] as usize;
+    sig_ctx[i] = ContextWriter::get_nz_map_ctx(
+      levels, pos, bhl, area, i, false, tx_size, tx_class,
+    );
+    eob_ctx_arr[i] = ContextWriter::get_nz_map_ctx(
+      levels, pos, bhl, area, i, true, tx_size, tx_class,
+    );
+    br_ctx_arr[i] = ContextWriter::get_br_ctx(levels, pos, bhl, tx_class);
   }
 
+  // Current EOB position rate.
+  let eob_rate_current =
+    eob_position_rate(n as u16, tx_size, tx_class, fc, txs_ctx, plane_type);
+
+  // Phase 1: EOB shrinkage via backward scan.
+  //
+  // For each candidate new_eob = i (from n-1 down to 1):
+  //   - Accumulate distortion from zeroing positions i..n-1
+  //   - Accumulate rate savings from not coding those coefficients
+  //   - Account for EOB position coding change
+  //   - Account for context switch: position i-1 changes from non-EOB to EOB
+  let mut best_new_eob = n;
+  let mut best_net_cost = 0.0f64;
+  let mut rate_accum = 0.0f64;
+  let mut dist_accum = 0.0f64;
+
   for i in (1..n).rev() {
-    let scan_pos = scan[i] as usize;
-    let orig_level = i32::cast_from(qcoeffs[scan_pos]).unsigned_abs();
+    let pos = scan[i] as usize;
+    let level = i32::cast_from(qcoeffs[pos]).unsigned_abs();
 
-    if orig_level == 0 {
-      continue; // already zero, no savings from "zeroing" it
-    }
-
-    // Effective quantizer for this position
-    let eff_quant = effective_ac_quant(ac_quant, scan_pos, qm);
-    if eff_quant == 0 {
+    if level == 0 {
       continue;
     }
 
-    // Distortion delta from zeroing
-    let coeff_raw = i32::cast_from(coeffs[scan_pos]);
-    let coeff = (coeff_raw as i64) << log_tx_scale;
-    let dist_keep = sq_err(coeff, orig_level, eff_quant, log_tx_scale);
-    let dist_zero = sq_err(coeff, 0, eff_quant, log_tx_scale);
-    let dd = (dist_zero - dist_keep) as f64;
+    // Rate of this coefficient in its current role (EOB or non-EOB).
+    let current_rate = if i == n - 1 {
+      coeff_rate(
+        level,
+        eob_ctx_arr[i],
+        br_ctx_arr[i],
+        true,
+        fc,
+        txs_ctx,
+        plane_type,
+      )
+    } else {
+      coeff_rate(
+        level,
+        sig_ctx[i],
+        br_ctx_arr[i],
+        false,
+        fc,
+        txs_ctx,
+        plane_type,
+      )
+    };
+    rate_accum += current_rate;
 
-    // Rate saved from not coding this coefficient
-    let prev_s = states[i] as usize;
-    let coeff_rate = coeff_coding_cost(prev_s, orig_level);
+    // Distortion increase from zeroing this coefficient.
+    let eff_quant = effective_ac_quant(ac_quant, pos, qm);
+    if eff_quant > 0 {
+      let coeff_raw = i32::cast_from(coeffs[pos]);
+      let coeff = (coeff_raw as i64) << log_tx_scale;
+      let dist_keep = sq_err(coeff, level, eff_quant, log_tx_scale);
+      let dist_zero = sq_err(coeff, 0, eff_quant, log_tx_scale);
+      dist_accum += (dist_zero - dist_keep) as f64;
+    }
 
-    dist_delta_sum += dd;
-    rate_sum += coeff_rate;
+    // Can only set new_eob = i if position i-1 is non-zero (EOB must be non-zero).
+    let prev_pos = scan[i - 1] as usize;
+    let prev_level = i32::cast_from(qcoeffs[prev_pos]).unsigned_abs();
+    if prev_level == 0 {
+      continue;
+    }
 
-    // EOB coding cost if we moved EOB to position i
-    let eob_bits_new = eob_coding_cost(i);
-    let eob_rate_saved = eob_bits_current - eob_bits_new;
+    // Context switch cost: position i-1 changes from non-EOB to EOB role.
+    let non_eob_rate_prev = coeff_rate(
+      prev_level,
+      sig_ctx[i - 1],
+      br_ctx_arr[i - 1],
+      false,
+      fc,
+      txs_ctx,
+      plane_type,
+    );
+    let eob_rate_prev = coeff_rate(
+      prev_level,
+      eob_ctx_arr[i - 1],
+      br_ctx_arr[i - 1],
+      true,
+      fc,
+      txs_ctx,
+      plane_type,
+    );
+    // Positive = EOB context costs more; negative = EOB context is cheaper.
+    let switch_cost = eob_rate_prev - non_eob_rate_prev;
 
-    // Net cost of zeroing positions [i..n):
-    // positive = bad (distortion increase outweighs rate savings)
-    // negative = good (rate savings outweigh distortion increase)
-    let net = dist_delta_sum - lambda_trellis * (rate_sum + eob_rate_saved);
+    // EOB position coding change.
+    let eob_rate_new =
+      eob_position_rate(i as u16, tx_size, tx_class, fc, txs_ctx, plane_type);
+    let eob_pos_saved = eob_rate_current - eob_rate_new;
 
+    // Total rate saved by moving EOB from n to i.
+    let rate_saved = rate_accum + eob_pos_saved - switch_cost;
+
+    // Net cost: positive = distortion increase outweighs savings.
+    let net = dist_accum - lambda_trellis * rate_saved;
     if net < best_net_cost {
       best_net_cost = net;
       best_new_eob = i;
     }
   }
 
-  // Apply EOB shrinkage
+  // Apply EOB shrinkage.
   if best_new_eob < n {
     for i in best_new_eob..n {
-      let scan_pos = scan[i] as usize;
-      qcoeffs[scan_pos] = T::cast_from(0);
+      let pos = scan[i] as usize;
+      qcoeffs[pos] = T::cast_from(0);
     }
   }
 
-  // Phase 2: Level round-down for interior coefficients [1..best_new_eob)
-  // For each coefficient at level >= 2, check if reducing by 1 is cheaper.
-  for i in 1..best_new_eob {
-    let scan_pos = scan[i] as usize;
-    let coeff_raw = i32::cast_from(coeffs[scan_pos]);
-    let orig_level = i32::cast_from(qcoeffs[scan_pos]).unsigned_abs();
+  // Phase 2: Level round-down for interior coefficients.
+  //
+  // Rebuild levels and recompute contexts after EOB shrinkage,
+  // then check each coefficient >= 2 for beneficial round-down.
+  if best_new_eob > 1 {
+    // Rebuild levels from modified qcoeffs.
+    levels_buf = [0u8; TX_PAD_2D];
+    let levels = &mut levels_buf[TX_PAD_TOP * stride..];
+    init_levels(qcoeffs, height, levels, stride);
 
-    if orig_level < 2 {
-      continue; // don't round level-1 to 0 (too aggressive for interior)
+    // Recompute contexts for the new block.
+    for i in 0..best_new_eob {
+      let pos = scan[i] as usize;
+      let is_eob = i == best_new_eob - 1;
+      if is_eob {
+        eob_ctx_arr[i] = ContextWriter::get_nz_map_ctx(
+          levels, pos, bhl, area, i, true, tx_size, tx_class,
+        );
+      } else {
+        sig_ctx[i] = ContextWriter::get_nz_map_ctx(
+          levels, pos, bhl, area, i, false, tx_size, tx_class,
+        );
+      }
+      br_ctx_arr[i] = ContextWriter::get_br_ctx(levels, pos, bhl, tx_class);
     }
 
-    let eff_quant = effective_ac_quant(ac_quant, scan_pos, qm);
-    if eff_quant == 0 {
-      continue;
-    }
+    for i in 1..best_new_eob {
+      let pos = scan[i] as usize;
+      let coeff_raw = i32::cast_from(coeffs[pos]);
+      let orig_level = i32::cast_from(qcoeffs[pos]).unsigned_abs();
 
-    let coeff = (coeff_raw as i64) << log_tx_scale;
-    let new_level = orig_level - 1;
+      if orig_level < 2 {
+        continue;
+      }
 
-    let dist_orig = sq_err(coeff, orig_level, eff_quant, log_tx_scale);
-    let dist_new = sq_err(coeff, new_level, eff_quant, log_tx_scale);
-    let dd = (dist_new - dist_orig) as f64; // positive when near higher level
+      let eff_quant = effective_ac_quant(ac_quant, pos, qm);
+      if eff_quant == 0 {
+        continue;
+      }
 
-    let prev_s = states[i] as usize;
-    let rate_orig = coeff_coding_cost(prev_s, orig_level);
-    let rate_new = coeff_coding_cost(prev_s, new_level);
-    let rate_saved = rate_orig - rate_new;
+      let coeff = (coeff_raw as i64) << log_tx_scale;
+      let new_level = orig_level - 1;
 
-    if rate_saved > 0.0 && dd < lambda_trellis * rate_saved {
-      let sign = if coeff_raw < 0 { -1i32 } else { 1 };
-      qcoeffs[scan_pos] = T::cast_from(sign * new_level as i32);
-      // Update state for next coefficient
-      states[i + 1] = match new_level {
-        0 => 0,
-        1 => 1,
-        _ => 2,
-      };
+      let dist_orig = sq_err(coeff, orig_level, eff_quant, log_tx_scale);
+      let dist_new = sq_err(coeff, new_level, eff_quant, log_tx_scale);
+      let dd = (dist_new - dist_orig) as f64;
+
+      let is_eob_coeff = i == best_new_eob - 1;
+      let ctx =
+        if is_eob_coeff { eob_ctx_arr[i] } else { sig_ctx[i] };
+
+      let rate_orig = coeff_rate(
+        orig_level,
+        ctx,
+        br_ctx_arr[i],
+        is_eob_coeff,
+        fc,
+        txs_ctx,
+        plane_type,
+      );
+      let rate_new = coeff_rate(
+        new_level,
+        ctx,
+        br_ctx_arr[i],
+        is_eob_coeff,
+        fc,
+        txs_ctx,
+        plane_type,
+      );
+      let rate_saved = rate_orig - rate_new;
+
+      if rate_saved > 0.0 && dd < lambda_trellis * rate_saved {
+        let sign = if coeff_raw < 0 { -1i32 } else { 1 };
+        qcoeffs[pos] = T::cast_from(sign * new_level as i32);
+      }
     }
   }
 
-  // Final EOB: find last non-zero
+  // Final EOB: find last non-zero in scan order.
   scan[..n]
     .iter()
     .rposition(|&pos| qcoeffs[pos as usize] != T::cast_from(0))
@@ -204,9 +297,170 @@ pub fn optimize<T: Coefficient>(
     .unwrap_or(0) as u16
 }
 
-/// Effective AC quantizer for a given scan position, accounting for QM.
+// ---------------------------------------------------------------------------
+// Rate estimation helpers
+// ---------------------------------------------------------------------------
+
+/// Approximate rate (in bits) for coding symbol `s` given a CDF table.
+///
+/// Uses the information-theoretic cost: -log2(p(s)) where probability is
+/// derived from the CDF entries. This matches the actual entropy coder cost
+/// to within ~0.1 bits on average (the encoder state `rng` introduces some
+/// variation, but this averages out over a block).
 #[inline]
-fn effective_ac_quant(base_quant: u32, scan_pos: usize, qm: Option<&[u8]>) -> u32 {
+fn cdf_rate(s: u32, cdf: &[u16]) -> f64 {
+  let fh = (cdf[s as usize] >> EC_PROB_SHIFT) as u32;
+  let fl = if s > 0 {
+    (cdf[(s - 1) as usize] >> EC_PROB_SHIFT) as u32
+  } else {
+    CDF_TOTAL
+  };
+  let range = fl.saturating_sub(fh).max(1);
+  // -log2(range / CDF_TOTAL) = log2(CDF_TOTAL / range)
+  (CDF_TOTAL as f64 / range as f64).log2()
+}
+
+/// Rate (in bits) for coding one coefficient at a given level.
+///
+/// Includes: base level CDF + sign bit + base range coding + Golomb overflow.
+/// Uses the actual CDF tables from the entropy coder state.
+#[inline]
+fn coeff_rate(
+  level: u32, ctx: usize, br_ctx: usize, is_eob: bool, fc: &CDFContext,
+  txs_ctx: usize, plane_type: usize,
+) -> f64 {
+  let mut rate = 0.0;
+
+  // Base level coding (significance).
+  if is_eob {
+    // EOB coefficient: symbol = min(level, 3) - 1, 3 symbols (0,1,2).
+    let sym = level.min(3) - 1;
+    rate +=
+      cdf_rate(sym, &fc.coeff_base_eob_cdf[txs_ctx][plane_type][ctx]);
+  } else {
+    // Non-EOB: symbol = min(level, 3), 4 symbols (0,1,2,3).
+    let sym = level.min(3);
+    rate += cdf_rate(sym, &fc.coeff_base_cdf[txs_ctx][plane_type][ctx]);
+  }
+
+  // Sign bit (AC signs are raw bits; DC uses CDF but ~1 bit either way).
+  if level > 0 {
+    rate += 1.0;
+  }
+
+  // Base range coding for levels above NUM_BASE_LEVELS (2).
+  if level > NUM_BASE_LEVELS as u32 {
+    let base_range = level - 1 - NUM_BASE_LEVELS as u32;
+    let br_cdf = &fc.coeff_br_cdf
+      [txs_ctx.min(TxSize::TX_32X32 as usize)][plane_type][br_ctx];
+    let mut idx = 0u32;
+
+    loop {
+      if idx >= COEFF_BASE_RANGE as u32 {
+        break;
+      }
+      let k = (base_range - idx).min(BR_CDF_SIZE as u32 - 1);
+      rate += cdf_rate(k, br_cdf);
+      if k < BR_CDF_SIZE as u32 - 1 {
+        break;
+      }
+      idx += BR_CDF_SIZE as u32 - 1;
+    }
+
+    // Golomb coding for excess beyond COEFF_BASE_RANGE.
+    if base_range >= COEFF_BASE_RANGE as u32 {
+      let golomb_val = base_range - COEFF_BASE_RANGE as u32;
+      rate += golomb_cost(golomb_val);
+    }
+  }
+
+  rate
+}
+
+/// Rate (in bits) for coding an EOB position.
+///
+/// AV1 codes EOB as: eob_pt (from size-specific CDF) + optional eob_extra
+/// (CDF for first bit, raw for remaining bits).
+#[inline]
+fn eob_position_rate(
+  eob: u16, tx_size: TxSize, tx_class: TxClass, fc: &CDFContext,
+  txs_ctx: usize, plane_type: usize,
+) -> f64 {
+  use crate::context::k_eob_offset_bits;
+
+  let (eob_pt, eob_extra) = ContextWriter::get_eob_pos_token(eob);
+  let eob_multi_size = tx_size.area_log2() - 4;
+  let eob_multi_ctx = if tx_class != TX_CLASS_2D { 1 } else { 0 };
+
+  let eob_sym = eob_pt - 1;
+  let mut rate = match eob_multi_size {
+    0 => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf16[plane_type][eob_multi_ctx])
+    }
+    1 => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf32[plane_type][eob_multi_ctx])
+    }
+    2 => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf64[plane_type][eob_multi_ctx])
+    }
+    3 => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf128[plane_type][eob_multi_ctx])
+    }
+    4 => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf256[plane_type][eob_multi_ctx])
+    }
+    5 => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf512[plane_type][eob_multi_ctx])
+    }
+    _ => {
+      cdf_rate(eob_sym, &fc.eob_flag_cdf1024[plane_type][eob_multi_ctx])
+    }
+  };
+
+  // Extra bits for EOB offset within the group.
+  let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
+  if eob_offset_bits > 0 {
+    // First extra bit via CDF.
+    let eob_shift = eob_offset_bits - 1;
+    let bit = ((eob_extra >> eob_shift) & 1) as u32;
+    rate += cdf_rate(
+      bit,
+      &fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize],
+    );
+    // Remaining bits are raw (1 bit each).
+    rate += (eob_offset_bits - 1) as f64;
+  }
+
+  rate
+}
+
+/// Cost (in bits) of Golomb coding a value.
+#[inline]
+fn golomb_cost(val: u32) -> f64 {
+  let x = val + 1;
+  let length = 32 - x.leading_zeros(); // bit_length
+  (2 * length - 1) as f64
+}
+
+/// Build padded levels buffer from quantized coefficients.
+/// Same layout as `txb_init_levels`: column-major with TX_PAD_HOR padding.
+fn init_levels<T: Coefficient>(
+  qcoeffs: &[T], height: usize, levels: &mut [u8], stride: usize,
+) {
+  for (col_coeffs, col_levels) in
+    qcoeffs.chunks(height).zip(levels.chunks_mut(stride))
+  {
+    for (coeff, level) in col_coeffs.iter().zip(col_levels.iter_mut()) {
+      *level = coeff.abs().min(T::cast_from(127)).as_();
+    }
+  }
+}
+
+/// Effective AC quantizer for a given coefficient position, accounting for QM.
+#[inline]
+fn effective_ac_quant(
+  base_quant: u32, scan_pos: usize, qm: Option<&[u8]>,
+) -> u32 {
   match qm {
     Some(qm_tbl) if scan_pos < qm_tbl.len() => {
       let wt = qm_tbl[scan_pos] as u32;
@@ -217,74 +471,13 @@ fn effective_ac_quant(base_quant: u32, scan_pos: usize, qm: Option<&[u8]>) -> u3
 }
 
 /// Squared error between original coefficient and reconstruction.
-/// `coeff_shifted`: coeff << log_tx_scale, `level`: quantized abs level.
-/// Returns distortion in unshifted squared-error units.
 #[inline]
-fn sq_err(coeff_shifted: i64, level: u32, quant: u32, log_tx_scale: usize) -> i64 {
+fn sq_err(
+  coeff_shifted: i64, level: u32, quant: u32, log_tx_scale: usize,
+) -> i64 {
   let recon = level as i64 * quant as i64;
   let err = coeff_shifted.abs() - recon;
   (err * err) >> (2 * log_tx_scale)
-}
-
-/// Approximate rate (in fractional bits) for coding a coefficient at `level`
-/// given the previous coefficient's level bin (`prev_state`).
-///
-/// Based on typical AV1 coefficient coding costs:
-/// - 0 → ~0.1 bits in zero context, ~0.7 bits in nonzero context
-/// - 1 → ~1.25 bits in zero context, ~0.55 bits in small context
-/// - >1 → base ~1.5 bits + ~0.19 bits per additional level
-#[inline]
-fn coeff_coding_cost(prev_state: usize, level: u32) -> f64 {
-  // Base costs (in bits) for each state × level_bin combination
-  const COSTS: [[f64; 4]; 3] = [
-    // state 0 (prev=0): [0, 1, 2, >2]
-    [0.11, 1.25, 1.50, 1.75],
-    // state 1 (prev=1): [0, 1, 2, >2]
-    [0.70, 0.55, 1.10, 1.50],
-    // state 2 (prev>=2): [0, 1, 2, >2]
-    [1.02, 0.70, 0.62, 0.86],
-  ];
-
-  let bin = (level as usize).min(3);
-  let mut rate = COSTS[prev_state][bin];
-
-  if level > 0 {
-    rate += 1.0; // sign bit
-  }
-
-  if level > 2 {
-    // Base range + Golomb coding
-    let excess = level - 3;
-    if excess <= 12 {
-      // ~0.19 bits per base_range symbol (4 iterations of 3-way choice)
-      rate += (excess as f64) * 0.19;
-    } else {
-      rate += 12.0 * 0.19;
-      // Golomb: ~2*log2(val) + 1 bits
-      let golomb = excess - 12;
-      let bits = if golomb == 0 {
-        1.0
-      } else {
-        2.0 * (golomb as f64).log2().ceil() + 1.0
-      };
-      rate += bits;
-    }
-  }
-
-  rate
-}
-
-/// Approximate cost (in bits) of coding EOB at position `pos`.
-/// AV1 uses a hierarchical code: eob_pt + eob_extra + eob_offset_bits.
-/// The total cost is roughly 2 + log2(pos) bits.
-#[inline]
-fn eob_coding_cost(pos: usize) -> f64 {
-  if pos <= 1 {
-    return 1.0;
-  }
-  // eob_pt cost ≈ 1 + log2(pos) bits (prefix code over log-scaled groups)
-  // eob_extra/offset ≈ 1 bit average
-  1.0 + (pos as f64).log2() + 1.0
 }
 
 #[cfg(test)]
@@ -300,22 +493,39 @@ mod tests {
   }
 
   #[test]
-  fn test_coeff_coding_cost_basic() {
-    // Zero in zero context should be very cheap
-    let cost_zero = coeff_coding_cost(0, 0);
-    assert!(cost_zero < 0.5);
-
-    // Level 1 should cost more than level 0
-    let cost_one = coeff_coding_cost(0, 1);
-    assert!(cost_one > cost_zero);
+  fn test_cdf_rate_uniform() {
+    // Uniform 4-symbol CDF: each symbol gets 1/4 probability.
+    // CDF values (15-bit): [384<<6, 256<<6, 128<<6, count=5]
+    let cdf = [384 << 6, 256 << 6, 128 << 6, 5];
+    for s in 0..4 {
+      let rate = cdf_rate(s, &cdf);
+      assert!(
+        (rate - 2.0).abs() < 0.01,
+        "uniform 4-symbol: s={s}, rate={rate}, expected ~2.0"
+      );
+    }
   }
 
   #[test]
-  fn test_eob_coding_cost_monotonic() {
-    let c1 = eob_coding_cost(1);
-    let c10 = eob_coding_cost(10);
-    let c100 = eob_coding_cost(100);
-    assert!(c1 < c10);
-    assert!(c10 < c100);
+  fn test_cdf_rate_skewed() {
+    // Skewed CDF: P(0) = 3/4, P(1) = 1/4.
+    // CDF: [128<<6, count=5] → fh(0)=128, fl(0)=512, range=384
+    // P(1): fl=128, fh=0, range=128
+    let cdf = [128 << 6, 5];
+    let r0 = cdf_rate(0, &cdf);
+    let r1 = cdf_rate(1, &cdf);
+    assert!(r0 < r1, "high-prob symbol should be cheaper: r0={r0}, r1={r1}");
+    assert!(
+      (r0 - 0.415).abs() < 0.1,
+      "P(0)=3/4 → ~0.415 bits, got {r0}"
+    );
+    assert!((r1 - 2.0).abs() < 0.1, "P(1)=1/4 → ~2.0 bits, got {r1}");
+  }
+
+  #[test]
+  fn test_golomb_cost() {
+    assert_eq!(golomb_cost(0), 1.0); // x=1, length=1, cost=1
+    assert_eq!(golomb_cost(1), 3.0); // x=2, length=2, cost=3
+    assert_eq!(golomb_cost(5), 5.0); // x=6, length=3, cost=5
   }
 }
