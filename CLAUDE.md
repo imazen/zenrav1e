@@ -35,21 +35,16 @@ cargo check --features threading
 - `src/cdef.rs` — CDEF
 - `src/lrf.rs` — loop restoration
 
-## Hardcoded Feature Disables (to enable)
-
-- `src/header.rs:754` — QM disabled: `write_bit(false) // no qm`
-- `src/header.rs:760` — delta_q disabled: `write_bit(false) // delta_q_present_flag`
-- `src/encoder.rs:302` — filter_intra: `enable_filter_intra: false`
-
 ## Implementation Progress
 
 ### Completed
-- [x] Fork from xiph/rav1e
-- [x] Edition 2024, MSRV 1.85
+- [x] Phase 0: Fork from xiph/rav1e, Edition 2024, MSRV 1.85
+- [x] Phase 1A: Quantization Matrices (~10% BD-rate) — `enable_qm: bool`
+- [x] Phase 1B: Variance Adaptive Quantization (~5-8% BD-rate) — `enable_vaq: bool`, `vaq_strength: f64`
+- [x] Phase 1C: Still-Image Tuning (~3-5% BD-rate) — `Tune::StillImage`
+- [x] Phase 2: Filter Intra Prediction (~3-5% BD-rate) — 5 recursive filter modes, auto-enabled at speed ≤ 6
+- [x] Phase 3: Lossless Mode — `quantizer: 0` for mathematically lossless output
 
-### In Progress
-- [ ] Phase 1A: Quantization Matrices (~10% BD-rate)
-- [ ] Phase 1B: Variance Adaptive Quantization (~5-8% BD-rate)
-- [ ] Phase 1C: Still-Image Tuning (~3-5% BD-rate)
-- [ ] Phase 2: Filter Intra Prediction (~3-5% BD-rate)
-- [ ] Phase 3: Lossless Mode
+### Not Yet Started
+- [ ] Phase 4: SSIMULACRA2 Target-Quality Convergence (ravif layer)
+- [ ] Phase 5: Integration (ravif/zenavif/zencodecs)
