@@ -90,6 +90,18 @@ CDEF adds -0.3% on top of that (marginal) with additional ~15% encode time.
   compression efficiency — just shifting the operating point.
 - **Per-SB delta-q**: Already implemented via segmentation (3-8 segments with
   QP offsets). Additional delta-q mechanism would have same RDO limitation.
+- **SGR full complexity**: Zero effect at speed 6. Loop restoration parameters
+  don't change with 16 vs 8 SGR parameter sets on small/medium images.
+- **LRU on skip (loop restoration on skip blocks)**: Zero effect at speed 6.
+- **Complex segmentation**: Shifts operating point (BPP and quality both drop
+  ~3%), not an efficiency gain. +35% encode time. Same issue as seg_boost.
+- **Bottom-up partition search**: Zero effect at speed 6. Top-down search
+  already finds good partitions for still images.
+- **Trellis quantization (EOB shrinkage + level round-down)**: ~0.3-0.5% BPP
+  savings at Q50, negligible quality impact. Limited by rav1e's well-tuned
+  adaptive rounding biases. Approximate rate model can't precisely identify
+  the marginal cases where trellis helps. Would need actual CDF-based rate
+  estimation for >2% savings.
 
 Recommended config:
 - **Speed priority**: `enable_qm: true` only (-10.1% BD-Rate, ~1x encode time)
