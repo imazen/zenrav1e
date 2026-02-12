@@ -75,8 +75,9 @@ Per-image BD-Rate vs upstream rav1e (SSIMULACRA2, negative = better):
 | **QM + RdoTx** | -10.3% | -9.6% | [-31.2%, -2.7%] | 63/63 |
 | **QM + CDEF + RdoTx** | -10.7% | -9.8% | [-31.6%, -3.5%] | 63/63 |
 
-RdoTx (rdo_tx_decision) adds -5.4% BD-Rate on top of QM alone (58/63 improved).
-CDEF adds -0.3% on top of that (marginal but free).
+RdoTx (rdo_tx_decision) adds -5.4% BD-Rate on top of QM alone (58/63 improved)
+but at **2.5-3.4x encode time** cost (speed 6: 101→259ms at Q50, 271→927ms at Q95).
+CDEF adds -0.3% on top of that (marginal) with additional ~15% encode time.
 
 ### Features Tested and Abandoned
 - **VAQ (SSIM boost)**: +2.8% mean — consistently worse. Psychovisual tune
@@ -90,5 +91,8 @@ CDEF adds -0.3% on top of that (marginal but free).
 - **Per-SB delta-q**: Already implemented via segmentation (3-8 segments with
   QP offsets). Additional delta-q mechanism would have same RDO limitation.
 
-Recommended config: `enable_qm: true`, force `rdo_tx_decision: true`,
-optionally force `cdef: true`. Everything else default/off.
+Recommended config:
+- **Speed priority**: `enable_qm: true` only (-10.1% BD-Rate, ~1x encode time)
+- **Quality priority**: `enable_qm: true` + force `rdo_tx_decision: true`
+  (-10.3% BD-Rate, ~3x encode time)
+- Everything else default/off.
