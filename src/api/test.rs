@@ -2510,18 +2510,14 @@ fn filter_intra_produces_valid_output() {
   let stride = input.planes[0].cfg.stride;
   for y in 0..32 {
     for x in 0..32 {
-      input.planes[0].data[y * stride + x] =
-        ((x * 4 + y * 2) % 256) as u8;
+      input.planes[0].data[y * stride + x] = ((x * 4 + y * 2) % 256) as u8;
     }
   }
   let _ = ctx.send_frame(Arc::new(input));
   ctx.flush();
 
   let pkt = ctx.receive_packet();
-  assert!(
-    pkt.is_ok(),
-    "Filter intra encoding should produce a valid packet"
-  );
+  assert!(pkt.is_ok(), "Filter intra encoding should produce a valid packet");
   let pkt = pkt.unwrap();
   assert!(!pkt.data.is_empty(), "Packet should contain data");
 }
@@ -2547,8 +2543,7 @@ fn lossless_mode_produces_valid_output() {
   let stride = input.planes[0].cfg.stride;
   for y in 0..64 {
     for x in 0..64 {
-      input.planes[0].data[y * stride + x] =
-        ((x * 3 + y * 5) % 256) as u8;
+      input.planes[0].data[y * stride + x] = ((x * 3 + y * 5) % 256) as u8;
     }
   }
   let _ = ctx.send_frame(Arc::new(input));

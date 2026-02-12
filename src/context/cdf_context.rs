@@ -31,7 +31,8 @@ pub struct CDFContext {
   pub eob_extra_cdf:
     [[[[u16; 2]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub filter_intra_cdfs: [[u16; 2]; BlockSize::BLOCK_SIZES_ALL],
-  pub filter_intra_mode_cdf: [u16; FilterIntraMode::FILTER_INTRA_MODES as usize],
+  pub filter_intra_mode_cdf:
+    [u16; FilterIntraMode::FILTER_INTRA_MODES as usize],
   pub intra_inter_cdfs: [[u16; 2]; INTRA_INTER_CONTEXTS],
   pub lrf_sgrproj_cdf: [u16; 2],
   pub lrf_wiener_cdf: [u16; 2],

@@ -847,8 +847,8 @@ pub(crate) mod rust {
   /// Only valid for blocks where both width and height are ≤ 32.
   /// The luma mode must be DC_PRED for filter intra to apply.
   pub fn pred_filter_intra<T: Pixel>(
-    dst: &mut PlaneRegionMut<'_, T>, edge_buf: &IntraEdge<T>,
-    tx_size: TxSize, filter_mode: FilterIntraMode, bit_depth: usize,
+    dst: &mut PlaneRegionMut<'_, T>, edge_buf: &IntraEdge<T>, tx_size: TxSize,
+    filter_mode: FilterIntraMode, bit_depth: usize,
   ) {
     let width = tx_size.width();
     let height = tx_size.height();
@@ -862,15 +862,13 @@ pub(crate) mod rust {
     let left_slice = &left[left.len().saturating_sub(height)..];
 
     // Helper closures for safe edge access with default fallback
-    let get_above = |i: usize| -> i32 {
-      above.get(i).map_or(default_val, |&v| v.into())
-    };
+    let get_above =
+      |i: usize| -> i32 { above.get(i).map_or(default_val, |&v| v.into()) };
     let get_left = |i: usize| -> i32 {
       left_slice.get(i).map_or(default_val, |&v| v.into())
     };
-    let get_top_left = || -> i32 {
-      top_left.first().map_or(default_val, |&v| v.into())
-    };
+    let get_top_left =
+      || -> i32 { top_left.first().map_or(default_val, |&v| v.into()) };
 
     for y in (0..height).step_by(2) {
       for x in (0..width).step_by(4) {

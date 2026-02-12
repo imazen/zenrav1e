@@ -796,7 +796,9 @@ impl<T: Pixel> CodedFrameData<T> {
   /// strength=1.0 is identity, >1.0 increases redistribution.
   pub fn apply_vaq_strength(&mut self, strength: f64) {
     use crate::util::bexp64;
-    if (strength - 1.0).abs() < f64::EPSILON || self.spatiotemporal_scores.is_empty() {
+    if (strength - 1.0).abs() < f64::EPSILON
+      || self.spatiotemporal_scores.is_empty()
+    {
       return;
     }
     let strength = strength.clamp(0.0, 4.0);
@@ -806,10 +808,12 @@ impl<T: Pixel> CodedFrameData<T> {
       // Scale the log by strength (raises score to the power of strength)
       let scaled_log_q11 = log_q11 * strength;
       // Convert back: raw = bexp(log_q11 + SHIFT_q11) via Q57
-      let log_q11_shifted = scaled_log_q11 as i64 + ((DistortionScale::SHIFT as i64) << 11);
+      let log_q11_shifted =
+        scaled_log_q11 as i64 + ((DistortionScale::SHIFT as i64) << 11);
       let log_q57 = log_q11_shifted << (57 - 11);
       let raw = bexp64(log_q57);
-      *score = DistortionScale(raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32);
+      *score =
+        DistortionScale(raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32);
     }
   }
 
@@ -987,7 +991,8 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_segmentation: config.quantizer > 0
         && (config.enable_vaq
           || config.tune == Tune::StillImage
-          || config.speed_settings.segmentation != SegmentationLevel::Disabled),
+          || config.speed_settings.segmentation
+            != SegmentationLevel::Disabled),
       enable_inter_txfm_split: config
         .speed_settings
         .transform
@@ -1004,8 +1009,8 @@ impl<T: Pixel> FrameInvariants<T> {
     gop_input_frameno_start: u64, t35_metadata: Box<[T35]>,
   ) -> Self {
     // In lossless mode (quantizer=0), only 4x4 WHT_WHT is used, no TX selection
-    let tx_mode_select = config.speed_settings.transform.rdo_tx_decision
-      && config.quantizer > 0;
+    let tx_mode_select =
+      config.speed_settings.transform.rdo_tx_decision && config.quantizer > 0;
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
     fi.tx_mode_select = tx_mode_select;
@@ -2058,8 +2063,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
   tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
   rdo_type: RDOType, need_recon_pixel: bool,
-  enc_stats: Option<&mut EncoderStats>,
-  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
+  enc_stats: Option<&mut EncoderStats>, use_filter_intra: bool,
+  filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -2370,8 +2375,8 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
   tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
-  rdo_type: RDOType, need_recon_pixel: bool,
-  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
+  rdo_type: RDOType, need_recon_pixel: bool, use_filter_intra: bool,
+  filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -2537,8 +2542,8 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
   tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
-  rdo_type: RDOType, need_recon_pixel: bool,
-  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
+  rdo_type: RDOType, need_recon_pixel: bool, use_filter_intra: bool,
+  filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   if skip {
     return (false, ScaledDistortion::zero());
@@ -3465,12 +3470,7 @@ fn encode_tile_group<T: Pixel>(
       let deblocked_frame = (*fs.rec).clone();
       fs.apply_tile_state_mut(|ts| {
         let rec = &mut ts.rec;
-        cdef_filter_tile(
-          fi,
-          &deblocked_frame,
-          &blocks.as_tile_blocks(),
-          rec,
-        );
+        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
       });
     }
   }
@@ -3590,7 +3590,10 @@ fn check_lf_queue<T: Pixel>(
           }
         }
         // write LRF information
-        if !fi.allow_intrabc && fi.sequence.enable_restoration && !fi.is_lossless() {
+        if !fi.allow_intrabc
+          && fi.sequence.enable_restoration
+          && !fi.is_lossless()
+        {
           for pli in 0..planes {
             if qe.lru_index[pli] != -1
               && last_lru_coded[pli] < qe.lru_index[pli]
