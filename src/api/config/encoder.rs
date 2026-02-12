@@ -138,6 +138,12 @@ pub struct EncoderConfig {
   /// Typical values: 1.0 (off), 1.5–2.5 (moderate–aggressive boost).
   pub seg_boost: f64,
 
+  /// Enable trellis quantization (Viterbi DP coefficient optimization).
+  /// Uses rate-distortion optimization to find the globally optimal
+  /// combination of coefficient levels, exploiting AV1 entropy coding
+  /// dependencies between coefficients. Encoder-only, bitstream compatible.
+  pub enable_trellis: bool,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -200,6 +206,7 @@ impl EncoderConfig {
       enable_vaq: false,
       vaq_strength: 1.0,
       seg_boost: 1.0,
+      enable_trellis: false,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
