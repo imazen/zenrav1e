@@ -65,16 +65,30 @@ rate-distortion tradeoff. Fix: use u64 proportional scaling.
 Before fix: QM caused +20% BD-Rate regression (worse).
 After fix: QM provides -5.5% BD-Rate improvement (better).
 
-## Benchmark Results (2026-02-12, 67-image corpus, speed 6)
+## Benchmark Results (2026-02-12, 63-image corpus, speed 6)
 
-Per-image BPP savings at matching quality settings (SSIMULACRA2):
-- **QM only**: -10.1% mean, -10.0% median (range -5.7% to -15.2%)
-  67/67 images improved, 0 regressions. Best single feature.
+Per-image BD-Rate vs upstream rav1e (SSIMULACRA2, negative = better):
+
+| Configuration | Mean BD-Rate | Median | Range | Improved |
+|---|---|---|---|---|
+| **QM only** | -10.1% | -10.0% | [-15.2%, -5.7%] | 67/67 |
+| **QM + RdoTx** | -10.3% | -9.6% | [-31.2%, -2.7%] | 63/63 |
+| **QM + CDEF + RdoTx** | -10.7% | -9.8% | [-31.6%, -3.5%] | 63/63 |
+
+RdoTx (rdo_tx_decision) adds -5.4% BD-Rate on top of QM alone (58/63 improved).
+CDEF adds -0.3% on top of that (marginal but free).
+
+### Features Tested and Abandoned
 - **VAQ (SSIM boost)**: +2.8% mean — consistently worse. Psychovisual tune
   already activates SSIM boost; VAQ with strength < 1.0 reduces masking.
 - **StillImage tuning**: ~0% — no effect. ravif disables CDEF at high quality.
-- **Variance Boost (SVT-AV1-PSY style)**: Tested and abandoned. Inflates
-  bitrate 8-65% depending on strength because rav1e's RDO allocates more
-  total bits when distortion tolerances vary widely across blocks.
+- **Variance Boost (SVT-AV1-PSY style)**: Inflates bitrate 8-65% because
+  rav1e's RDO allocates more total bits when distortion tolerances vary widely.
+- **Separated Segmentation Boost (seg_boost)**: Trades BPP for quality at
+  constant ratio. At boost 2.0: -7.6% BPP but -1.40 SS2. Not improving
+  compression efficiency — just shifting the operating point.
+- **Per-SB delta-q**: Already implemented via segmentation (3-8 segments with
+  QP offsets). Additional delta-q mechanism would have same RDO limitation.
 
-Recommended config: `enable_qm: true`, everything else default/off.
+Recommended config: `enable_qm: true`, force `rdo_tx_decision: true`,
+optionally force `cdef: true`. Everything else default/off.
