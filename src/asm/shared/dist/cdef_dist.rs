@@ -14,7 +14,7 @@ pub mod test {
   use crate::frame::*;
   use crate::tiling::Area;
   use crate::util::Pixel;
-  use rand::{rng, Rng};
+  use rand::{Rng, rng};
 
   fn random_planes<T: Pixel>(bd: usize) -> (Plane<T>, Plane<T>) {
     let mut rng = rng();

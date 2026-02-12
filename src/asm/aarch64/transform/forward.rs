@@ -136,23 +136,23 @@ unsafe fn transpose_8x8_neon(
     vtrnq_s32(input[6].vec().1, input[7].vec().1),
   );
   let stage2 = (
-    vtrnq_s64_to_s32(stage1.0 .0, stage1.1 .0),
-    vtrnq_s64_to_s32(stage1.0 .1, stage1.1 .1),
-    vtrnq_s64_to_s32(stage1.2 .0, stage1.3 .0),
-    vtrnq_s64_to_s32(stage1.2 .1, stage1.3 .1),
-    vtrnq_s64_to_s32(stage1.4 .0, stage1.5 .0),
-    vtrnq_s64_to_s32(stage1.4 .1, stage1.5 .1),
-    vtrnq_s64_to_s32(stage1.6 .0, stage1.7 .0),
-    vtrnq_s64_to_s32(stage1.6 .1, stage1.7 .1),
+    vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    vtrnq_s64_to_s32(stage1.2.0, stage1.3.0),
+    vtrnq_s64_to_s32(stage1.2.1, stage1.3.1),
+    vtrnq_s64_to_s32(stage1.4.0, stage1.5.0),
+    vtrnq_s64_to_s32(stage1.4.1, stage1.5.1),
+    vtrnq_s64_to_s32(stage1.6.0, stage1.7.0),
+    vtrnq_s64_to_s32(stage1.6.1, stage1.7.1),
   );
-  into[0].write(I32X8::new(stage2.0 .0, stage2.2 .0));
-  into[1].write(I32X8::new(stage2.1 .0, stage2.3 .0));
-  into[2].write(I32X8::new(stage2.0 .1, stage2.2 .1));
-  into[3].write(I32X8::new(stage2.1 .1, stage2.3 .1));
-  into[4].write(I32X8::new(stage2.4 .0, stage2.6 .0));
-  into[5].write(I32X8::new(stage2.5 .0, stage2.7 .0));
-  into[6].write(I32X8::new(stage2.4 .1, stage2.6 .1));
-  into[7].write(I32X8::new(stage2.5 .1, stage2.7 .1));
+  into[0].write(I32X8::new(stage2.0.0, stage2.2.0));
+  into[1].write(I32X8::new(stage2.1.0, stage2.3.0));
+  into[2].write(I32X8::new(stage2.0.1, stage2.2.1));
+  into[3].write(I32X8::new(stage2.1.1, stage2.3.1));
+  into[4].write(I32X8::new(stage2.4.0, stage2.6.0));
+  into[5].write(I32X8::new(stage2.5.0, stage2.7.0));
+  into[6].write(I32X8::new(stage2.4.1, stage2.6.1));
+  into[7].write(I32X8::new(stage2.5.1, stage2.7.1));
 }
 
 #[inline]
@@ -166,15 +166,15 @@ unsafe fn transpose_8x4_neon(
     vtrnq_s32(input[6].vec().0, input[7].vec().0),
   );
   let stage2 = (
-    vtrnq_s64_to_s32(stage1.0 .0, stage1.1 .0),
-    vtrnq_s64_to_s32(stage1.0 .1, stage1.1 .1),
-    vtrnq_s64_to_s32(stage1.2 .0, stage1.3 .0),
-    vtrnq_s64_to_s32(stage1.2 .1, stage1.3 .1),
+    vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    vtrnq_s64_to_s32(stage1.2.0, stage1.3.0),
+    vtrnq_s64_to_s32(stage1.2.1, stage1.3.1),
   );
-  into[0].write(I32X8::new(stage2.0 .0, stage2.2 .0));
-  into[1].write(I32X8::new(stage2.1 .0, stage2.3 .0));
-  into[2].write(I32X8::new(stage2.0 .1, stage2.2 .1));
-  into[3].write(I32X8::new(stage2.1 .1, stage2.3 .1));
+  into[0].write(I32X8::new(stage2.0.0, stage2.2.0));
+  into[1].write(I32X8::new(stage2.1.0, stage2.3.0));
+  into[2].write(I32X8::new(stage2.0.1, stage2.2.1));
+  into[3].write(I32X8::new(stage2.1.1, stage2.3.1));
 }
 
 #[inline]
@@ -188,19 +188,19 @@ unsafe fn transpose_4x8_neon(
     vtrnq_s32(input[2].vec().1, input[3].vec().1),
   );
   let stage2 = (
-    vtrnq_s64_to_s32(stage1.0 .0, stage1.1 .0),
-    vtrnq_s64_to_s32(stage1.0 .1, stage1.1 .1),
-    vtrnq_s64_to_s32(stage1.2 .0, stage1.3 .0),
-    vtrnq_s64_to_s32(stage1.2 .1, stage1.3 .1),
+    vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    vtrnq_s64_to_s32(stage1.2.0, stage1.3.0),
+    vtrnq_s64_to_s32(stage1.2.1, stage1.3.1),
   );
   into[0].write(I32X8::raw(stage2.0));
   into[1].write(I32X8::raw(stage2.1));
-  into[2].write(I32X8::new(stage2.0 .1, stage2.0 .0));
-  into[3].write(I32X8::new(stage2.1 .1, stage2.1 .0));
+  into[2].write(I32X8::new(stage2.0.1, stage2.0.0));
+  into[3].write(I32X8::new(stage2.1.1, stage2.1.0));
   into[4].write(I32X8::raw(stage2.2));
   into[5].write(I32X8::raw(stage2.3));
-  into[6].write(I32X8::new(stage2.2 .1, stage2.2 .0));
-  into[7].write(I32X8::new(stage2.3 .1, stage2.3 .0));
+  into[6].write(I32X8::new(stage2.2.1, stage2.2.0));
+  into[7].write(I32X8::new(stage2.3.1, stage2.3.0));
 }
 
 #[inline]
@@ -212,13 +212,13 @@ unsafe fn transpose_4x4_neon(
     vtrnq_s32(input[2].vec().0, input[3].vec().0),
   );
   let stage2 = (
-    vtrnq_s64_to_s32(stage1.0 .0, stage1.1 .0),
-    vtrnq_s64_to_s32(stage1.0 .1, stage1.1 .1),
+    vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
   );
   into[0].write(I32X8::raw(stage2.0));
   into[1].write(I32X8::raw(stage2.1));
-  into[2].write(I32X8::new(stage2.0 .1, stage2.0 .0));
-  into[3].write(I32X8::new(stage2.1 .1, stage2.1 .0));
+  into[2].write(I32X8::new(stage2.0.1, stage2.0.0));
+  into[3].write(I32X8::new(stage2.1.1, stage2.1.0));
 }
 
 #[inline]

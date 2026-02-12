@@ -66,11 +66,7 @@ fn select_qi(quantizer: i64, qlookup: &[NonZeroU16; QINDEX_RANGE]) -> u8 {
         let qthresh =
           (qlookup[qi - 1].get() as i32) * (qlookup[qi].get() as i32);
         let q2_i32 = (quantizer as i32) * (quantizer as i32);
-        if q2_i32 < qthresh {
-          (qi - 1) as u8
-        } else {
-          qi as u8
-        }
+        if q2_i32 < qthresh { (qi - 1) as u8 } else { qi as u8 }
       }
     }
   }
@@ -158,11 +154,7 @@ const fn divu_pair(x: u32, d: (u32, u32, u32)) -> u32 {
 
 #[inline]
 const fn copysign(value: u32, signed: i32) -> i32 {
-  if signed < 0 {
-    -(value as i32)
-  } else {
-    value as i32
-  }
+  if signed < 0 { -(value as i32) } else { value as i32 }
 }
 
 #[cfg(test)]

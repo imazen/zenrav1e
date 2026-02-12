@@ -33,11 +33,11 @@ use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  luma_ac, AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
+  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode, luma_ac,
 };
 use crate::quantize::*;
 use crate::rate::{
-  QuantizerParameters, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P, QSCALE,
+  FRAME_SUBTYPE_I, FRAME_SUBTYPE_P, QSCALE, QuantizerParameters,
 };
 use crate::rdo::*;
 use crate::segmentation::*;
@@ -1451,9 +1451,18 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
 
   let plane_bsize = bsize.subsampled_size(xdec, ydec).unwrap();
 
-  debug_assert!(p != 0 || !mode.is_intra() || tx_size.block_size() == plane_bsize || need_recon_pixel,
+  debug_assert!(
+    p != 0
+      || !mode.is_intra()
+      || tx_size.block_size() == plane_bsize
+      || need_recon_pixel,
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
-    mode.is_intra(), p, tx_size.block_size(), plane_bsize, need_recon_pixel);
+    mode.is_intra(),
+    p,
+    tx_size.block_size(),
+    plane_bsize,
+    need_recon_pixel
+  );
 
   let ief_params = if mode.is_directional()
     && fi.sequence.enable_intra_edge_filter

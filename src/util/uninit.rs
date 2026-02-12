@@ -26,5 +26,5 @@ pub fn init_slice_repeat_mut<T: Copy>(
 pub unsafe fn slice_assume_init_mut<T: Copy>(
   slice: &'_ mut [MaybeUninit<T>],
 ) -> &'_ mut [T] {
-  &mut *(slice as *mut [MaybeUninit<T>] as *mut [T])
+  unsafe { &mut *(slice as *mut [MaybeUninit<T>] as *mut [T]) }
 }

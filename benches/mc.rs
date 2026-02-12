@@ -9,7 +9,7 @@ use rav1e::bench::context::ContextWriter;
 use rav1e::bench::context::FrameBlocks;
 use rav1e::bench::cpu_features::*;
 use rav1e::bench::encoder::FrameState;
-use rav1e::bench::encoder::{motion_compensate, FrameInvariants};
+use rav1e::bench::encoder::{FrameInvariants, motion_compensate};
 use rav1e::bench::frame::{AsRegion, PlaneOffset, PlaneSlice};
 use rav1e::bench::mc::*;
 use rav1e::bench::partition::RefType;

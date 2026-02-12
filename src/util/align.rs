@@ -57,7 +57,7 @@ impl<T> Aligned<T> {
   ///
   /// The resulting `Aligned<T>` *must* be written to before it is read from.
   pub const unsafe fn uninitialized() -> Self {
-    Self::new(MaybeUninit::uninit().assume_init())
+    unsafe { Self::new(MaybeUninit::uninit().assume_init()) }
   }
 }
 

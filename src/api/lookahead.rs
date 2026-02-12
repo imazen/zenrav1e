@@ -1,19 +1,19 @@
+use crate::Pixel;
 use crate::api::internal::InterConfig;
 use crate::config::EncoderConfig;
 use crate::context::{BlockOffset, FrameBlocks, TileBlockOffset};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::{
-  FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
+  FrameInvariants, FrameState, IMPORTANCE_BLOCK_SIZE, Sequence,
 };
 use crate::frame::{AsRegion, PlaneOffset};
-use crate::me::{estimate_tile_motion, RefMEStats};
-use crate::partition::{get_intra_edges, BlockSize};
+use crate::me::{RefMEStats, estimate_tile_motion};
+use crate::partition::{BlockSize, get_intra_edges};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
 use crate::util::Aligned;
-use crate::Pixel;
 use rayon::iter::*;
 use std::sync::Arc;
 use v_frame::frame::Frame;

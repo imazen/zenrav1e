@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use crate::test_encode_decode::{compare_plane, DecodeResult, TestDecoder};
+use crate::test_encode_decode::{DecodeResult, TestDecoder, compare_plane};
 use crate::util::{CastFromPrimitive, Pixel};
 use log::debug;
 use std::collections::VecDeque;

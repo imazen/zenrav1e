@@ -22,12 +22,12 @@ use crate::util::*;
 
 // TODO: move 1d txfm code to rust module.
 
+use super::TxSize;
+use super::TxType;
 use super::clamp_value;
 use super::consts::*;
 use super::get_1d_tx_types;
 use super::half_btf;
-use super::TxSize;
-use super::TxType;
 
 /// # Panics
 ///

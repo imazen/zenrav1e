@@ -7,11 +7,11 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::api::EncoderConfig;
+use crate::api::InterConfig;
 use crate::api::channel::data::*;
 use crate::api::config::*;
 use crate::api::util::*;
-use crate::api::EncoderConfig;
-use crate::api::InterConfig;
 
 use crossbeam::channel::*;
 

@@ -13,7 +13,7 @@ use rand_chacha::ChaChaRng;
 use rav1e::bench::cpu_features::*;
 use rav1e::bench::transform;
 use rav1e::bench::transform::{
-  forward_transform, get_valid_txfm_types, TxSize,
+  TxSize, forward_transform, get_valid_txfm_types,
 };
 use std::mem::MaybeUninit;
 

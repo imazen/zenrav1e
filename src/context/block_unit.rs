@@ -1565,17 +1565,9 @@ impl ContextWriter<'_> {
         4
       }
     } else if avail_up {
-      if above_single {
-        above_backward as usize
-      } else {
-        3
-      }
+      if above_single { above_backward as usize } else { 3 }
     } else if avail_left {
-      if left_single {
-        left_backward as usize
-      } else {
-        3
-      }
+      if left_single { left_backward as usize } else { 3 }
     } else {
       1
     }
@@ -1619,17 +1611,9 @@ impl ContextWriter<'_> {
       if !above_comp_inter && !left_comp_inter {
         1 + 2 * samedir
       } else if !above_comp_inter {
-        if !left_uni_comp {
-          1
-        } else {
-          3 + samedir
-        }
+        if !left_uni_comp { 1 } else { 3 + samedir }
       } else if !left_comp_inter {
-        if !above_uni_comp {
-          1
-        } else {
-          3 + samedir
-        }
+        if !above_uni_comp { 1 } else { 3 + samedir }
       } else if !above_uni_comp && !left_uni_comp {
         0
       } else if !above_uni_comp || !left_uni_comp {

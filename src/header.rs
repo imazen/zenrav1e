@@ -1212,8 +1212,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 mod tests {
   use super::ULEB128Writer;
   use bitstream_io::{BigEndian, BitWriter};
-  use nom::error::Error;
   use nom::IResult;
+  use nom::error::Error;
   use quickcheck::quickcheck;
 
   fn leb128(mut input: &[u8]) -> IResult<&[u8], u64, Error<&[u8]>> {

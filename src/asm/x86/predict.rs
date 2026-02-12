@@ -7,14 +7,14 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::Pixel;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::{BlockSize, IntraEdge};
 use crate::predict::{
-  rust, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
+  IntraEdgeFilterParameters, PredictionMode, PredictionVariant, rust,
 };
 use crate::tiling::{PlaneRegion, PlaneRegionMut};
 use crate::transform::TxSize;
-use crate::Pixel;
 use std::mem::MaybeUninit;
 use v_frame::pixel::PixelType;
 

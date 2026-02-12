@@ -9,12 +9,12 @@
 
 use std::cmp;
 
-use crate::api::color::ChromaSampling;
 use crate::api::ContextInner;
+use crate::api::color::ChromaSampling;
 use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{
-  bexp64, bexp_q24, blog64, clamp, q24_to_q57, q57, q57_to_q24, Pixel,
+  Pixel, bexp_q24, bexp64, blog64, clamp, q24_to_q57, q57, q57_to_q24,
 };
 
 // The number of frame sub-types for which we track distinct parameters.

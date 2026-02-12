@@ -16,7 +16,7 @@ use crate::lrf::{IntegralImageBuffer, SOLVE_IMAGE_SIZE};
 use crate::mc::MotionVector;
 use crate::me::FrameMEStats;
 use crate::me::WriteGuardMEStats;
-use crate::partition::{RefType, REF_FRAMES};
+use crate::partition::{REF_FRAMES, RefType};
 use crate::predict::{InterCompoundBuffers, PredictionMode};
 use crate::quantize::*;
 use crate::rdo::*;
@@ -236,11 +236,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     if bo_y & 1 == 1 {
       bo_y -= ydec
     };
-    if bo_y == 0 {
-      None
-    } else {
-      Some(self.coded_block_info[bo_y - 1][bo_x])
-    }
+    if bo_y == 0 { None } else { Some(self.coded_block_info[bo_y - 1][bo_x]) }
   }
 
   /// Returns left block information for context during prediction.
@@ -256,10 +252,6 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     if bo_y & 1 == 0 {
       bo_y += ydec
     };
-    if bo_x == 0 {
-      None
-    } else {
-      Some(self.coded_block_info[bo_y][bo_x - 1])
-    }
+    if bo_x == 0 { None } else { Some(self.coded_block_info[bo_y][bo_x - 1]) }
   }
 }

@@ -14,15 +14,15 @@ use crate::predict::rust::{
   dr_intra_derivative, select_ief_strength, select_ief_upsample,
 };
 use crate::predict::{
-  rust, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
+  IntraEdgeFilterParameters, PredictionMode, PredictionVariant, rust,
 };
 use crate::tiling::{PlaneRegion, PlaneRegionMut};
 use crate::transform::TxSize;
 use crate::{Pixel, PixelType};
+use PixelType::{U8, U16};
 use libc;
 use libc::{c_int, ptrdiff_t};
 use std::mem::MaybeUninit;
-use PixelType::{U16, U8};
 
 macro_rules! decl_cfl_ac_fn {
   ($($f:ident),+) => {

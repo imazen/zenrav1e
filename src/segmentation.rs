@@ -7,15 +7,15 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::FrameInvariants;
+use crate::FrameState;
 use crate::context::*;
 use crate::header::PRIMARY_REF_NONE;
 use crate::partition::BlockSize;
-use crate::rdo::spatiotemporal_scale;
 use crate::rdo::DistortionScale;
+use crate::rdo::spatiotemporal_scale;
 use crate::tiling::TileStateMut;
 use crate::util::Pixel;
-use crate::FrameInvariants;
-use crate::FrameState;
 
 pub const MAX_SEGMENTS: usize = 8;
 

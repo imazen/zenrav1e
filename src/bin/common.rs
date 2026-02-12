@@ -8,12 +8,12 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::error::*;
-use crate::muxer::{create_muxer, Muxer};
+use crate::muxer::{Muxer, create_muxer};
 use crate::stats::MetricsEnabled;
-use clap::builder::styling::AnsiColor;
 use clap::builder::Styles;
+use clap::builder::styling::AnsiColor;
 use clap::{CommandFactory, Parser as Clap, Subcommand};
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
 
@@ -546,7 +546,9 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
   if speed > 10 {
     panic!("Speed must be between 0-10");
   } else if min_interval > max_interval {
-    panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
+    panic!(
+      "Maximum keyframe interval must be greater than or equal to minimum keyframe interval"
+    );
   }
 
   let color_primaries = matches.primaries.unwrap_or_default();

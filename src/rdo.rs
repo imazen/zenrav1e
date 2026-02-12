@@ -16,37 +16,38 @@ use std::mem::MaybeUninit;
 use arrayvec::*;
 use itertools::izip;
 
+use crate::Tune;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::deblock::*;
 use crate::dist::*;
-use crate::ec::{Writer, WriterCounter, OD_BITRES};
+use crate::ec::{OD_BITRES, Writer, WriterCounter};
 use crate::encode_block_with_modes;
 use crate::encoder::{FrameInvariants, IMPORTANCE_BLOCK_SIZE};
 use crate::frame::*;
 use crate::header::ReferenceMode;
 use crate::lrf::*;
 use crate::mc::MotionVector;
-use crate::me::estimate_motion;
 use crate::me::MVSamplingMode;
 use crate::me::MotionSearchResult;
+use crate::me::estimate_motion;
 use crate::motion_compensate;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  luma_ac, AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
+  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
   RAV1E_INTER_COMPOUND_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
+  luma_ac,
 };
 use crate::rdo_tables::*;
 use crate::tiling::*;
-use crate::transform::{TxSet, TxSize, TxType, RAV1E_TX_TYPES};
-use crate::util::{init_slice_repeat_mut, Aligned, Pixel};
+use crate::transform::{RAV1E_TX_TYPES, TxSet, TxSize, TxType};
+use crate::util::{Aligned, Pixel, init_slice_repeat_mut};
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
-use crate::Tune;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -2115,9 +2116,9 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   // Determine area of optimization: Which plane has the largest LRUs?
   // How many LRUs for each?
   let mut sb_w = 1; // how many superblocks wide the largest LRU
-                    // is/how many SBs we're processing (same thing)
+  // is/how many SBs we're processing (same thing)
   let mut sb_h = 1; // how many superblocks wide the largest LRU
-                    // is/how many SBs we're processing (same thing)
+  // is/how many SBs we're processing (same thing)
   let mut lru_w = [0; MAX_PLANES]; // how many LRUs we're processing
   let mut lru_h = [0; MAX_PLANES]; // how many LRUs we're processing
   for pli in 0..planes {
@@ -2452,7 +2453,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
                       )
                     } else {
                       0 // no relative cost differeneces to different
-                        // CDEF params.  If cdef is on, it's a wash.
+                      // CDEF params.  If cdef is on, it's a wash.
                     };
                   }
                   RestorationFilter::Sgrproj { set, xqd } => {

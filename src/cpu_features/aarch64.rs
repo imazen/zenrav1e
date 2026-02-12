@@ -41,11 +41,7 @@ impl Default for CpuFeatureLevel {
       Ok(feature) => CpuFeatureLevel::from_str(&feature).unwrap_or(detected),
       Err(_e) => detected,
     };
-    if manual > detected {
-      detected
-    } else {
-      manual
-    }
+    if manual > detected { detected } else { manual }
   }
 }
 

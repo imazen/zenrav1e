@@ -7,11 +7,12 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::FrameInvariants;
 use crate::api::InterConfig;
 use crate::context::{
-  BlockOffset, PlaneBlockOffset, SuperBlockOffset, TileBlockOffset,
-  TileSuperBlockOffset, MAX_SB_SIZE_LOG2, MIB_SIZE_LOG2, MI_SIZE,
-  MI_SIZE_LOG2, SB_SIZE,
+  BlockOffset, MAX_SB_SIZE_LOG2, MI_SIZE, MI_SIZE_LOG2, MIB_SIZE_LOG2,
+  PlaneBlockOffset, SB_SIZE, SuperBlockOffset, TileBlockOffset,
+  TileSuperBlockOffset,
 };
 use crate::dist::*;
 use crate::frame::*;
@@ -20,8 +21,7 @@ use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::tiling::*;
 use crate::util::ILog;
-use crate::util::{clamp, Pixel};
-use crate::FrameInvariants;
+use crate::util::{Pixel, clamp};
 
 use arrayvec::*;
 use std::ops::{Index, IndexMut};
@@ -845,11 +845,7 @@ fn full_pixel_me<T: Pixel>(
         [MotionVector::default(); 2],
       );
 
-      if results.rd.cost < best.rd.cost {
-        results
-      } else {
-        best
-      }
+      if results.rd.cost < best.rd.cost { results } else { best }
     }
   }
 }

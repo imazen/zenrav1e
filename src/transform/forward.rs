@@ -27,7 +27,7 @@ pub mod rust {
   use std::mem::MaybeUninit;
 
   use crate::transform::forward_shared::*;
-  use crate::transform::{av1_round_shift_array, valid_av1_transform, TxSize};
+  use crate::transform::{TxSize, av1_round_shift_array, valid_av1_transform};
   use simd_helpers::cold_for_target_arch;
 
   type TxfmFunc = fn(&mut [i32]);

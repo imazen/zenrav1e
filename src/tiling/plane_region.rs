@@ -176,7 +176,7 @@ macro_rules! plane_region_common {
       }
 
       #[inline(always)]
-      pub unsafe fn from_slice_unsafe(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect: Rect) -> Self {
+      pub unsafe fn from_slice_unsafe(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect: Rect) -> Self { unsafe {
         debug_assert!(rect.x >= -(cfg.xorigin as isize));
         debug_assert!(rect.y >= -(cfg.yorigin as isize));
         debug_assert!(cfg.xorigin as isize + rect.x + rect.width as isize <= cfg.stride as isize);
@@ -189,7 +189,7 @@ macro_rules! plane_region_common {
           rect,
           phantom: PhantomData,
         }
-      }
+      }}
 
       #[inline(always)]
       pub fn new(plane: &'a $($opt_mut)? Plane<T>, rect: Rect) -> Self {

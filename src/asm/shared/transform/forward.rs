@@ -44,7 +44,7 @@ pub fn cast_mut<const N: usize, T>(x: &mut [T]) -> &mut [T; N] {
 #[cfg(test)]
 mod test {
   use crate::cpu_features::*;
-  use crate::transform::{forward_transform, get_valid_txfm_types, TxSize};
+  use crate::transform::{TxSize, forward_transform, get_valid_txfm_types};
   use crate::util::slice_assume_init_mut;
   use rand::Rng;
   use std::mem::MaybeUninit;

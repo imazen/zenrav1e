@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::DeblockState;
 use crate::api::FrameType;
 use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
@@ -15,8 +16,7 @@ use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
 use crate::tiling::*;
-use crate::util::{clamp, ILog, Pixel};
-use crate::DeblockState;
+use crate::util::{ILog, Pixel, clamp};
 use rayon::iter::*;
 use std::cmp;
 

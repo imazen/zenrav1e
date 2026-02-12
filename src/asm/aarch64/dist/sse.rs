@@ -7,8 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::asm::aarch64::dist::to_index;
 use crate::asm::aarch64::dist::DIST_FNS_LENGTH;
+use crate::asm::aarch64::dist::to_index;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
 use crate::encoder::IMPORTANCE_BLOCK_SIZE;

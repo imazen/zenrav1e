@@ -142,8 +142,8 @@ pub mod data {
 /// Encoder configuration and settings
 pub mod config {
   pub use crate::api::config::{
-    GrainTableSegment, NoiseGenArgs, TransferFunction, NUM_UV_COEFFS,
-    NUM_UV_POINTS, NUM_Y_COEFFS, NUM_Y_POINTS,
+    GrainTableSegment, NUM_UV_COEFFS, NUM_UV_POINTS, NUM_Y_COEFFS,
+    NUM_Y_POINTS, NoiseGenArgs, TransferFunction,
   };
   pub use crate::api::{
     Config, EncoderConfig, InvalidConfig, PredictionModesSetting,
@@ -225,11 +225,7 @@ pub mod version {
     let s = short();
     let hash = hash();
 
-    if hash.is_empty() {
-      s
-    } else {
-      format!("{s} - {hash}")
-    }
+    if hash.is_empty() { s } else { format!("{s} - {hash}") }
   }
 
   cfg_if::cfg_if! {

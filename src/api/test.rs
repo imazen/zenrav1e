@@ -449,9 +449,11 @@ fn pyramid_level_low_latency_minus(missing: u64) {
 
   // data[output_frameno] = pyramid_level
 
-  assert!(get_frame_invariants(ctx)
-    .map(|fi| fi.unwrap().pyramid_level)
-    .all(|pyramid_level| pyramid_level == 0));
+  assert!(
+    get_frame_invariants(ctx)
+      .map(|fi| fi.unwrap().pyramid_level)
+      .all(|pyramid_level| pyramid_level == 0)
+  );
 }
 
 #[interpolate_test(0, 0)]

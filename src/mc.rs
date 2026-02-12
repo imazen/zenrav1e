@@ -225,14 +225,16 @@ pub(crate) mod rust {
   unsafe fn run_filter<T: AsPrimitive<i32>>(
     src: *const T, stride: usize, filter: [i32; 8],
   ) -> i32 {
-    filter
-      .iter()
-      .enumerate()
-      .map(|(i, f)| {
-        let p = src.add(i * stride);
-        f * (*p).as_()
-      })
-      .sum::<i32>()
+    unsafe {
+      filter
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+          let p = src.add(i * stride);
+          f * (*p).as_()
+        })
+        .sum::<i32>()
+    }
   }
 
   fn get_filter(

@@ -19,7 +19,7 @@ use crate::frame::{
   AsRegion, Frame, Plane, PlaneConfig, PlaneOffset, PlaneSlice,
 };
 use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect};
-use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
+use crate::util::{CastFromPrimitive, ILog, Pixel, clamp};
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
@@ -163,14 +163,14 @@ impl RestorationFilter {
 }
 
 pub(crate) mod rust {
+  use crate::Pixel;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::PlaneSlice;
   use crate::lrf::{
-    get_integral_square, sgrproj_sum_finish, SGRPROJ_RST_BITS,
-    SGRPROJ_SGR_BITS,
+    SGRPROJ_RST_BITS, SGRPROJ_SGR_BITS, get_integral_square,
+    sgrproj_sum_finish,
   };
   use crate::util::CastFromPrimitive;
-  use crate::Pixel;
 
   #[inline(always)]
   pub(crate) fn sgrproj_box_ab_internal<const BD: usize>(
@@ -367,15 +367,17 @@ fn sgrproj_sum_finish<const BD: usize>(
 unsafe fn get_integral_square(
   iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
 ) -> u32 {
-  // Cancel out overflow in iimg by using wrapping arithmetic
-  let top_left = *iimg.get_unchecked(y * stride + x);
-  let top_right = *iimg.get_unchecked(y * stride + x + size);
-  let bottom_left = *iimg.get_unchecked((y + size) * stride + x);
-  let bottom_right = *iimg.get_unchecked((y + size) * stride + x + size);
-  top_left
-    .wrapping_add(bottom_right)
-    .wrapping_sub(bottom_left)
-    .wrapping_sub(top_right)
+  unsafe {
+    // Cancel out overflow in iimg by using wrapping arithmetic
+    let top_left = *iimg.get_unchecked(y * stride + x);
+    let top_right = *iimg.get_unchecked(y * stride + x + size);
+    let bottom_left = *iimg.get_unchecked((y + size) * stride + x);
+    let bottom_right = *iimg.get_unchecked((y + size) * stride + x + size);
+    top_left
+      .wrapping_add(bottom_right)
+      .wrapping_sub(bottom_left)
+      .wrapping_sub(top_right)
+  }
 }
 
 struct VertPaddedIter<'a, T: Pixel> {
@@ -1059,19 +1061,11 @@ pub fn sgrproj_solve<T: Pixel>(
   let (xq0, xq1) = if s_r2 == 0 {
     // H matrix is now only the scalar h[1][1]
     // C vector is now only the scalar c[1]
-    if h[1][1] == 0. {
-      (0, 0)
-    } else {
-      (0, (c[1] / h[1][1]).round() as i32)
-    }
+    if h[1][1] == 0. { (0, 0) } else { (0, (c[1] / h[1][1]).round() as i32) }
   } else if s_r1 == 0 {
     // H matrix is now only the scalar h[0][0]
     // C vector is now only the scalar c[0]
-    if h[0][0] == 0. {
-      (0, 0)
-    } else {
-      ((c[0] / h[0][0]).round() as i32, 0)
-    }
+    if h[0][0] == 0. { (0, 0) } else { ((c[0] / h[0][0]).round() as i32, 0) }
   } else {
     let det = h[0][0].mul_add(h[1][1], -h[0][1] * h[1][0]);
     if det == 0. {

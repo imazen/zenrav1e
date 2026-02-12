@@ -13,6 +13,7 @@ mod test {
   use rand::random;
   use std::mem::MaybeUninit;
 
+  use crate::Pixel;
   use crate::context::MAX_TX_SIZE;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::{AsRegion, Plane};
@@ -24,8 +25,7 @@ mod test {
     IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
   };
   use crate::transform::TxSize;
-  use crate::util::{slice_assume_init_mut, Aligned};
-  use crate::Pixel;
+  use crate::util::{Aligned, slice_assume_init_mut};
 
   #[test]
   fn pred_matches() {

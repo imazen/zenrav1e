@@ -19,8 +19,8 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::partition::*;
 use crate::rate::{
-  RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
-  FRAME_SUBTYPE_SEF,
+  FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P, FRAME_SUBTYPE_SEF,
+  RCState,
 };
 use crate::stats::EncoderStats;
 use crate::tiling::Area;
@@ -380,7 +380,7 @@ impl<T: Pixel> ContextInner<T> {
       let lookahead_frames = self
         .frame_q
         .range(self.next_lookahead_frame - 1..)
-        .filter_map(|(&_input_frameno, frame)| frame.as_ref())
+        .filter_map(|(_, frame)| frame.as_ref())
         .collect::<Vec<&Arc<Frame<T>>>>();
 
       if is_flushing {
@@ -445,7 +445,7 @@ impl<T: Pixel> ContextInner<T> {
     self
       .frame_data
       .iter()
-      .skip_while(move |(&output_frameno, _)| {
+      .skip_while(move |&(&output_frameno, _)| {
         output_frameno < self.output_frameno
       })
       .filter_map(|(fno, data)| data.as_ref().map(|data| (fno, data)))
@@ -1452,7 +1452,7 @@ impl<T: Pixel> ContextInner<T> {
     for subsequent_fi in self
       .frame_data
       .iter_mut()
-      .skip_while(|(&output_frameno, _)| output_frameno <= cur_output_frameno)
+      .skip_while(|&(&output_frameno, _)| output_frameno <= cur_output_frameno)
       // Here we want the next valid non-show-existing-frame inter frame.
       //
       // Copying to show-existing-frame frames isn't actually required
@@ -1508,7 +1508,7 @@ impl<T: Pixel> ContextInner<T> {
     self.output_frameno = self
       .frame_data
       .iter()
-      .skip_while(|(&output_frameno, _)| output_frameno < self.output_frameno)
+      .skip_while(|&(&output_frameno, _)| output_frameno < self.output_frameno)
       .find(|(_, data)| data.is_some())
       .map(|(&output_frameno, _)| output_frameno)
       .ok_or(EncoderStatus::NeedMoreData)?; // TODO: doesn't play well with the below check?

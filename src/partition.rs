@@ -22,8 +22,8 @@ use crate::transform::TxSize;
 use crate::util::*;
 use thiserror::Error;
 
-use std::mem::transmute;
 use std::mem::MaybeUninit;
+use std::mem::transmute;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
 #[derive(PartialEq, Eq, PartialOrd, Copy, Clone, Debug)]

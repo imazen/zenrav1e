@@ -1,5 +1,5 @@
 #![allow(unused_variables)]
-use serde::{ser, Serialize, Serializer};
+use serde::{Serialize, Serializer, ser};
 use thiserror::*;
 
 use std::fmt;

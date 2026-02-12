@@ -12,7 +12,7 @@ use crate::context::*;
 use crate::encoder::FrameInvariants;
 use crate::frame::*;
 use crate::tiling::*;
-use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
+use crate::util::{CastFromPrimitive, Pixel, clamp, msb};
 
 use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
@@ -148,11 +148,7 @@ pub(crate) mod rust {
       let shift = cmp::max(0, damping - msb(threshold));
       let magnitude = (threshold - (diff.abs() >> shift)).clamp(0, diff.abs());
 
-      if diff < 0 {
-        -magnitude
-      } else {
-        magnitude
-      }
+      if diff < 0 { -magnitude } else { magnitude }
     } else {
       0
     }
@@ -162,34 +158,36 @@ pub(crate) mod rust {
     dst: *mut u16, dst_stride: isize, src: *const T, src_stride: isize,
     block_width: usize, block_height: usize, edges: u8,
   ) {
-    let mut w = block_width;
-    let mut h = block_height;
-    let (dst_col, src_col) = if (edges & CDEF_HAVE_LEFT) != 0 {
-      w += 2;
-      (dst, src.offset(-2))
-    } else {
-      (dst.offset(2), src)
-    };
-    if (edges & CDEF_HAVE_RIGHT) != 0 {
-      w += 2;
-    };
+    unsafe {
+      let mut w = block_width;
+      let mut h = block_height;
+      let (dst_col, src_col) = if (edges & CDEF_HAVE_LEFT) != 0 {
+        w += 2;
+        (dst, src.offset(-2))
+      } else {
+        (dst.offset(2), src)
+      };
+      if (edges & CDEF_HAVE_RIGHT) != 0 {
+        w += 2;
+      };
 
-    let (mut dst_ptr, mut src_ptr) = if (edges & CDEF_HAVE_TOP) != 0 {
-      h += 2;
-      (dst_col, src_col.offset(-2 * src_stride))
-    } else {
-      (dst_col.offset(2 * dst_stride), src_col)
-    };
-    if (edges & CDEF_HAVE_BOTTOM) != 0 {
-      h += 2;
-    };
+      let (mut dst_ptr, mut src_ptr) = if (edges & CDEF_HAVE_TOP) != 0 {
+        h += 2;
+        (dst_col, src_col.offset(-2 * src_stride))
+      } else {
+        (dst_col.offset(2 * dst_stride), src_col)
+      };
+      if (edges & CDEF_HAVE_BOTTOM) != 0 {
+        h += 2;
+      };
 
-    for _y in 0..h {
-      for x in 0..w {
-        *dst_ptr.add(x) = u16::cast_from(*src_ptr.add(x));
+      for _y in 0..h {
+        for x in 0..w {
+          *dst_ptr.add(x) = u16::cast_from(*src_ptr.add(x));
+        }
+        src_ptr = src_ptr.offset(src_stride);
+        dst_ptr = dst_ptr.offset(dst_stride);
       }
-      src_ptr = src_ptr.offset(src_stride);
-      dst_ptr = dst_ptr.offset(dst_stride);
     }
   }
 
@@ -201,97 +199,99 @@ pub(crate) mod rust {
     bit_depth: usize, xdec: usize, ydec: usize, edges: u8,
     _cpu: CpuFeatureLevel,
   ) {
-    if edges != CDEF_HAVE_ALL {
-      // slowpath for unpadded border[s]
-      let tmpstride = 2 + (8 >> xdec) + 2;
-      let mut tmp = [CDEF_VERY_LARGE; (2 + 8 + 2) * (2 + 8 + 2)];
-      // copy in what pixels we have/are allowed to use
-      pad_into_tmp16(
-        tmp.as_mut_ptr(), // points to *padding* upper left
-        tmpstride,
-        input, // points to *block* upper left
-        istride,
-        8 >> xdec,
-        8 >> ydec,
-        edges,
-      );
-      cdef_filter_block(
-        dst,
-        tmp.as_ptr().offset(2 * tmpstride + 2),
-        tmpstride,
-        pri_strength,
-        sec_strength,
-        dir,
-        damping,
-        bit_depth,
-        xdec,
-        ydec,
-        CDEF_HAVE_ALL,
-        _cpu,
-      );
-    } else {
-      let xsize = (8 >> xdec) as isize;
-      let ysize = (8 >> ydec) as isize;
-      let coeff_shift = bit_depth - 8;
-      let cdef_pri_taps = [[4, 2], [3, 3]];
-      let cdef_sec_taps = [[2, 1], [2, 1]];
-      let pri_taps =
-        cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
-      let sec_taps =
-        cdef_sec_taps[((pri_strength >> coeff_shift) & 1) as usize];
-      let cdef_directions = [
-        [-1 * istride + 1, -2 * istride + 2],
-        [0 * istride + 1, -1 * istride + 2],
-        [0 * istride + 1, 0 * istride + 2],
-        [0 * istride + 1, 1 * istride + 2],
-        [1 * istride + 1, 2 * istride + 2],
-        [1 * istride + 0, 2 * istride + 1],
-        [1 * istride + 0, 2 * istride + 0],
-        [1 * istride + 0, 2 * istride - 1],
-      ];
-      for i in 0..ysize {
-        for j in 0..xsize {
-          let ptr_in = input.offset(i * istride + j);
-          let x = i32::cast_from(*ptr_in);
-          let mut sum: i32 = 0;
-          let mut max = x;
-          let mut min = x;
-          for k in 0..2usize {
-            let cdef_dirs = [
-              cdef_directions[dir][k],
-              cdef_directions[(dir + 2) & 7][k],
-              cdef_directions[(dir + 6) & 7][k],
-            ];
-            let pri_tap = pri_taps[k];
-            let p = [
-              i32::cast_from(*ptr_in.offset(cdef_dirs[0])),
-              i32::cast_from(*ptr_in.offset(-cdef_dirs[0])),
-            ];
-            for p_elem in p.iter() {
-              sum += pri_tap * constrain(*p_elem - x, pri_strength, damping);
-              if *p_elem != CDEF_VERY_LARGE as i32 {
-                max = cmp::max(*p_elem, max);
+    unsafe {
+      if edges != CDEF_HAVE_ALL {
+        // slowpath for unpadded border[s]
+        let tmpstride = 2 + (8 >> xdec) + 2;
+        let mut tmp = [CDEF_VERY_LARGE; (2 + 8 + 2) * (2 + 8 + 2)];
+        // copy in what pixels we have/are allowed to use
+        pad_into_tmp16(
+          tmp.as_mut_ptr(), // points to *padding* upper left
+          tmpstride,
+          input, // points to *block* upper left
+          istride,
+          8 >> xdec,
+          8 >> ydec,
+          edges,
+        );
+        cdef_filter_block(
+          dst,
+          tmp.as_ptr().offset(2 * tmpstride + 2),
+          tmpstride,
+          pri_strength,
+          sec_strength,
+          dir,
+          damping,
+          bit_depth,
+          xdec,
+          ydec,
+          CDEF_HAVE_ALL,
+          _cpu,
+        );
+      } else {
+        let xsize = (8 >> xdec) as isize;
+        let ysize = (8 >> ydec) as isize;
+        let coeff_shift = bit_depth - 8;
+        let cdef_pri_taps = [[4, 2], [3, 3]];
+        let cdef_sec_taps = [[2, 1], [2, 1]];
+        let pri_taps =
+          cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
+        let sec_taps =
+          cdef_sec_taps[((pri_strength >> coeff_shift) & 1) as usize];
+        let cdef_directions = [
+          [-1 * istride + 1, -2 * istride + 2],
+          [0 * istride + 1, -1 * istride + 2],
+          [0 * istride + 1, 0 * istride + 2],
+          [0 * istride + 1, 1 * istride + 2],
+          [1 * istride + 1, 2 * istride + 2],
+          [1 * istride + 0, 2 * istride + 1],
+          [1 * istride + 0, 2 * istride + 0],
+          [1 * istride + 0, 2 * istride - 1],
+        ];
+        for i in 0..ysize {
+          for j in 0..xsize {
+            let ptr_in = input.offset(i * istride + j);
+            let x = i32::cast_from(*ptr_in);
+            let mut sum: i32 = 0;
+            let mut max = x;
+            let mut min = x;
+            for k in 0..2usize {
+              let cdef_dirs = [
+                cdef_directions[dir][k],
+                cdef_directions[(dir + 2) & 7][k],
+                cdef_directions[(dir + 6) & 7][k],
+              ];
+              let pri_tap = pri_taps[k];
+              let p = [
+                i32::cast_from(*ptr_in.offset(cdef_dirs[0])),
+                i32::cast_from(*ptr_in.offset(-cdef_dirs[0])),
+              ];
+              for p_elem in p.iter() {
+                sum += pri_tap * constrain(*p_elem - x, pri_strength, damping);
+                if *p_elem != CDEF_VERY_LARGE as i32 {
+                  max = cmp::max(*p_elem, max);
+                }
+                min = cmp::min(*p_elem, min);
               }
-              min = cmp::min(*p_elem, min);
-            }
 
-            let s = [
-              i32::cast_from(*ptr_in.offset(cdef_dirs[1])),
-              i32::cast_from(*ptr_in.offset(-cdef_dirs[1])),
-              i32::cast_from(*ptr_in.offset(cdef_dirs[2])),
-              i32::cast_from(*ptr_in.offset(-cdef_dirs[2])),
-            ];
-            let sec_tap = sec_taps[k];
-            for s_elem in s.iter() {
-              if *s_elem != CDEF_VERY_LARGE as i32 {
-                max = cmp::max(*s_elem, max);
+              let s = [
+                i32::cast_from(*ptr_in.offset(cdef_dirs[1])),
+                i32::cast_from(*ptr_in.offset(-cdef_dirs[1])),
+                i32::cast_from(*ptr_in.offset(cdef_dirs[2])),
+                i32::cast_from(*ptr_in.offset(-cdef_dirs[2])),
+              ];
+              let sec_tap = sec_taps[k];
+              for s_elem in s.iter() {
+                if *s_elem != CDEF_VERY_LARGE as i32 {
+                  max = cmp::max(*s_elem, max);
+                }
+                min = cmp::min(*s_elem, min);
+                sum += sec_tap * constrain(*s_elem - x, sec_strength, damping);
               }
-              min = cmp::min(*s_elem, min);
-              sum += sec_tap * constrain(*s_elem - x, sec_strength, damping);
             }
+            let v = x + ((8 + sum - (sum < 0) as i32) >> 4);
+            dst[i as usize][j as usize] = T::cast_from(clamp(v, min, max));
           }
-          let v = x + ((8 + sum - (sum < 0) as i32) >> 4);
-          dst[i as usize][j as usize] = T::cast_from(clamp(v, min, max));
         }
       }
     }
@@ -314,11 +314,7 @@ pub(crate) mod rust {
 #[inline]
 fn adjust_strength(strength: i32, var: i32) -> i32 {
   let i = if (var >> 6) != 0 { cmp::min(msb(var >> 6), 12) } else { 0 };
-  if var != 0 {
-    (strength * (4 + i) + 8) >> 4
-  } else {
-    0
-  }
+  if var != 0 { (strength * (4 + i) + 8) >> 4 } else { 0 }
 }
 
 #[profiling::function]
@@ -495,11 +491,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
               local_pri_strength =
                 adjust_strength(cdef_pri_y_strength << coeff_shift, var);
               local_sec_strength = cdef_sec_y_strength << coeff_shift;
-              if cdef_pri_y_strength != 0 {
-                dir as usize
-              } else {
-                0
-              }
+              if cdef_pri_y_strength != 0 { dir as usize } else { 0 }
             } else {
               local_pri_strength = cdef_pri_uv_strength << coeff_shift;
               local_sec_strength = cdef_sec_uv_strength << coeff_shift;

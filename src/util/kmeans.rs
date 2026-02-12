@@ -74,31 +74,33 @@ unsafe fn scan<T>(
   T: PartialEq,
   T: PartialOrd,
 {
-  let mut n = *high;
-  let mut s = *sum.get_unchecked(0);
-  for &d in data.get_unchecked(..n).iter().rev().take_while(|&d| *d > t) {
-    s -= d.into();
-    n -= 1;
-  }
-  for &d in data.get_unchecked(n..).iter().take_while(|&d| *d <= t) {
-    s += d.into();
-    n += 1;
-  }
-  *high = n;
-  *sum.get_unchecked_mut(0) = s;
+  unsafe {
+    let mut n = *high;
+    let mut s = *sum.get_unchecked(0);
+    for &d in data.get_unchecked(..n).iter().rev().take_while(|&d| *d > t) {
+      s -= d.into();
+      n -= 1;
+    }
+    for &d in data.get_unchecked(n..).iter().take_while(|&d| *d <= t) {
+      s += d.into();
+      n += 1;
+    }
+    *high = n;
+    *sum.get_unchecked_mut(0) = s;
 
-  let mut n = *low;
-  let mut s = *sum.get_unchecked(1);
-  for &d in data.get_unchecked(n..).iter().take_while(|&d| *d < t) {
-    s -= d.into();
-    n += 1;
+    let mut n = *low;
+    let mut s = *sum.get_unchecked(1);
+    for &d in data.get_unchecked(n..).iter().take_while(|&d| *d < t) {
+      s -= d.into();
+      n += 1;
+    }
+    for &d in data.get_unchecked(..n).iter().rev().take_while(|&d| *d >= t) {
+      s += d.into();
+      n -= 1;
+    }
+    *low = n;
+    *sum.get_unchecked_mut(1) = s;
   }
-  for &d in data.get_unchecked(..n).iter().rev().take_while(|&d| *d >= t) {
-    s += d.into();
-    n -= 1;
-  }
-  *low = n;
-  *sum.get_unchecked_mut(1) = s;
 }
 
 #[cfg(test)]

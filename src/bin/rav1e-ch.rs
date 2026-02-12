@@ -398,7 +398,7 @@ fn run() -> Result<(), error::CliError> {
         y4m::Error::OutOfMemory => "The video's frame size exceeds the limit.",
         y4m::Error::EOF => "Unexpected end of input.",
         y4m::Error::BadInput => "Bad y4m input parameters provided.",
-      }))
+      }));
     }
     Ok(d) => d,
   };
@@ -560,7 +560,7 @@ fn run() -> Result<(), error::CliError> {
     match y4m_dec.read_frame() {
       Ok(f) => f,
       Err(_) => {
-        return Err(CliError::new("Skipped more frames than in the input"))
+        return Err(CliError::new("Skipped more frames than in the input"));
       }
     };
   }

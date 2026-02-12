@@ -52,7 +52,7 @@ pub use v_frame::frame::Frame;
 pub(crate) trait FrameAlloc {
   /// Initialise new frame default type
   fn new(width: usize, height: usize, chroma_sampling: ChromaSampling)
-    -> Self;
+  -> Self;
 }
 
 impl<T: Pixel> FrameAlloc for Frame<T> {
