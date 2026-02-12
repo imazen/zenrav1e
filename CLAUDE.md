@@ -97,11 +97,12 @@ CDEF adds -0.3% on top of that (marginal) with additional ~15% encode time.
   ~3%), not an efficiency gain. +35% encode time. Same issue as seg_boost.
 - **Bottom-up partition search**: Zero effect at speed 6. Top-down search
   already finds good partitions for still images.
-- **Trellis quantization (EOB shrinkage + level round-down)**: ~0.3-0.5% BPP
-  savings at Q50, negligible quality impact. Limited by rav1e's well-tuned
-  adaptive rounding biases. Approximate rate model can't precisely identify
-  the marginal cases where trellis helps. Would need actual CDF-based rate
-  estimation for >2% savings.
+- **Trellis quantization (EOB shrinkage + level round-down)**: CDF-based rate
+  model using actual AV1 entropy coder CDFs. Quality-adaptive dampening
+  (80/ac_quant) prevents low-Q regression; early exit at ac_quant >= 200.
+  Result: ~0.3% BPP savings at Q90-Q95 with no quality loss, but +34%
+  encode time. Not worth it — rav1e's adaptive rounding biases are already
+  well-tuned, leaving little room for trellis to improve.
 
 Recommended config:
 - **Speed priority**: `enable_qm: true` only (-10.1% BD-Rate, ~1x encode time)
