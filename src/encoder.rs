@@ -733,6 +733,9 @@ pub struct CodedFrameData<T: Pixel> {
   pub activity_mask: ActivityMask,
   /// Combined metric of activity and distortion
   pub spatiotemporal_scores: Box<[DistortionScale]>,
+  /// Boosted scores for segmentation (wider dynamic range).
+  /// When seg_boost > 1.0, these have amplified range for wider QP deltas.
+  pub segmentation_scores: Box<[DistortionScale]>,
 }
 
 impl<T: Pixel> CodedFrameData<T> {
@@ -761,6 +764,7 @@ impl<T: Pixel> CodedFrameData<T> {
       .into_boxed_slice(),
       activity_mask: Default::default(),
       spatiotemporal_scores: Default::default(),
+      segmentation_scores: Default::default(),
     }
   }
 
@@ -815,6 +819,37 @@ impl<T: Pixel> CodedFrameData<T> {
       *score =
         DistortionScale(raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32);
     }
+  }
+
+  /// Compute segmentation scores with boosted dynamic range.
+  /// Copies spatiotemporal_scores and raises each to the given power,
+  /// creating wider separation for segmentation QP offsets without
+  /// affecting RDO distortion weighting.
+  pub fn compute_segmentation_scores(&mut self, boost: f64) {
+    use crate::util::bexp64;
+    if (boost - 1.0).abs() < f64::EPSILON
+      || self.spatiotemporal_scores.is_empty()
+    {
+      // No boost: segmentation uses same scores as RDO
+      self.segmentation_scores.clone_from(&self.spatiotemporal_scores);
+      return;
+    }
+    let boost = boost.clamp(0.5, 4.0);
+    self.segmentation_scores = self
+      .spatiotemporal_scores
+      .iter()
+      .map(|score| {
+        let log_q11 = score.blog16() as f64;
+        let scaled_log_q11 = log_q11 * boost;
+        let log_q11_shifted =
+          scaled_log_q11 as i64 + ((DistortionScale::SHIFT as i64) << 11);
+        let log_q57 = log_q11_shifted << (57 - 11);
+        let raw = bexp64(log_q57);
+        DistortionScale(
+          raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32,
+        )
+      })
+      .collect();
   }
 
   // Assumes that we have already computed distortion_scales

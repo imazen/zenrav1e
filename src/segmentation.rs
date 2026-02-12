@@ -13,7 +13,7 @@ use crate::context::*;
 use crate::header::PRIMARY_REF_NONE;
 use crate::partition::BlockSize;
 use crate::rdo::DistortionScale;
-use crate::rdo::spatiotemporal_scale;
+use crate::rdo::segmentation_scale;
 use crate::tiling::TileStateMut;
 use crate::util::Pixel;
 
@@ -81,10 +81,15 @@ fn segmentation_optimize_inner<T: Pixel>(
   use arrayvec::ArrayVec;
 
   // Minimize the total distance from a small set of values to all scales.
-  // Find k-means of log(spatiotemporal scale), k in 3..=8
+  // Find k-means of log(segmentation scale), k in 3..=8
+  // Uses segmentation_scores (possibly boosted) for wider QP deltas.
   let c: ([_; 8], [_; 7], [_; 6], [_; 5], [_; 4], [_; 3]) = {
-    let spatiotemporal_scores =
-      &fi.coded_frame_data.as_ref().unwrap().spatiotemporal_scores;
+    let coded_data = fi.coded_frame_data.as_ref().unwrap();
+    let spatiotemporal_scores = if coded_data.segmentation_scores.is_empty() {
+      &coded_data.spatiotemporal_scores
+    } else {
+      &coded_data.segmentation_scores
+    };
     let mut log2_scale_q11 = Vec::with_capacity(spatiotemporal_scores.len());
     log2_scale_q11.extend(spatiotemporal_scores.iter().map(|&s| s.blog16()));
     log2_scale_q11.sort_unstable();
@@ -174,7 +179,7 @@ pub fn select_segment<T: Pixel>(
   }
 
   let frame_bo = ts.to_frame_block_offset(tile_bo);
-  let scale = spatiotemporal_scale(fi, frame_bo, bsize);
+  let scale = segmentation_scale(fi, frame_bo, bsize);
 
   let sidx = segment_idx_from_distortion(&ts.segmentation.threshold, scale);
 

@@ -131,6 +131,13 @@ pub struct EncoderConfig {
   /// Only effective when `enable_vaq` is true.
   pub vaq_strength: f64,
 
+  /// Segmentation boost power (default 1.0 = disabled).
+  /// When > 1.0, amplifies the dynamic range of segmentation QP offsets
+  /// independently of RDO distortion weighting. This allows wider bit
+  /// redistribution without inflating total bitrate through RDO.
+  /// Typical values: 1.0 (off), 1.5–2.5 (moderate–aggressive boost).
+  pub seg_boost: f64,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -192,6 +199,7 @@ impl EncoderConfig {
       enable_qm: false,
       enable_vaq: false,
       vaq_strength: 1.0,
+      seg_boost: 1.0,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
@@ -310,6 +318,7 @@ impl fmt::Display for EncoderConfig {
       ("enable_qm", self.enable_qm.to_string()),
       ("enable_vaq", self.enable_vaq.to_string()),
       ("vaq_strength", self.vaq_strength.to_string()),
+      ("seg_boost", self.seg_boost.to_string()),
       (
         "min_block_size",
         self.speed_settings.partition.partition_range.min.to_string(),

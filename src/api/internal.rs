@@ -1356,6 +1356,8 @@ impl<T: Pixel> ContextInner<T> {
         if self.config.enable_vaq && self.config.vaq_strength != 1.0 {
           coded_data.apply_vaq_strength(self.config.vaq_strength);
         }
+        // Compute boosted segmentation scores for wider QP deltas
+        coded_data.compute_segmentation_scores(self.config.seg_boost);
       } else {
         coded_data.activity_mask = ActivityMask::default();
         log_isqrt_mean_scale = coded_data.compute_temporal_scores();

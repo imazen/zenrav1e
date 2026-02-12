@@ -511,6 +511,35 @@ pub fn spatiotemporal_scale<T: Pixel>(
   DistortionScale(((sum + (den >> 1)) / den) as u32)
 }
 
+/// Get the segmentation scale for a block (for segment selection).
+/// Uses segmentation_scores (possibly boosted) when available,
+/// falls back to spatiotemporal_scale when seg_boost is disabled.
+pub fn segmentation_scale<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+) -> DistortionScale {
+  let coded_data = fi.coded_frame_data.as_ref().unwrap();
+  if coded_data.segmentation_scores.is_empty() {
+    return spatiotemporal_scale(fi, frame_bo, bsize);
+  }
+
+  let x0 = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let y0 = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let x1 = (x0 + bsize.width_imp_b()).min(coded_data.w_in_imp_b);
+  let y1 = (y0 + bsize.height_imp_b()).min(coded_data.h_in_imp_b);
+  let count = ((x1 - x0) * (y1 - y0)) as u64;
+  if count == 0 {
+    return DistortionScale::default();
+  }
+
+  let mut sum = 0u64;
+  for y in y0..y1 {
+    let row = &coded_data.segmentation_scores
+      [y * coded_data.w_in_imp_b..][x0..x1];
+    sum += row.iter().map(|s| s.0 as u64).sum::<u64>();
+  }
+  DistortionScale((sum / count) as u32)
+}
+
 pub fn distortion_scale_for(
   propagate_cost: f64, intra_cost: f64,
 ) -> DistortionScale {
