@@ -552,6 +552,9 @@ impl QuantizerParameters {
     let scale = |q| bexp64((log_target_q - q) * 2 + q57(16)) as f64 / 65536.;
     let dist_scale = [scale(log_q_y), scale(log_q_u), scale(log_q_v)];
 
+    // In the rate controller, prevent accidental lossless (qi=0) which would
+    // change transform and filter semantics. Lossless is only entered through
+    // explicit quantizer=0 in the config (constant-quality path).
     let base_q_idx = select_ac_qi(quantizer, bit_depth).max(1);
 
     // delta_q only gets 6 bits + a sign bit, so it can differ by 63 at most.

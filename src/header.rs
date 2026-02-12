@@ -735,8 +735,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write::<2, u32>(fs.max_tile_size_bytes - 1)?;
     }
 
-    // quantization
-    assert!(fi.base_q_idx > 0);
+    // quantization (base_q_idx == 0 is lossless mode)
     self.write::<8, u8>(fi.base_q_idx)?; // base_q_idx
     self.write_delta_q(fi.dc_delta_q[0])?;
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
@@ -1110,7 +1109,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_frame_cdef<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()> {
-    if fi.sequence.enable_cdef && !fi.allow_intrabc {
+    if fi.sequence.enable_cdef && !fi.allow_intrabc && !fi.is_lossless() {
       assert!(fi.cdef_damping >= 3);
       assert!(fi.cdef_damping <= 6);
       self.write::<2, u8>(fi.cdef_damping - 3)?;
@@ -1131,8 +1130,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_frame_lrf<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, rs: &RestorationState,
   ) -> io::Result<()> {
-    if fi.sequence.enable_restoration && !fi.allow_intrabc {
-      // && !self.lossless
+    if fi.sequence.enable_restoration && !fi.allow_intrabc && !fi.is_lossless()
+    {
       let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
         1
       } else {

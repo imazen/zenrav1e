@@ -984,9 +984,10 @@ impl<T: Pixel> FrameInvariants<T> {
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
       cpu_feature_level: Default::default(),
-      enable_segmentation: config.enable_vaq
-        || config.tune == Tune::StillImage
-        || config.speed_settings.segmentation != SegmentationLevel::Disabled,
+      enable_segmentation: config.quantizer > 0
+        && (config.enable_vaq
+          || config.tune == Tune::StillImage
+          || config.speed_settings.segmentation != SegmentationLevel::Disabled),
       enable_inter_txfm_split: config
         .speed_settings
         .transform
@@ -1002,7 +1003,9 @@ impl<T: Pixel> FrameInvariants<T> {
     config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
     gop_input_frameno_start: u64, t35_metadata: Box<[T35]>,
   ) -> Self {
-    let tx_mode_select = config.speed_settings.transform.rdo_tx_decision;
+    // In lossless mode (quantizer=0), only 4x4 WHT_WHT is used, no TX selection
+    let tx_mode_select = config.speed_settings.transform.rdo_tx_decision
+      && config.quantizer > 0;
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
     fi.tx_mode_select = tx_mode_select;
@@ -1304,6 +1307,15 @@ impl<T: Pixel> FrameInvariants<T> {
       self.cdef_y_strengths[0] = y_strength;
       self.cdef_uv_strengths[0] = uv_strength;
     }
+  }
+
+  /// Returns true when the frame is coded in lossless mode (base_q_idx == 0
+  /// with no delta-q offsets). In lossless mode, only WHT_WHT 4x4 transforms
+  /// are used and all loop filters are disabled.
+  pub fn is_lossless(&self) -> bool {
+    self.base_q_idx == 0
+      && self.dc_delta_q.iter().all(|&d| d == 0)
+      && self.ac_delta_q.iter().all(|&d| d == 0)
   }
 
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
@@ -2365,10 +2377,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
 
-  // TODO: Lossless is not yet supported.
-  if !skip {
-    assert_ne!(qidx, 0);
-  }
+  // qidx == 0 is lossless mode: uses WHT_WHT transform, no quantization
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let mut ac = Aligned::<[MaybeUninit<i16>; 32 * 32]>::uninit_array();
@@ -3386,75 +3395,82 @@ fn encode_tile_group<T: Pixel>(
     fs.enc_stats += &tile_stats;
   }
 
-  /* Frame deblocking operates over a single large tile wrapping the
-   * frame rather than the frame itself so that deblocking is
-   * available inside RDO when needed */
-  /* TODO: Don't apply if lossless */
-  let levels = fs.apply_tile_state_mut(|ts| {
-    let rec = &mut ts.rec;
-    deblock_filter_optimize(
-      fi,
-      &rec.as_const(),
-      &ts.input.as_tile(),
-      &blocks.as_tile_blocks(),
-      fi.width,
-      fi.height,
-    )
-  });
-  fs.deblock.levels = levels;
-
-  // For still images, increase deblocking sharpness to preserve edges.
-  // AV1 sharpness range is 0-7. Higher = less deblocking near edges.
-  if fi.config.tune == Tune::StillImage {
-    fs.deblock.sharpness = if fi.base_q_idx < 80 {
-      7 // High quality: maximum edge preservation
-    } else if fi.base_q_idx < 160 {
-      5
-    } else {
-      3
-    };
-  }
-
-  if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    fs.apply_tile_state_mut(|ts| {
+  // In lossless mode, all loop filters are disabled (deblocking, CDEF, LRF).
+  if !fi.is_lossless() {
+    /* Frame deblocking operates over a single large tile wrapping the
+     * frame rather than the frame itself so that deblocking is
+     * available inside RDO when needed */
+    let levels = fs.apply_tile_state_mut(|ts| {
       let rec = &mut ts.rec;
-      deblock_filter_frame(
-        ts.deblock,
-        rec,
+      deblock_filter_optimize(
+        fi,
+        &rec.as_const(),
+        &ts.input.as_tile(),
         &blocks.as_tile_blocks(),
         fi.width,
         fi.height,
-        fi.sequence.bit_depth,
-        planes,
-      );
+      )
     });
-  }
+    fs.deblock.levels = levels;
 
-  if fi.sequence.enable_restoration {
-    // Until the loop filters are better pipelined, we'll need to keep
-    // around a copy of both the deblocked and cdeffed frame.
-    let deblocked_frame = (*fs.rec).clone();
+    // For still images, increase deblocking sharpness to preserve edges.
+    // AV1 sharpness range is 0-7. Higher = less deblocking near edges.
+    if fi.config.tune == Tune::StillImage {
+      fs.deblock.sharpness = if fi.base_q_idx < 80 {
+        7 // High quality: maximum edge preservation
+      } else if fi.base_q_idx < 160 {
+        5
+      } else {
+        3
+      };
+    }
 
-    /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_cdef {
+    if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
       fs.apply_tile_state_mut(|ts| {
         let rec = &mut ts.rec;
-        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+        deblock_filter_frame(
+          ts.deblock,
+          rec,
+          &blocks.as_tile_blocks(),
+          fi.width,
+          fi.height,
+          fi.sequence.bit_depth,
+          planes,
+        );
       });
     }
-    /* TODO: Don't apply if lossless */
-    fs.restoration.lrf_filter_frame(
-      Arc::get_mut(&mut fs.rec).unwrap(),
-      &deblocked_frame,
-      fi,
-    );
-  } else {
-    /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_cdef {
+
+    if fi.sequence.enable_restoration {
+      // Until the loop filters are better pipelined, we'll need to keep
+      // around a copy of both the deblocked and cdeffed frame.
+      let deblocked_frame = (*fs.rec).clone();
+
+      if fi.sequence.enable_cdef {
+        fs.apply_tile_state_mut(|ts| {
+          let rec = &mut ts.rec;
+          cdef_filter_tile(
+            fi,
+            &deblocked_frame,
+            &blocks.as_tile_blocks(),
+            rec,
+          );
+        });
+      }
+      fs.restoration.lrf_filter_frame(
+        Arc::get_mut(&mut fs.rec).unwrap(),
+        &deblocked_frame,
+        fi,
+      );
+    } else if fi.sequence.enable_cdef {
       let deblocked_frame = (*fs.rec).clone();
       fs.apply_tile_state_mut(|ts| {
         let rec = &mut ts.rec;
-        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+        cdef_filter_tile(
+          fi,
+          &deblocked_frame,
+          &blocks.as_tile_blocks(),
+          rec,
+        );
       });
     }
   }
@@ -3574,8 +3590,7 @@ fn check_lf_queue<T: Pixel>(
           }
         }
         // write LRF information
-        if !fi.allow_intrabc && fi.sequence.enable_restoration {
-          // TODO: also disallow if lossless
+        if !fi.allow_intrabc && fi.sequence.enable_restoration && !fi.is_lossless() {
           for pli in 0..planes {
             if qe.lru_index[pli] != -1
               && last_lru_coded[pli] < qe.lru_index[pli]
@@ -3721,9 +3736,8 @@ fn encode_tile<'a, T: Pixel>(
     }
   }
 
-  if fi.sequence.enable_delayed_loopfilter_rdo {
+  if fi.sequence.enable_delayed_loopfilter_rdo && !fi.is_lossless() {
     // Solve deblocking for just this tile
-    /* TODO: Don't apply if lossless */
     let deblock_levels = deblock_filter_optimize(
       fi,
       &ts.rec.as_const(),

@@ -33,9 +33,8 @@ pub fn segmentation_optimize<T: Pixel>(
     fs.segmentation.update_data = fi.primary_ref_frame == PRIMARY_REF_NONE;
 
     // Avoid going into lossless mode by never bringing qidx below 1.
-    // Because base_q_idx changes more frequently than the segmentation
-    // data, it is still possible for a segment to enter lossless, so
-    // enforcement elsewhere is needed.
+    // Segmentation is disabled in lossless mode (quantizer=0), so this
+    // only runs for lossy encoding.
     let offset_lower_limit = 1 - fi.base_q_idx as i16;
 
     if !fs.segmentation.update_data {

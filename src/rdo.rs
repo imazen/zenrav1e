@@ -736,6 +736,11 @@ pub fn rdo_tx_size_type<T: Pixel>(
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   skip: bool,
 ) -> (TxSize, TxType) {
+  // In lossless mode, always use WHT_WHT with 4x4 transform
+  if fi.is_lossless() {
+    return (TxSize::TX_4X4, TxType::WHT_WHT);
+  }
+
   let is_inter = !luma_mode.is_intra();
   let mut tx_size = max_txsize_rect_lookup[bsize as usize];
 
