@@ -38,9 +38,9 @@ use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
-  RAV1E_INTER_COMPOUND_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
-  luma_ac,
+  AngleDelta, FilterIntraMode, IntraEdgeFilterParameters, IntraParam,
+  PredictionMode, RAV1E_INTER_COMPOUND_MODES, RAV1E_INTER_MODES_MINIMAL,
+  RAV1E_INTRA_MODES, luma_ac,
 };
 use crate::rdo_tables::*;
 use crate::tiling::*;
@@ -102,6 +102,8 @@ pub struct PartitionParameters {
   pub tx_size: TxSize,
   pub tx_type: TxType,
   pub sidx: u8,
+  pub use_filter_intra: bool,
+  pub filter_intra_mode: FilterIntraMode,
 }
 
 impl Default for PartitionParameters {
@@ -121,6 +123,8 @@ impl Default for PartitionParameters {
       tx_size: TxSize::TX_4X4,
       tx_type: TxType::DCT_DCT,
       sidx: 0,
+      use_filter_intra: false,
+      filter_intra_mode: FilterIntraMode::FILTER_DC_PRED,
     }
   }
 }
@@ -906,6 +910,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           rdo_type,
           need_recon_pixel,
           None,
+          false,
+          FilterIntraMode::FILTER_DC_PRED,
         );
 
         let rate = wr.tell_frac() - tell;
@@ -938,6 +944,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           best.tx_size = tx_size;
           best.tx_type = tx_type;
           best.sidx = sidx;
+          best.use_filter_intra = false;
           zero_distortion = is_zero_dist;
         }
 
@@ -1039,6 +1046,8 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
       rdo_type,
       true,
+      best.use_filter_intra,
+      best.filter_intra_mode,
     );
     cw.rollback(&cw_checkpoint);
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
@@ -1076,6 +1085,8 @@ pub fn rdo_mode_decision<T: Pixel>(
           rdo_type,
           true, // For CFL, luma should be always reconstructed.
           None,
+          false,
+          FilterIntraMode::FILTER_DC_PRED,
         );
 
         let rate = wr.tell_frac() - tell;
@@ -1118,6 +1129,8 @@ pub fn rdo_mode_decision<T: Pixel>(
     tx_size: best.tx_size,
     tx_type: best.tx_type,
     sidx: best.sidx,
+    use_filter_intra: best.use_filter_intra,
+    filter_intra_mode: best.filter_intra_mode,
   }
 }
 
@@ -1539,6 +1552,117 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
+  // Try filter intra modes (5 modes using 7-tap recursive filters on 4x2 subblocks).
+  // Filter intra is only applicable for DC_PRED blocks where width and height ≤ 32.
+  if fi.sequence.enable_filter_intra
+    && bsize.width() <= 32
+    && bsize.height() <= 32
+  {
+    use crate::segmentation::select_segment;
+
+    let luma_mode = PredictionMode::DC_PRED;
+    let mvs = [MotionVector::default(); 2];
+    let ref_frames = [INTRA_FRAME, NONE_FRAME];
+    let angle_delta = AngleDelta::default();
+    let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+    let fi_is_chroma_block =
+      has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+
+    let filter_intra_modes = [
+      FilterIntraMode::FILTER_DC_PRED,
+      FilterIntraMode::FILTER_V_PRED,
+      FilterIntraMode::FILTER_H_PRED,
+      FilterIntraMode::FILTER_D157_PRED,
+      FilterIntraMode::FILTER_PAETH_PRED,
+    ];
+
+    for &fi_mode in &filter_intra_modes {
+      for sidx in select_segment(fi, ts, tile_bo, bsize, false) {
+        cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
+
+        let (tx_size, tx_type) = rdo_tx_size_type(
+          fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
+        );
+
+        // Use DC_PRED for chroma when filter intra is used on luma
+        let chroma_mode = PredictionMode::DC_PRED;
+        let wr = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
+
+        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+          cw.write_partition(
+            wr,
+            tile_bo,
+            PartitionType::PARTITION_NONE,
+            bsize,
+          );
+        }
+
+        let need_recon_pixel = tx_size.block_size() != bsize;
+
+        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, false);
+        let (has_coeff, tx_dist) = encode_block_post_cdef(
+          fi,
+          ts,
+          cw,
+          wr,
+          luma_mode,
+          chroma_mode,
+          angle_delta,
+          ref_frames,
+          mvs,
+          bsize,
+          tile_bo,
+          false,
+          CFLParams::default(),
+          tx_size,
+          tx_type,
+          0,
+          &[],
+          rdo_type,
+          need_recon_pixel,
+          None,
+          true,
+          fi_mode,
+        );
+
+        let rate = wr.tell_frac() - tell;
+        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
+          compute_tx_distortion(
+            fi,
+            ts,
+            bsize,
+            fi_is_chroma_block,
+            tile_bo,
+            tx_dist,
+            false,
+            false,
+          )
+        } else {
+          compute_distortion(fi, ts, bsize, fi_is_chroma_block, tile_bo, false)
+        };
+        let rd = compute_rd_cost(fi, rate, distortion);
+        if rd < best.rd_cost {
+          best.rd_cost = rd;
+          best.pred_mode_luma = luma_mode;
+          best.pred_mode_chroma = chroma_mode;
+          best.angle_delta = angle_delta;
+          best.ref_frames = ref_frames;
+          best.mvs = mvs;
+          best.skip = false;
+          best.has_coeff = has_coeff;
+          best.tx_size = tx_size;
+          best.tx_type = tx_type;
+          best.sidx = sidx;
+          best.use_filter_intra = true;
+          best.filter_intra_mode = fi_mode;
+        }
+
+        cw.rollback(cw_checkpoint);
+      }
+    }
+  }
+
   if fi.config.speed_settings.prediction.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
@@ -1763,6 +1887,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         true,
         rdo_type,
         need_recon_pixel,
+        false,
+        FilterIntraMode::FILTER_DC_PRED,
       )
     } else {
       write_tx_blocks(
@@ -1782,6 +1908,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         true,
         rdo_type,
         need_recon_pixel,
+        false,
+        FilterIntraMode::FILTER_DC_PRED,
       )
     };
 

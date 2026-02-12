@@ -2487,3 +2487,41 @@ fn tune_still_image_produces_valid_output() {
   let pkt = pkt.unwrap();
   assert!(!pkt.data.is_empty(), "Packet should contain data");
 }
+
+#[test]
+fn filter_intra_produces_valid_output() {
+  // Test that enabling filter_intra produces valid AV1 output.
+  // Uses speed 6 (ComplexKeyframes) to enable filter intra search.
+  let mut enc = EncoderConfig::with_speed_preset(6);
+  enc.width = 32;
+  enc.height = 32;
+  enc.quantizer = 100;
+  enc.min_key_frame_interval = 1;
+  enc.max_key_frame_interval = 1;
+  enc.low_latency = true;
+  enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+  // filter_intra is auto-enabled when prediction_modes >= ComplexKeyframes
+
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+  let mut input = ctx.new_frame();
+  // Use a gradient pattern to give filter intra modes something to work with
+  let stride = input.planes[0].cfg.stride;
+  for y in 0..32 {
+    for x in 0..32 {
+      input.planes[0].data[y * stride + x] =
+        ((x * 4 + y * 2) % 256) as u8;
+    }
+  }
+  let _ = ctx.send_frame(Arc::new(input));
+  ctx.flush();
+
+  let pkt = ctx.receive_packet();
+  assert!(
+    pkt.is_ok(),
+    "Filter intra encoding should produce a valid packet"
+  );
+  let pkt = pkt.unwrap();
+  assert!(!pkt.data.is_empty(), "Packet should contain data");
+}

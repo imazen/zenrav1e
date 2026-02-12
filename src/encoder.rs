@@ -33,7 +33,8 @@ use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode, luma_ac,
+  AngleDelta, FilterIntraMode, IntraEdgeFilterParameters, IntraParam,
+  PredictionMode, luma_ac, rust::pred_filter_intra,
 };
 use crate::quantize::*;
 use crate::rate::{
@@ -319,7 +320,8 @@ impl Sequence {
       force_integer_mv: 2,
       still_picture: config.still_picture,
       reduced_still_picture_hdr: config.still_picture,
-      enable_filter_intra: false,
+      enable_filter_intra: config.speed_settings.prediction.prediction_modes
+        >= PredictionModesSetting::ComplexKeyframes,
       enable_intra_edge_filter: true,
       enable_interintra_compound: false,
       enable_masked_compound: false,
@@ -1501,6 +1503,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   pred_intra_param: IntraParam,
   rdo_type: RDOType,
   need_recon_pixel: bool,
+  use_filter_intra: bool,
+  filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
@@ -1570,17 +1574,27 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       pred_intra_param,
     );
 
-    mode.predict_intra(
-      tile_rect,
-      &mut rec.subregion_mut(area),
-      tx_size,
-      bit_depth,
-      ac,
-      pred_intra_param,
-      ief_params,
-      &edge_buf,
-      fi.cpu_feature_level,
-    );
+    if use_filter_intra && p == 0 {
+      pred_filter_intra(
+        &mut rec.subregion_mut(area),
+        &edge_buf,
+        tx_size,
+        filter_intra_mode,
+        bit_depth,
+      );
+    } else {
+      mode.predict_intra(
+        tile_rect,
+        &mut rec.subregion_mut(area),
+        tx_size,
+        bit_depth,
+        ac,
+        pred_intra_param,
+        ief_params,
+        &edge_buf,
+        fi.cpu_feature_level,
+      );
+    }
   }
 
   if skip {
@@ -2033,6 +2047,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
   rdo_type: RDOType, need_recon_pixel: bool,
   enc_stats: Option<&mut EncoderStats>,
+  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -2214,7 +2229,10 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       && bsize.width() <= 32
       && bsize.height() <= 32
     {
-      cw.write_use_filter_intra(w, false, bsize); // turn off FILTER_INTRA
+      cw.write_use_filter_intra(w, use_filter_intra, bsize);
+      if use_filter_intra {
+        cw.write_filter_intra_mode(w, filter_intra_mode);
+      }
     }
   }
 
@@ -2304,6 +2322,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       false,
       rdo_type,
       need_recon_pixel,
+      false, // filter intra not used for inter blocks
+      FilterIntraMode::FILTER_DC_PRED,
     )
   } else {
     write_tx_blocks(
@@ -2323,6 +2343,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       false,
       rdo_type,
       need_recon_pixel,
+      use_filter_intra,
+      filter_intra_mode,
     )
   }
 }
@@ -2337,6 +2359,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
   rdo_type: RDOType, need_recon_pixel: bool,
+  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -2394,6 +2417,8 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         IntraParam::AngleDelta(angle_delta.y),
         rdo_type,
         need_recon_pixel,
+        use_filter_intra,
+        filter_intra_mode,
       );
       partition_has_coeff |= has_coeff;
       tx_dist += dist;
@@ -2486,6 +2511,8 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
           },
           rdo_type,
           need_recon_pixel,
+          false, // filter intra is luma-only
+          FilterIntraMode::FILTER_DC_PRED,
         );
         partition_has_coeff |= has_coeff;
         tx_dist += dist;
@@ -2502,6 +2529,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
   tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
   rdo_type: RDOType, need_recon_pixel: bool,
+  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
   if skip {
     return (false, ScaledDistortion::zero());
@@ -2559,6 +2587,8 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
         IntraParam::AngleDelta(angle_delta_y),
         rdo_type,
         need_recon_pixel,
+        use_filter_intra,
+        filter_intra_mode,
       );
       partition_has_coeff |= has_coeff;
       tx_dist += dist;
@@ -2643,6 +2673,8 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
           IntraParam::AngleDelta(angle_delta_y),
           rdo_type,
           need_recon_pixel,
+          false, // filter intra is luma-only
+          FilterIntraMode::FILTER_DC_PRED,
         );
         partition_has_coeff |= has_coeff;
         tx_dist += dist;
@@ -2717,6 +2749,8 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     rdo_type,
     true,
     enc_stats,
+    mode_decision.use_filter_intra,
+    mode_decision.filter_intra_mode,
   );
 }
 
@@ -3235,6 +3269,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         RDOType::PixelDistRealRate,
         true,
         Some(enc_stats),
+        part_decision.use_filter_intra,
+        part_decision.filter_intra_mode,
       );
     }
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {

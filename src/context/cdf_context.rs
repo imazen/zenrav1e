@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use crate::predict::FilterIntraMode;
 use std::marker::PhantomData;
 
 pub const CDF_LEN_MAX: usize = 16;
@@ -30,6 +31,7 @@ pub struct CDFContext {
   pub eob_extra_cdf:
     [[[[u16; 2]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub filter_intra_cdfs: [[u16; 2]; BlockSize::BLOCK_SIZES_ALL],
+  pub filter_intra_mode_cdf: [u16; FilterIntraMode::FILTER_INTRA_MODES as usize],
   pub intra_inter_cdfs: [[u16; 2]; INTRA_INTER_CONTEXTS],
   pub lrf_sgrproj_cdf: [u16; 2],
   pub lrf_wiener_cdf: [u16; 2],
@@ -133,6 +135,7 @@ impl CDFContext {
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
+      filter_intra_mode_cdf: default_filter_intra_mode_cdf,
       palette_y_mode_cdfs: default_palette_y_mode_cdfs,
       palette_uv_mode_cdfs: default_palette_uv_mode_cdfs,
       comp_mode_cdf: default_comp_mode_cdf,
@@ -229,6 +232,7 @@ impl CDFContext {
     reset_2d!(self.intra_inter_cdfs);
     reset_2d!(self.angle_delta_cdf);
     reset_2d!(self.filter_intra_cdfs);
+    reset_1d!(self.filter_intra_mode_cdf);
     reset_3d!(self.palette_y_mode_cdfs);
     reset_2d!(self.palette_uv_mode_cdfs);
     reset_2d!(self.comp_mode_cdf);

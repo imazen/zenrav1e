@@ -518,6 +518,70 @@ pub enum FilterIntraMode {
   FILTER_INTRA_MODES,
 }
 
+/// AV1 filter intra tap coefficients.
+/// `FILTER_INTRA_TAPS[mode][pixel_idx][tap_idx]`
+/// - 5 modes (DC, V, H, D157, Paeth)
+/// - 8 output pixels per 4x2 subblock (row-major: pixels 0-3 = top row, 4-7 = bottom row)
+/// - 7 taps per pixel: [top_left, above0, above1, above2, above3, left0, left1]
+/// From AV1 spec Section 7.11.2.6.
+pub const FILTER_INTRA_TAPS: [[[i8; 7]; 8]; 5] = [
+  // FILTER_DC_PRED
+  [
+    [-6, 10, 0, 0, 0, 12, 0],
+    [-5, 2, 10, 0, 0, 9, 0],
+    [-3, 1, 1, 10, 0, 7, 0],
+    [-3, 1, 1, 2, 10, 5, 0],
+    [-4, 6, 0, 0, 0, 2, 12],
+    [-3, 2, 6, 0, 0, 2, 9],
+    [-3, 2, 2, 6, 0, 2, 7],
+    [-3, 1, 2, 2, 6, 3, 5],
+  ],
+  // FILTER_V_PRED
+  [
+    [-10, 16, 0, 0, 0, 10, 0],
+    [-6, 0, 16, 0, 0, 6, 0],
+    [-4, 0, 0, 16, 0, 4, 0],
+    [-2, 0, 0, 0, 16, 2, 0],
+    [-10, 16, 0, 0, 0, 0, 10],
+    [-6, 0, 16, 0, 0, 0, 6],
+    [-4, 0, 0, 16, 0, 0, 4],
+    [-2, 0, 0, 0, 16, 0, 2],
+  ],
+  // FILTER_H_PRED
+  [
+    [-8, 8, 0, 0, 0, 16, 0],
+    [-8, 0, 8, 0, 0, 16, 0],
+    [-8, 0, 0, 8, 0, 16, 0],
+    [-8, 0, 0, 0, 8, 16, 0],
+    [-4, 4, 0, 0, 0, 0, 16],
+    [-4, 0, 4, 0, 0, 0, 16],
+    [-4, 0, 0, 4, 0, 0, 16],
+    [-4, 0, 0, 0, 4, 0, 16],
+  ],
+  // FILTER_D157_PRED
+  [
+    [-2, 8, 0, 0, 0, 10, 0],
+    [-1, 3, 8, 0, 0, 6, 0],
+    [-1, 2, 3, 8, 0, 4, 0],
+    [0, 1, 2, 3, 8, 2, 0],
+    [-1, 4, 0, 0, 0, 3, 10],
+    [-1, 3, 4, 0, 0, 4, 6],
+    [-1, 2, 3, 4, 0, 4, 4],
+    [-1, 2, 2, 3, 4, 3, 3],
+  ],
+  // FILTER_PAETH_PRED
+  [
+    [-12, 14, 0, 0, 0, 14, 0],
+    [-10, 0, 14, 0, 0, 12, 0],
+    [-9, 0, 0, 14, 0, 11, 0],
+    [-8, 0, 0, 0, 14, 10, 0],
+    [-10, 12, 0, 0, 0, 0, 14],
+    [-9, 1, 12, 0, 0, 0, 12],
+    [-8, 0, 0, 12, 0, 1, 11],
+    [-7, 0, 0, 1, 12, 1, 9],
+  ],
+];
+
 #[derive(Copy, Clone, Debug)]
 pub enum IntraParam {
   AngleDelta(i8),
@@ -776,6 +840,98 @@ pub(crate) mod rust {
         bit_depth,
       ),
       _ => unimplemented!(),
+    }
+  }
+
+  /// Filter intra prediction using recursive 7-tap filters on 4x2 subblocks.
+  /// Only valid for blocks where both width and height are ≤ 32.
+  /// The luma mode must be DC_PRED for filter intra to apply.
+  pub fn pred_filter_intra<T: Pixel>(
+    dst: &mut PlaneRegionMut<'_, T>, edge_buf: &IntraEdge<T>,
+    tx_size: TxSize, filter_mode: FilterIntraMode, bit_depth: usize,
+  ) {
+    let width = tx_size.width();
+    let height = tx_size.height();
+    debug_assert!(width <= 32 && height <= 32);
+
+    let max_val = (1i32 << bit_depth) - 1;
+    let default_val: i32 = 1 << (bit_depth - 1);
+    let taps = &FILTER_INTRA_TAPS[filter_mode as usize];
+    let (left, top_left, above) = edge_buf.as_slices();
+    // Left edge buffer is ordered top-to-bottom; take the last `height` entries
+    let left_slice = &left[left.len().saturating_sub(height)..];
+
+    // Helper closures for safe edge access with default fallback
+    let get_above = |i: usize| -> i32 {
+      above.get(i).map_or(default_val, |&v| v.into())
+    };
+    let get_left = |i: usize| -> i32 {
+      left_slice.get(i).map_or(default_val, |&v| v.into())
+    };
+    let get_top_left = || -> i32 {
+      top_left.first().map_or(default_val, |&v| v.into())
+    };
+
+    for y in (0..height).step_by(2) {
+      for x in (0..width).step_by(4) {
+        // Gather 7 reference pixels for this 4x2 subblock
+        let p0: i32; // top-left of subblock
+        let p1: i32; // above[0]
+        let p2: i32; // above[1]
+        let p3: i32; // above[2]
+        let p4: i32; // above[3]
+        let p5: i32; // left[0]
+        let p6: i32; // left[1]
+
+        // Above pixels: from edge buffer (first row) or from already-computed output
+        if y == 0 {
+          p1 = get_above(x);
+          p2 = get_above(x + 1);
+          p3 = get_above(x + 2);
+          p4 = get_above(x + 3);
+        } else {
+          p1 = dst[y - 1][x].into();
+          p2 = dst[y - 1][x + 1].into();
+          p3 = dst[y - 1][x + 2].into();
+          p4 = dst[y - 1][x + 3].into();
+        }
+
+        // Top-left pixel
+        if x == 0 && y == 0 {
+          p0 = get_top_left();
+        } else if y == 0 {
+          p0 = get_above(x - 1);
+        } else if x == 0 {
+          p0 = get_left(y - 1);
+        } else {
+          p0 = dst[y - 1][x - 1].into();
+        }
+
+        // Left pixels
+        if x == 0 {
+          p5 = get_left(y);
+          p6 = get_left(y + 1);
+        } else {
+          p5 = dst[y][x - 1].into();
+          p6 = dst[y + 1][x - 1].into();
+        }
+
+        let p = [p0, p1, p2, p3, p4, p5, p6];
+
+        // Compute 8 output pixels (4 wide × 2 high)
+        for row in 0..2 {
+          for col in 0..4 {
+            let pixel_idx = row * 4 + col;
+            let t = &taps[pixel_idx];
+            let mut acc = 0i32;
+            for i in 0..7 {
+              acc += t[i] as i32 * p[i];
+            }
+            dst[y + row][x + col] =
+              T::cast_from(((acc + 8) >> 4).clamp(0, max_val));
+          }
+        }
+      }
     }
   }
 

@@ -11,7 +11,7 @@ use std::mem::MaybeUninit;
 
 use super::*;
 
-use crate::predict::PredictionMode;
+use crate::predict::{FilterIntraMode, PredictionMode};
 
 pub const MAX_PLANES: usize = 3;
 
@@ -762,6 +762,13 @@ impl ContextWriter<'_> {
   ) {
     let cdf = &self.fc.filter_intra_cdfs[block_size as usize];
     symbol_with_update!(self, w, enable as u32, cdf);
+  }
+
+  pub fn write_filter_intra_mode<W: Writer>(
+    &mut self, w: &mut W, mode: FilterIntraMode,
+  ) {
+    let cdf = &self.fc.filter_intra_mode_cdf;
+    symbol_with_update!(self, w, mode as u32, cdf);
   }
 
   /// # Panics
