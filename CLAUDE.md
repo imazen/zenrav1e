@@ -48,3 +48,31 @@ cargo check --features threading
 ### Not Yet Started
 - [ ] Phase 4: SSIMULACRA2 Target-Quality Convergence (ravif layer)
 - [ ] Phase 5: Integration (ravif/zenavif/zencodecs)
+
+## Known Bugs (Fixed)
+
+### QM eob calculation (fixed: 358d4f51)
+Deadzone-based eob prediction used global base quantizer, but QM gives each
+coefficient position a different effective quantizer. This caused eob overshoot,
+leading to segfaults in release builds from incorrect entropy coding.
+Fix: recompute eob from actual quantized coefficients when QM is active.
+
+### QM offset scaling (fixed: 734bd79e)
+Integer division truncation in offset scaling: `weighted_q * (offset / base_q)`
+truncated to 0 (since offset ≈ 42% of base_q), then `.max(1)` made offset = 100%
+of weighted_q. This eliminated the quantization deadzone, distorting the
+rate-distortion tradeoff. Fix: use u64 proportional scaling.
+Before fix: QM caused +20% BD-Rate regression (worse).
+After fix: QM provides -5.5% BD-Rate improvement (better).
+
+## Benchmark Results (2026-02-12, 67-image corpus, after all fixes)
+
+Feature ablation (SSIMULACRA2 BD-Rate vs upstream rav1e baseline):
+- **QM only**: ~-5.5% (saves 5.5% bitrate at same quality) — best single feature
+- **QM+VAQ+StillImage**: ~-3.5% (VAQ overhead partially offsets QM gains)
+- **VAQ only**: ~+2.8% (consistently worse, needs investigation)
+- **StillImage only**: ~+0.3% (no measurable effect — CDEF disabled at high quality in ravif)
+
+Note: StillImage's CDEF/deblock adjustments have no effect because ravif disables
+CDEF for high-quality encodes (`cdef: Some(low_quality && speed <= 9)` where
+`low_quality = quantizer > 150`).
