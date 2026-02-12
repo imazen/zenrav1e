@@ -17,12 +17,12 @@
 //! AV1 entropy coder state. Purely encoder-side — produces valid AV1 bitstream.
 
 use crate::context::{
-  av1_get_coded_tx_size, tx_type_to_class, CDFContext, ContextWriter, TxClass,
-  TxClass::*, BR_CDF_SIZE, COEFF_BASE_RANGE, NUM_BASE_LEVELS, TX_PAD_2D,
-  TX_PAD_HOR, TX_PAD_TOP,
+  BR_CDF_SIZE, CDFContext, COEFF_BASE_RANGE, ContextWriter, NUM_BASE_LEVELS,
+  TX_PAD_2D, TX_PAD_HOR, TX_PAD_TOP, TxClass, TxClass::*,
+  av1_get_coded_tx_size, tx_type_to_class,
 };
-use crate::quantize::qm_tables::AOM_QM_BITS;
 use crate::quantize::QuantizationContext;
+use crate::quantize::qm_tables::AOM_QM_BITS;
 use crate::scan_order::av1_scan_orders;
 use crate::transform::{TxSize, TxType};
 use crate::util::*;
@@ -49,8 +49,8 @@ const CDF_TOTAL: u32 = 32768 >> EC_PROB_SHIFT;
 /// Returns the new eob after optimization.
 pub fn optimize<T: Coefficient>(
   qcoeffs: &mut [T], coeffs: &[T], qc: &QuantizationContext, tx_size: TxSize,
-  tx_type: TxType, lambda: f64, qm: Option<&[u8]>, eob: u16,
-  fc: &CDFContext, plane_type: usize,
+  tx_type: TxType, lambda: f64, qm: Option<&[u8]>, eob: u16, fc: &CDFContext,
+  plane_type: usize,
 ) -> u16 {
   let scan = &av1_scan_orders[tx_size as usize][tx_type as usize].scan;
   let n = eob as usize;
@@ -64,8 +64,22 @@ pub fn optimize<T: Coefficient>(
 
   // Lambda calibration: our distortion is 2^(6-2*lts) times rav1e's ScaledDist.
   // See previous comments in git history for full derivation.
+  //
+  // Quality-adaptive dampening: transform-domain MSE diverges from perceptual
+  // quality (SSIMULACRA2) at low quality where quantizer steps are large.
+  // Without dampening, the trellis over-optimizes at Q50 (-0.5 SS2).
+  // Scale by ac_quant: small quantizer (high quality) → full strength,
+  // large quantizer (low quality) → reduced strength.
+  // ac_quant ~40 at Q95, ~200 at Q80, ~800 at Q50.
   let tx_dist_scale = (1u64 << (6 - 2 * log_tx_scale)) as f64;
-  let lambda_trellis = lambda * tx_dist_scale;
+  // Skip trellis when quantizer is too coarse for beneficial optimization.
+  // At ac_quant >= 200 (~Q80 and below), the dampening would be ≤ 0.4
+  // and the effect is empirically zero (< 0.01% BPP savings).
+  if ac_quant >= 200 {
+    return eob;
+  }
+  let dampening = (80.0 / (ac_quant as f64).max(80.0)).min(1.0);
+  let lambda_trellis = lambda * tx_dist_scale * dampening;
 
   let tx_class = tx_type_to_class[tx_type as usize];
   let txs_ctx = ContextWriter::get_txsize_entropy_ctx(tx_size);
@@ -259,8 +273,7 @@ pub fn optimize<T: Coefficient>(
       let dd = (dist_new - dist_orig) as f64;
 
       let is_eob_coeff = i == best_new_eob - 1;
-      let ctx =
-        if is_eob_coeff { eob_ctx_arr[i] } else { sig_ctx[i] };
+      let ctx = if is_eob_coeff { eob_ctx_arr[i] } else { sig_ctx[i] };
 
       let rate_orig = coeff_rate(
         orig_level,
@@ -335,8 +348,7 @@ fn coeff_rate(
   if is_eob {
     // EOB coefficient: symbol = min(level, 3) - 1, 3 symbols (0,1,2).
     let sym = level.min(3) - 1;
-    rate +=
-      cdf_rate(sym, &fc.coeff_base_eob_cdf[txs_ctx][plane_type][ctx]);
+    rate += cdf_rate(sym, &fc.coeff_base_eob_cdf[txs_ctx][plane_type][ctx]);
   } else {
     // Non-EOB: symbol = min(level, 3), 4 symbols (0,1,2,3).
     let sym = level.min(3);
@@ -351,8 +363,8 @@ fn coeff_rate(
   // Base range coding for levels above NUM_BASE_LEVELS (2).
   if level > NUM_BASE_LEVELS as u32 {
     let base_range = level - 1 - NUM_BASE_LEVELS as u32;
-    let br_cdf = &fc.coeff_br_cdf
-      [txs_ctx.min(TxSize::TX_32X32 as usize)][plane_type][br_ctx];
+    let br_cdf = &fc.coeff_br_cdf[txs_ctx.min(TxSize::TX_32X32 as usize)]
+      [plane_type][br_ctx];
     let mut idx = 0u32;
 
     loop {
@@ -394,27 +406,13 @@ fn eob_position_rate(
 
   let eob_sym = eob_pt - 1;
   let mut rate = match eob_multi_size {
-    0 => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf16[plane_type][eob_multi_ctx])
-    }
-    1 => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf32[plane_type][eob_multi_ctx])
-    }
-    2 => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf64[plane_type][eob_multi_ctx])
-    }
-    3 => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf128[plane_type][eob_multi_ctx])
-    }
-    4 => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf256[plane_type][eob_multi_ctx])
-    }
-    5 => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf512[plane_type][eob_multi_ctx])
-    }
-    _ => {
-      cdf_rate(eob_sym, &fc.eob_flag_cdf1024[plane_type][eob_multi_ctx])
-    }
+    0 => cdf_rate(eob_sym, &fc.eob_flag_cdf16[plane_type][eob_multi_ctx]),
+    1 => cdf_rate(eob_sym, &fc.eob_flag_cdf32[plane_type][eob_multi_ctx]),
+    2 => cdf_rate(eob_sym, &fc.eob_flag_cdf64[plane_type][eob_multi_ctx]),
+    3 => cdf_rate(eob_sym, &fc.eob_flag_cdf128[plane_type][eob_multi_ctx]),
+    4 => cdf_rate(eob_sym, &fc.eob_flag_cdf256[plane_type][eob_multi_ctx]),
+    5 => cdf_rate(eob_sym, &fc.eob_flag_cdf512[plane_type][eob_multi_ctx]),
+    _ => cdf_rate(eob_sym, &fc.eob_flag_cdf1024[plane_type][eob_multi_ctx]),
   };
 
   // Extra bits for EOB offset within the group.
@@ -422,7 +420,7 @@ fn eob_position_rate(
   if eob_offset_bits > 0 {
     // First extra bit via CDF.
     let eob_shift = eob_offset_bits - 1;
-    let bit = ((eob_extra >> eob_shift) & 1) as u32;
+    let bit = (eob_extra >> eob_shift) & 1;
     rate += cdf_rate(
       bit,
       &fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize],
@@ -515,10 +513,7 @@ mod tests {
     let r0 = cdf_rate(0, &cdf);
     let r1 = cdf_rate(1, &cdf);
     assert!(r0 < r1, "high-prob symbol should be cheaper: r0={r0}, r1={r1}");
-    assert!(
-      (r0 - 0.415).abs() < 0.1,
-      "P(0)=3/4 → ~0.415 bits, got {r0}"
-    );
+    assert!((r0 - 0.415).abs() < 0.1, "P(0)=3/4 → ~0.415 bits, got {r0}");
     assert!((r1 - 2.0).abs() < 0.1, "P(1)=1/4 → ~2.0 bits, got {r1}");
   }
 

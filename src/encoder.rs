@@ -845,9 +845,7 @@ impl<T: Pixel> CodedFrameData<T> {
           scaled_log_q11 as i64 + ((DistortionScale::SHIFT as i64) << 11);
         let log_q57 = log_q11_shifted << (57 - 11);
         let raw = bexp64(log_q57);
-        DistortionScale(
-          raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32,
-        )
+        DistortionScale(raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32)
       })
       .collect();
   }
@@ -1712,8 +1710,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   let eob = if fi.config.enable_trellis && eob > 1 {
     let plane_type = if p == 0 { 0 } else { 1 };
     crate::quantize::trellis::optimize(
-      qcoeffs, coeffs, &ts.qc, tx_size, tx_type, fi.lambda, qm, eob,
-      &*cw.fc, plane_type,
+      qcoeffs, coeffs, &ts.qc, tx_size, tx_type, fi.lambda, qm, eob, &*cw.fc,
+      plane_type,
     )
   } else {
     eob

@@ -533,8 +533,8 @@ pub fn segmentation_scale<T: Pixel>(
 
   let mut sum = 0u64;
   for y in y0..y1 {
-    let row = &coded_data.segmentation_scores
-      [y * coded_data.w_in_imp_b..][x0..x1];
+    let row =
+      &coded_data.segmentation_scores[y * coded_data.w_in_imp_b..][x0..x1];
     sum += row.iter().map(|s| s.0 as u64).sum::<u64>();
   }
   DistortionScale((sum / count) as u32)

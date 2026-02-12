@@ -10,8 +10,8 @@
 #![allow(non_upper_case_globals)]
 
 pub mod qm_tables;
-pub mod trellis;
 mod tables;
+pub mod trellis;
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
@@ -314,10 +314,9 @@ impl QuantizationContext {
             );
             // Scale offset proportionally: offset_w = weighted_q * (offset / base_q)
             // Use u64 to avoid overflow: weighted_q * offset can exceed u32.
-            let dc_offset_weighted = (dc_q_weighted as u64
-              * self.dc_offset as u64
-              / self.dc_quant.get() as u64)
-              as u32;
+            let dc_offset_weighted =
+              (dc_q_weighted as u64 * self.dc_offset as u64
+                / self.dc_quant.get() as u64) as u32;
             T::cast_from(copysign(
               divu_pair(abs_coeff + dc_offset_weighted, dc_div),
               coeff,
