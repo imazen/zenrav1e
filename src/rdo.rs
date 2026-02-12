@@ -572,10 +572,10 @@ pub struct ScaledDistortion(u64);
 
 impl DistortionScale {
   /// Bits past the radix point
-  const SHIFT: u32 = 14;
+  pub(crate) const SHIFT: u32 = 14;
   /// Number of bits used. Determines the max value.
   /// 28 bits is quite excessive.
-  const BITS: u32 = 28;
+  pub(crate) const BITS: u32 = 28;
   /// Maximum internal value
   const MAX: u64 = (1 << Self::BITS) - 1;
 

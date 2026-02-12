@@ -1352,6 +1352,9 @@ impl<T: Pixel> ContextInner<T> {
           &mut coded_data.activity_scales,
         );
         log_isqrt_mean_scale = coded_data.compute_spatiotemporal_scores();
+        if self.config.enable_vaq && self.config.vaq_strength != 1.0 {
+          coded_data.apply_vaq_strength(self.config.vaq_strength);
+        }
       } else {
         coded_data.activity_mask = ActivityMask::default();
         log_isqrt_mean_scale = coded_data.compute_temporal_scores();

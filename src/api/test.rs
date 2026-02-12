@@ -2134,6 +2134,7 @@ fn log_q_exp_overflow() {
     tiles: 0,
     enable_qm: false,
     enable_vaq: false,
+    vaq_strength: 1.0,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
@@ -2213,6 +2214,7 @@ fn guess_frame_subtypes_assert() {
     tiles: 0,
     enable_qm: false,
     enable_vaq: false,
+    vaq_strength: 1.0,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
@@ -2429,4 +2431,31 @@ fn vaq_produces_valid_output() {
   assert!(pkt.is_ok(), "VAQ encoding should produce a valid packet");
   let pkt = pkt.unwrap();
   assert!(!pkt.data.is_empty(), "Packet should contain data");
+}
+
+#[test]
+fn vaq_strength_produces_valid_output() {
+  // Test that non-default VAQ strength (2.0) produces valid output.
+  let mut enc = EncoderConfig::with_speed_preset(10);
+  enc.width = 64;
+  enc.height = 64;
+  enc.quantizer = 100;
+  enc.min_key_frame_interval = 1;
+  enc.max_key_frame_interval = 1;
+  enc.low_latency = true;
+  enc.tune = Tune::Psnr;
+  enc.enable_vaq = true;
+  enc.vaq_strength = 2.0;
+  enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+  let mut input = ctx.new_frame();
+  fill_frame_const(&mut input, 128u8);
+  let _ = ctx.send_frame(Arc::new(input));
+  ctx.flush();
+
+  let pkt = ctx.receive_packet();
+  assert!(pkt.is_ok(), "VAQ with strength=2.0 should produce a valid packet");
 }

@@ -784,6 +784,29 @@ impl<T: Pixel> CodedFrameData<T> {
     inv_mean.blog64() >> 1
   }
 
+  /// Apply VAQ strength scaling to spatiotemporal scores.
+  /// Raises each normalized score to the given power, amplifying
+  /// the variance in quantizer allocation.
+  /// strength=1.0 is identity, >1.0 increases redistribution.
+  pub fn apply_vaq_strength(&mut self, strength: f64) {
+    use crate::util::bexp64;
+    if (strength - 1.0).abs() < f64::EPSILON || self.spatiotemporal_scores.is_empty() {
+      return;
+    }
+    let strength = strength.clamp(0.0, 4.0);
+    for score in self.spatiotemporal_scores.iter_mut() {
+      // Get log2 of the score in Q11 fixed point, relative to 1.0
+      let log_q11 = score.blog16() as f64;
+      // Scale the log by strength (raises score to the power of strength)
+      let scaled_log_q11 = log_q11 * strength;
+      // Convert back: raw = bexp(log_q11 + SHIFT_q11) via Q57
+      let log_q11_shifted = scaled_log_q11 as i64 + ((DistortionScale::SHIFT as i64) << 11);
+      let log_q57 = log_q11_shifted << (57 - 11);
+      let raw = bexp64(log_q57);
+      *score = DistortionScale(raw.clamp(1, (1 << DistortionScale::BITS) - 1) as u32);
+    }
+  }
+
   // Assumes that we have already computed distortion_scales
   // Returns -0.5 log2(mean(scale))
   #[profiling::function]

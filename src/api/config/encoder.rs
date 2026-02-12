@@ -124,6 +124,13 @@ pub struct EncoderConfig {
   /// Works independently of `tune` mode.
   pub enable_vaq: bool,
 
+  /// VAQ strength (0.0 to 4.0, default 1.0).
+  /// Controls how aggressively bits are redistributed based on variance.
+  /// 0.0 = no redistribution, 1.0 = default SSIM weighting,
+  /// >1.0 = stronger redistribution toward smooth areas.
+  /// Only effective when `enable_vaq` is true.
+  pub vaq_strength: f64,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -184,6 +191,7 @@ impl EncoderConfig {
       tiles: 0,
       enable_qm: false,
       enable_vaq: false,
+      vaq_strength: 1.0,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
@@ -301,6 +309,7 @@ impl fmt::Display for EncoderConfig {
       ("enable_timing_info", self.enable_timing_info.to_string()),
       ("enable_qm", self.enable_qm.to_string()),
       ("enable_vaq", self.enable_vaq.to_string()),
+      ("vaq_strength", self.vaq_strength.to_string()),
       (
         "min_block_size",
         self.speed_settings.partition.partition_range.min.to_string(),
