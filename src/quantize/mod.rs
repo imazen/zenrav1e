@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 mod tables;
+pub mod qm_tables;
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
