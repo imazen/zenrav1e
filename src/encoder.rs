@@ -120,9 +120,9 @@ const FRAME_ID_LENGTH: u32 = 15;
 const DELTA_FRAME_ID_LENGTH: u32 = 14;
 
 /// Select QM level from quantizer index for still images.
-/// Based on libaom's `aom_get_qmlevel_allintra()` heuristic.
 /// Lower qindex (higher quality) → higher QM level (flatter matrix).
 /// Higher qindex (lower quality) → lower QM level (steeper weighting).
+/// Based on libaom's all-intra heuristic (min=4, max=10).
 fn qm_level_for_qindex(qindex: u8) -> u8 {
   match qindex {
     0..=40 => 10,

@@ -65,14 +65,16 @@ rate-distortion tradeoff. Fix: use u64 proportional scaling.
 Before fix: QM caused +20% BD-Rate regression (worse).
 After fix: QM provides -5.5% BD-Rate improvement (better).
 
-## Benchmark Results (2026-02-12, 67-image corpus, after all fixes)
+## Benchmark Results (2026-02-12, 67-image corpus, speed 6)
 
-Feature ablation (SSIMULACRA2 BD-Rate vs upstream rav1e baseline):
-- **QM only**: ~-5.5% (saves 5.5% bitrate at same quality) — best single feature
-- **QM+VAQ+StillImage**: ~-3.5% (VAQ overhead partially offsets QM gains)
-- **VAQ only**: ~+2.8% (consistently worse, needs investigation)
-- **StillImage only**: ~+0.3% (no measurable effect — CDEF disabled at high quality in ravif)
+Per-image BPP savings at matching quality settings (SSIMULACRA2):
+- **QM only**: -10.1% mean, -10.0% median (range -5.7% to -15.2%)
+  67/67 images improved, 0 regressions. Best single feature.
+- **VAQ (SSIM boost)**: +2.8% mean — consistently worse. Psychovisual tune
+  already activates SSIM boost; VAQ with strength < 1.0 reduces masking.
+- **StillImage tuning**: ~0% — no effect. ravif disables CDEF at high quality.
+- **Variance Boost (SVT-AV1-PSY style)**: Tested and abandoned. Inflates
+  bitrate 8-65% depending on strength because rav1e's RDO allocates more
+  total bits when distortion tolerances vary widely across blocks.
 
-Note: StillImage's CDEF/deblock adjustments have no effect because ravif disables
-CDEF for high-quality encodes (`cdef: Some(low_quality && speed <= 9)` where
-`low_quality = quantizer > 150`).
+Recommended config: `enable_qm: true`, everything else default/off.
