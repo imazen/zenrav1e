@@ -299,8 +299,12 @@ impl QuantizationContext {
               NonZeroU32::new(dc_q_weighted)
                 .unwrap_or(NonZeroU32::new(1).unwrap()),
             );
-            let dc_offset_weighted = dc_q_weighted
-              * (self.dc_offset / self.dc_quant.get() as u32).max(1);
+            // Scale offset proportionally: offset_w = weighted_q * (offset / base_q)
+            // Use u64 to avoid overflow: weighted_q * offset can exceed u32.
+            let dc_offset_weighted = (dc_q_weighted as u64
+              * self.dc_offset as u64
+              / self.dc_quant.get() as u64)
+              as u32;
             T::cast_from(copysign(
               divu_pair(abs_coeff + dc_offset_weighted, dc_div),
               coeff,
@@ -368,10 +372,14 @@ impl QuantizationContext {
                 .unwrap_or(NonZeroU32::new(1).unwrap()),
             );
             let level0 = divu_pair(abs_coeff, ac_div);
+            // Scale offsets proportionally: offset_w = weighted_q * (offset / base_q)
+            // Use u64 to avoid overflow.
             let offset = if level0 > 1 - level_mode {
-              (ac_q_weighted * (self.ac_offset1 / ac_quant.max(1))).max(1)
+              (ac_q_weighted as u64 * self.ac_offset1 as u64
+                / ac_quant.max(1) as u64) as u32
             } else {
-              (ac_q_weighted * (self.ac_offset0 / ac_quant.max(1))).max(1)
+              (ac_q_weighted as u64 * self.ac_offset0 as u64
+                / ac_quant.max(1) as u64) as u32
             };
             level0
               + (abs_coeff + offset >= (level0 + 1) * ac_q_weighted) as u32
