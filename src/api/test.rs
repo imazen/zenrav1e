@@ -2135,6 +2135,8 @@ fn log_q_exp_overflow() {
     enable_qm: false,
     enable_vaq: false,
     vaq_strength: 1.0,
+    seg_boost: 1.0,
+    enable_trellis: false,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
@@ -2215,6 +2217,8 @@ fn guess_frame_subtypes_assert() {
     enable_qm: false,
     enable_vaq: false,
     vaq_strength: 1.0,
+    seg_boost: 1.0,
+    enable_trellis: false,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,

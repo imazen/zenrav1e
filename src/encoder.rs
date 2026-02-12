@@ -1709,6 +1709,13 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     None
   };
   let eob = ts.qc.quantize_with_qm(coeffs, qcoeffs, tx_size, tx_type, qm);
+  let eob = if fi.config.enable_trellis && eob > 1 {
+    crate::quantize::trellis::optimize(
+      qcoeffs, coeffs, &ts.qc, tx_size, tx_type, fi.lambda, qm, eob,
+    )
+  } else {
+    eob
+  };
 
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
     debug_assert!((((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec) >= 4);

@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 pub mod qm_tables;
+pub mod trellis;
 mod tables;
 
 cfg_if::cfg_if! {
@@ -209,6 +210,18 @@ mod test {
 }
 
 impl QuantizationContext {
+  /// Get the DC quantizer value.
+  #[inline]
+  pub fn dc_quant(&self) -> u16 {
+    self.dc_quant.get()
+  }
+
+  /// Get the AC quantizer value.
+  #[inline]
+  pub fn ac_quant(&self) -> u16 {
+    self.ac_quant.get()
+  }
+
   pub fn update(
     &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize,
     dc_delta_q: i8, ac_delta_q: i8,
