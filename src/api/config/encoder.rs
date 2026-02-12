@@ -117,6 +117,13 @@ pub struct EncoderConfig {
   /// sensitivity, giving ~10% BD-rate improvement for photographic content.
   pub enable_qm: bool,
 
+  /// Enable variance adaptive quantization (VAQ).
+  /// Allocates more bits to smooth/flat regions (where artifacts are visible)
+  /// and fewer bits to textured regions (where texture masks distortion).
+  /// Uses AV1 segmentation with SSIM-weighted activity masking.
+  /// Works independently of `tune` mode.
+  pub enable_vaq: bool,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -176,6 +183,7 @@ impl EncoderConfig {
       tile_rows: 0,
       tiles: 0,
       enable_qm: false,
+      enable_vaq: false,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
@@ -292,6 +300,7 @@ impl fmt::Display for EncoderConfig {
       ("lrf", self.speed_settings.lrf.to_string()),
       ("enable_timing_info", self.enable_timing_info.to_string()),
       ("enable_qm", self.enable_qm.to_string()),
+      ("enable_vaq", self.enable_vaq.to_string()),
       (
         "min_block_size",
         self.speed_settings.partition.partition_range.min.to_string(),

@@ -955,8 +955,8 @@ impl<T: Pixel> FrameInvariants<T> {
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
       cpu_feature_level: Default::default(),
-      enable_segmentation: config.speed_settings.segmentation
-        != SegmentationLevel::Disabled,
+      enable_segmentation: config.enable_vaq
+        || config.speed_settings.segmentation != SegmentationLevel::Disabled,
       enable_inter_txfm_split: config
         .speed_settings
         .transform

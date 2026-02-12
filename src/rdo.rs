@@ -465,7 +465,10 @@ pub fn distortion_scale<T: Pixel>(
 pub fn spatiotemporal_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
-  if !fi.config.temporal_rdo() && fi.config.tune != Tune::Psychovisual {
+  if !fi.config.temporal_rdo()
+    && fi.config.tune != Tune::Psychovisual
+    && !fi.config.enable_vaq
+  {
     return DistortionScale::default();
   }
 

@@ -1341,7 +1341,9 @@ impl<T: Pixel> ContextInner<T> {
     let mut log_isqrt_mean_scale = 0i64;
 
     if let Some(coded_data) = frame_data.fi.coded_frame_data.as_mut() {
-      if self.config.tune == Tune::Psychovisual {
+      let use_activity =
+        self.config.tune == Tune::Psychovisual || self.config.enable_vaq;
+      if use_activity {
         let frame =
           self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
         coded_data.activity_mask = ActivityMask::from_plane(&frame.planes[0]);
@@ -1358,7 +1360,7 @@ impl<T: Pixel> ContextInner<T> {
       {
         use crate::encoder::Scales::*;
         let input_frameno = frame_data.fi.input_frameno;
-        if self.config.tune == Tune::Psychovisual {
+        if use_activity {
           coded_data.dump_scales(
             Self::build_dump_properties(),
             ActivityScales,

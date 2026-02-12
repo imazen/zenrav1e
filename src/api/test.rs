@@ -2133,6 +2133,7 @@ fn log_q_exp_overflow() {
     tile_rows: 0,
     tiles: 0,
     enable_qm: false,
+    enable_vaq: false,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
@@ -2211,6 +2212,7 @@ fn guess_frame_subtypes_assert() {
     tile_rows: 0,
     tiles: 0,
     enable_qm: false,
+    enable_vaq: false,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
@@ -2382,4 +2384,49 @@ fn max_quantizer_bounds_correctly() {
       assert!(frame_data.fi.base_q_idx < 115);
     }
   }
+}
+
+#[test]
+fn vaq_produces_valid_output() {
+  // Test that VAQ-enabled encoding produces valid output for a single frame.
+  // Uses PSNR tune to verify VAQ works independently of Psychovisual mode.
+  let mut enc = EncoderConfig::with_speed_preset(10);
+  enc.width = 64;
+  enc.height = 64;
+  enc.quantizer = 100;
+  enc.min_key_frame_interval = 1;
+  enc.max_key_frame_interval = 1;
+  enc.low_latency = true;
+  enc.tune = Tune::Psnr;
+  enc.enable_vaq = true;
+  enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+  // Send a frame with varying content (not flat) to exercise VAQ.
+  // Use smooth left half and textured right half.
+  let mut input = ctx.new_frame();
+  {
+    let plane = &mut input.planes[0];
+    let stride = plane.cfg.stride;
+    for y in 0..64 {
+      for x in 0..64 {
+        let val: u8 = if x < 32 {
+          128 // smooth region
+        } else {
+          ((x * 7 + y * 13) % 256) as u8 // textured region
+        };
+        plane.data[y * stride + x] = val;
+      }
+    }
+  }
+  let _ = ctx.send_frame(Arc::new(input));
+  ctx.flush();
+
+  // Should produce a valid packet
+  let pkt = ctx.receive_packet();
+  assert!(pkt.is_ok(), "VAQ encoding should produce a valid packet");
+  let pkt = pkt.unwrap();
+  assert!(!pkt.data.is_empty(), "Packet should contain data");
 }
