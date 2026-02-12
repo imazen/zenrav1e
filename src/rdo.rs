@@ -275,7 +275,7 @@ fn compute_distortion<T: Pixel>(
   }
 
   let mut distortion = match fi.config.tune {
-    Tune::Psychovisual => cdef_dist_wxh(
+    Tune::Psychovisual | Tune::StillImage => cdef_dist_wxh(
       &input_region,
       &rec_region,
       visible_w,
@@ -466,7 +466,7 @@ pub fn spatiotemporal_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
   if !fi.config.temporal_rdo()
-    && fi.config.tune != Tune::Psychovisual
+    && !matches!(fi.config.tune, Tune::Psychovisual | Tune::StillImage)
     && !fi.config.enable_vaq
   {
     return DistortionScale::default();

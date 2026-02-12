@@ -109,6 +109,10 @@ pub enum Tune {
   Psnr,
   #[default]
   Psychovisual,
+  /// Optimized for still image quality.
+  /// Uses perceptual distortion metric with activity masking (like Psychovisual),
+  /// plus reduced CDEF/deblock strength to preserve detail in stills.
+  StillImage,
 }
 
 const FRAME_ID_LENGTH: u32 = 15;
@@ -979,6 +983,7 @@ impl<T: Pixel> FrameInvariants<T> {
       default_filter: FilterMode::REGULAR,
       cpu_feature_level: Default::default(),
       enable_segmentation: config.enable_vaq
+        || config.tune == Tune::StillImage
         || config.speed_settings.segmentation != SegmentationLevel::Disabled,
       enable_inter_txfm_split: config
         .speed_settings
@@ -1283,9 +1288,20 @@ impl<T: Pixel> FrameInvariants<T> {
         poly2(q, 0.0000032651783_f32, 0.00035520183_f32, 0.00228092_f32, 3),
       )
     };
-    self.cdef_y_strengths[0] = (y_f1 * CDEF_SEC_STRENGTHS as i32 + y_f2) as u8;
-    self.cdef_uv_strengths[0] =
-      (uv_f1 * CDEF_SEC_STRENGTHS as i32 + uv_f2) as u8;
+    let y_strength = (y_f1 * CDEF_SEC_STRENGTHS as i32 + y_f2) as u8;
+    let uv_strength = (uv_f1 * CDEF_SEC_STRENGTHS as i32 + uv_f2) as u8;
+
+    // For still images, reduce CDEF strength to preserve detail.
+    // At high quality (low q), CDEF blurring is perceptually harmful.
+    // Scale factor: 0.5 at q=0, ramping to 1.0 at q=200+.
+    if self.config.tune == Tune::StillImage {
+      let scale = 0.5 + 0.5 * (self.base_q_idx as f32 / 200.0).min(1.0);
+      self.cdef_y_strengths[0] = (y_strength as f32 * scale) as u8;
+      self.cdef_uv_strengths[0] = (uv_strength as f32 * scale) as u8;
+    } else {
+      self.cdef_y_strengths[0] = y_strength;
+      self.cdef_uv_strengths[0] = uv_strength;
+    }
   }
 
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
@@ -3350,6 +3366,18 @@ fn encode_tile_group<T: Pixel>(
     )
   });
   fs.deblock.levels = levels;
+
+  // For still images, increase deblocking sharpness to preserve edges.
+  // AV1 sharpness range is 0-7. Higher = less deblocking near edges.
+  if fi.config.tune == Tune::StillImage {
+    fs.deblock.sharpness = if fi.base_q_idx < 80 {
+      7 // High quality: maximum edge preservation
+    } else if fi.base_q_idx < 160 {
+      5
+    } else {
+      3
+    };
+  }
 
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     fs.apply_tile_state_mut(|ts| {

@@ -686,7 +686,7 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
 
   cfg.tune = matches.tune;
 
-  if cfg.tune == Tune::Psychovisual {
+  if matches!(cfg.tune, Tune::Psychovisual | Tune::StillImage) {
     cfg.speed_settings.transform.tx_domain_distortion = false;
   }
 

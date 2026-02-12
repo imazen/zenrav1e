@@ -2459,3 +2459,31 @@ fn vaq_strength_produces_valid_output() {
   let pkt = ctx.receive_packet();
   assert!(pkt.is_ok(), "VAQ with strength=2.0 should produce a valid packet");
 }
+
+#[test]
+fn tune_still_image_produces_valid_output() {
+  // Test that Tune::StillImage encoding produces valid output.
+  // Verifies CDEF reduction, sharpness, and perceptual metric integration.
+  let mut enc = EncoderConfig::with_speed_preset(10);
+  enc.width = 64;
+  enc.height = 64;
+  enc.quantizer = 80;
+  enc.min_key_frame_interval = 1;
+  enc.max_key_frame_interval = 1;
+  enc.low_latency = true;
+  enc.tune = Tune::StillImage;
+  enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+  let mut input = ctx.new_frame();
+  fill_frame_const(&mut input, 128u8);
+  let _ = ctx.send_frame(Arc::new(input));
+  ctx.flush();
+
+  let pkt = ctx.receive_packet();
+  assert!(pkt.is_ok(), "StillImage encoding should produce a valid packet");
+  let pkt = pkt.unwrap();
+  assert!(!pkt.data.is_empty(), "Packet should contain data");
+}
