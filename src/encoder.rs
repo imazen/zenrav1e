@@ -114,6 +114,22 @@ pub enum Tune {
 const FRAME_ID_LENGTH: u32 = 15;
 const DELTA_FRAME_ID_LENGTH: u32 = 14;
 
+/// Select QM level from quantizer index for still images.
+/// Based on libaom's `aom_get_qmlevel_allintra()` heuristic.
+/// Lower qindex (higher quality) → higher QM level (flatter matrix).
+/// Higher qindex (lower quality) → lower QM level (steeper weighting).
+fn qm_level_for_qindex(qindex: u8) -> u8 {
+  match qindex {
+    0..=40 => 10,
+    41..=100 => 9,
+    101..=160 => 8,
+    161..=200 => 7,
+    201..=220 => 6,
+    221..=240 => 5,
+    241.. => 4,
+  }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Sequence {
   /// OBU Sequence header of AV1
@@ -654,6 +670,10 @@ pub struct FrameInvariants<T: Pixel> {
   pub base_q_idx: u8,
   pub dc_delta_q: [i8; 3],
   pub ac_delta_q: [i8; 3],
+  /// Whether quantization matrices are enabled for this frame.
+  pub using_qmatrix: bool,
+  /// QM level per plane [Y, U, V] (0-15, where 15 = flat/identity).
+  pub qm_level: [u8; 3],
   pub lambda: f64,
   pub me_lambda: f64,
   pub dist_scale: [DistortionScale; 3],
@@ -921,6 +941,8 @@ impl<T: Pixel> FrameInvariants<T> {
       base_q_idx: config.quantizer as u8,
       dc_delta_q: [0; 3],
       ac_delta_q: [0; 3],
+      using_qmatrix: config.enable_qm,
+      qm_level: [15; 3], // flat by default, set in set_quantizers()
       lambda: 0.0,
       dist_scale: Default::default(),
       me_lambda: 0.0,
@@ -1176,6 +1198,8 @@ impl<T: Pixel> FrameInvariants<T> {
       base_q_idx: self.base_q_idx,
       dc_delta_q: self.dc_delta_q,
       ac_delta_q: self.ac_delta_q,
+      using_qmatrix: self.using_qmatrix,
+      qm_level: self.qm_level,
       lambda: self.lambda,
       me_lambda: self.me_lambda,
       dist_scale: self.dist_scale,
@@ -1252,6 +1276,15 @@ impl<T: Pixel> FrameInvariants<T> {
       qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
     self.me_lambda = self.lambda.sqrt();
     self.dist_scale = qps.dist_scale.map(DistortionScale::from);
+
+    // Select QM levels based on quantizer index (all-intra heuristic from libaom)
+    if self.using_qmatrix {
+      let qi = self.base_q_idx;
+      let luma_level = qm_level_for_qindex(qi);
+      // Chroma uses one level flatter (higher) than luma
+      let chroma_level = (luma_level + 1).min(15);
+      self.qm_level = [luma_level, chroma_level, chroma_level];
+    }
 
     match self.cdef_search_method {
       CDEFSearchMethod::PickFromQ => {
@@ -1562,7 +1595,15 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   // SAFETY: forward_transform initialized coeffs
   let coeffs = unsafe { slice_assume_init_mut(coeffs) };
 
-  let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
+  // Look up QM table if enabled and applicable.
+  // QM is not applied for identity transforms (IDTX, V_DCT, H_DCT).
+  let qm = if fi.using_qmatrix && (tx_type as usize) < TxType::IDTX as usize {
+    let plane_type = if p == 0 { 0 } else { 1 };
+    crate::quantize::qm_tables::qm_table(fi.qm_level[p], plane_type, tx_size)
+  } else {
+    None
+  };
+  let eob = ts.qc.quantize_with_qm(coeffs, qcoeffs, tx_size, tx_type, qm);
 
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
     debug_assert!((((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec) >= 4);
@@ -1595,7 +1636,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   };
 
   // Reconstruct
-  dequantize(
+  crate::quantize::rust::dequantize_with_qm(
     qidx,
     qcoeffs,
     eob,
@@ -1605,6 +1646,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     fi.dc_delta_q[p],
     fi.ac_delta_q[p],
     fi.cpu_feature_level,
+    qm,
   );
   // SAFETY: dequantize initialized rcoeffs
   let rcoeffs = unsafe { slice_assume_init_mut(rcoeffs) };

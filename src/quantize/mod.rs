@@ -9,8 +9,8 @@
 
 #![allow(non_upper_case_globals)]
 
-mod tables;
 pub mod qm_tables;
+mod tables;
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
@@ -258,29 +258,80 @@ impl QuantizationContext {
       self.ac_quant.get() as u32 * (if is_intra { 88 } else { 44 }) / 256;
   }
 
+  /// Quantize without QM (original hot path, unchanged).
   #[inline]
   pub fn quantize<T: Coefficient>(
     &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
   ) -> u16 {
+    self.quantize_inner(coeffs, qcoeffs, tx_size, tx_type, None)
+  }
+
+  /// Quantize with optional QM table.
+  #[inline]
+  pub fn quantize_with_qm<T: Coefficient>(
+    &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
+    qm: Option<&[u8]>,
+  ) -> u16 {
+    self.quantize_inner(coeffs, qcoeffs, tx_size, tx_type, qm)
+  }
+
+  #[inline]
+  fn quantize_inner<T: Coefficient>(
+    &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
+    qm: Option<&[u8]>,
+  ) -> u16 {
     let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
     let iscan = av1_scan_orders[tx_size as usize][tx_type as usize].iscan;
 
+    // DC coefficient
     qcoeffs[0] = {
       let coeff: i32 = i32::cast_from(coeffs[0]) << self.log_tx_scale;
       let abs_coeff = coeff.unsigned_abs();
-      T::cast_from(copysign(
-        divu_pair(abs_coeff + self.dc_offset, self.dc_mul_add),
-        coeff,
-      ))
+      match qm {
+        Some(qm_tbl) => {
+          // QM-weighted DC: effective_q = Round2(dc_quant * qm[0], 5)
+          let wt = qm_tbl[0] as u32;
+          let dc_q_weighted = (self.dc_quant.get() as u32 * wt + 16) >> 5;
+          if dc_q_weighted == 0 {
+            T::cast_from(copysign(abs_coeff, coeff))
+          } else {
+            let dc_div = divu_gen(
+              NonZeroU32::new(dc_q_weighted)
+                .unwrap_or(NonZeroU32::new(1).unwrap()),
+            );
+            let dc_offset_weighted = dc_q_weighted
+              * (self.dc_offset / self.dc_quant.get() as u32).max(1);
+            T::cast_from(copysign(
+              divu_pair(abs_coeff + dc_offset_weighted, dc_div),
+              coeff,
+            ))
+          }
+        }
+        None => T::cast_from(copysign(
+          divu_pair(abs_coeff + self.dc_offset, self.dc_mul_add),
+          coeff,
+        )),
+      }
     };
 
     // Find the last non-zero coefficient using our smaller biases and
     // zero everything else.
     // This threshold is such that `abs(coeff) < deadzone` implies:
     // (abs(coeff << log_tx_scale) + ac_offset_eob) / ac_quant == 0
+    //
+    // For QM, use the minimum weight (steepest quantization) for deadzone.
+    // This is conservative — keeps more coefficients alive for QM evaluation.
+    let effective_ac_quant = match qm {
+      Some(qm_tbl) => {
+        let min_wt = qm_tbl.iter().skip(1).copied().min().unwrap_or(32) as u32;
+        ((self.ac_quant.get() as u32 * min_wt + 16) >> 5) as usize
+      }
+      None => self.ac_quant.get() as usize,
+    };
     let deadzone = T::cast_from(
-      (self.ac_quant.get() as usize - self.ac_offset_eob as usize)
-        .align_power_of_two_and_shift(self.log_tx_scale),
+      (effective_ac_quant
+        - (self.ac_offset_eob as usize).min(effective_ac_quant))
+      .align_power_of_two_and_shift(self.log_tx_scale),
     );
     let eob = {
       let eob_minus_one = iscan
@@ -313,15 +364,39 @@ impl QuantizationContext {
       let coeff = i32::cast_from(coeffs[pos as usize]) << self.log_tx_scale;
       let abs_coeff = coeff.unsigned_abs();
 
-      let level0 = divu_pair(abs_coeff, self.ac_mul_add);
-      let offset = if level0 > 1 - level_mode {
-        self.ac_offset1
-      } else {
-        self.ac_offset0
+      let abs_qcoeff = match qm {
+        Some(qm_tbl) if (pos as usize) < qm_tbl.len() => {
+          // QM-weighted AC: scale coefficient by weight, divide by (quant << QM_BITS)
+          let wt = qm_tbl[pos as usize] as u32;
+          let ac_q_weighted = (ac_quant * wt + 16) >> 5;
+          if ac_q_weighted == 0 {
+            abs_coeff
+          } else {
+            let ac_div = divu_gen(
+              NonZeroU32::new(ac_q_weighted)
+                .unwrap_or(NonZeroU32::new(1).unwrap()),
+            );
+            let level0 = divu_pair(abs_coeff, ac_div);
+            let offset = if level0 > 1 - level_mode {
+              (ac_q_weighted * (self.ac_offset1 / ac_quant.max(1))).max(1)
+            } else {
+              (ac_q_weighted * (self.ac_offset0 / ac_quant.max(1))).max(1)
+            };
+            level0
+              + (abs_coeff + offset >= (level0 + 1) * ac_q_weighted) as u32
+          }
+        }
+        _ => {
+          let level0 = divu_pair(abs_coeff, self.ac_mul_add);
+          let offset = if level0 > 1 - level_mode {
+            self.ac_offset1
+          } else {
+            self.ac_offset0
+          };
+          level0 + (abs_coeff + offset >= (level0 + 1) * ac_quant) as u32
+        }
       };
 
-      let abs_qcoeff: u32 =
-        level0 + (abs_coeff + offset >= (level0 + 1) * ac_quant) as u32;
       if level_mode != 0 && abs_qcoeff == 0 {
         level_mode = 0;
       } else if abs_qcoeff > 1 {
@@ -348,6 +423,14 @@ impl QuantizationContext {
   }
 }
 
+/// Apply QM weight to a quantizer value: Round2(q * weight, AOM_QM_BITS).
+/// Returns the QM-adjusted quantizer for the given coefficient position.
+#[inline]
+pub fn qm_adjust_quant(quant: i32, qm_weight: u8) -> i32 {
+  (quant * qm_weight as i32 + (1 << (qm_tables::AOM_QM_BITS - 1)))
+    >> qm_tables::AOM_QM_BITS
+}
+
 pub mod rust {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
@@ -357,6 +440,17 @@ pub mod rust {
     qindex: u8, coeffs: &[T], _eob: u16, rcoeffs: &mut [MaybeUninit<T>],
     tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
     _cpu: CpuFeatureLevel,
+  ) {
+    dequantize_with_qm(
+      qindex, coeffs, _eob, rcoeffs, tx_size, bit_depth, dc_delta_q,
+      ac_delta_q, _cpu, None,
+    )
+  }
+
+  pub fn dequantize_with_qm<T: Coefficient>(
+    qindex: u8, coeffs: &[T], _eob: u16, rcoeffs: &mut [MaybeUninit<T>],
+    tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
+    _cpu: CpuFeatureLevel, qm: Option<&[u8]>,
   ) {
     let log_tx_scale = get_log_tx_scale(tx_size) as i32;
     let offset = (1 << log_tx_scale) - 1;
@@ -369,7 +463,13 @@ pub mod rust {
       .zip(coeffs.iter().map(|&c| i32::cast_from(c)))
       .enumerate()
     {
-      let quant = if i == 0 { dc_quant } else { ac_quant };
+      let base_quant = if i == 0 { dc_quant } else { ac_quant };
+      let quant = match qm {
+        Some(qm_tbl) if i < qm_tbl.len() => {
+          qm_adjust_quant(base_quant, qm_tbl[i])
+        }
+        _ => base_quant,
+      };
       r.write(T::cast_from(
         (c * quant + ((c >> 31) & offset)) >> log_tx_scale,
       ));

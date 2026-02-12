@@ -751,7 +751,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_delta_q(fi.ac_delta_q[2])?;
       }
     }
-    self.write_bit(false)?; // no qm
+    // quantization matrices
+    self.write_bit(fi.using_qmatrix)?;
+    if fi.using_qmatrix {
+      self.write::<4, u8>(fi.qm_level[0])?; // qm_y
+      self.write::<4, u8>(fi.qm_level[1])?; // qm_u
+      let diff_uv_delta = fi.dc_delta_q[1] != fi.dc_delta_q[2]
+        || fi.ac_delta_q[1] != fi.ac_delta_q[2];
+      if diff_uv_delta {
+        self.write::<4, u8>(fi.qm_level[2])?; // qm_v
+      }
+    }
 
     // segmentation
     self.write_segment_data(fi, &fs.segmentation)?;

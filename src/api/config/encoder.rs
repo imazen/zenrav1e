@@ -112,6 +112,11 @@ pub struct EncoderConfig {
   /// [`tile_rows`]: #structfield.tile_rows
   pub tiles: usize,
 
+  /// Enable AV1 quantization matrices for perceptual quality improvement.
+  /// QM applies frequency-dependent quantization weights based on contrast
+  /// sensitivity, giving ~10% BD-rate improvement for photographic content.
+  pub enable_qm: bool,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -170,6 +175,7 @@ impl EncoderConfig {
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,
+      enable_qm: false,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
@@ -285,6 +291,7 @@ impl fmt::Display for EncoderConfig {
       ("cdef", self.speed_settings.cdef.to_string()),
       ("lrf", self.speed_settings.lrf.to_string()),
       ("enable_timing_info", self.enable_timing_info.to_string()),
+      ("enable_qm", self.enable_qm.to_string()),
       (
         "min_block_size",
         self.speed_settings.partition.partition_range.min.to_string(),
