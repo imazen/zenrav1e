@@ -175,6 +175,9 @@ fn process_frame<T: Pixel, D: Decoder>(
     Err(e @ EncoderStatus::NotReady) => {
       Err(e.context("Mismanaged handling of two-pass stats data"))
     }
+    Err(e @ EncoderStatus::Cancelled) => {
+      Err(e.context("Encoding was cancelled"))
+    }
     Err(EncoderStatus::Encoded) => Ok((Some(frame_summaries), true)),
   }?;
 

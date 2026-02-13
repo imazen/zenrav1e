@@ -619,6 +619,33 @@ impl SegmentationState {
   }
 }
 
+/// Wrapper around `Arc<dyn Stop>` that implements `Debug` and `Clone`.
+#[cfg(feature = "stop")]
+#[derive(Clone)]
+pub(crate) struct StopToken(Arc<dyn enough::Stop>);
+
+#[cfg(feature = "stop")]
+impl std::fmt::Debug for StopToken {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str("StopToken")
+  }
+}
+
+#[cfg(feature = "stop")]
+impl std::ops::Deref for StopToken {
+  type Target = dyn enough::Stop;
+  fn deref(&self) -> &Self::Target {
+    &*self.0
+  }
+}
+
+#[cfg(feature = "stop")]
+impl StopToken {
+  pub(crate) fn new(stop: Arc<dyn enough::Stop>) -> Self {
+    Self(stop)
+  }
+}
+
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -700,6 +727,10 @@ pub struct FrameInvariants<T: Pixel> {
   // These will be set if this is a coded (non-SEF) frame.
   // We do not need them for SEFs.
   pub coded_frame_data: Option<CodedFrameData<T>>,
+
+  /// Cooperative cancellation token, checked every superblock during encoding.
+  #[cfg(feature = "stop")]
+  pub(crate) stop: StopToken,
 }
 
 /// These frame invariants are only used on coded frames, i.e. non-SEFs.
@@ -912,6 +943,16 @@ pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 }
 
 impl<T: Pixel> FrameInvariants<T> {
+  /// Check the cooperative cancellation token.
+  /// When the `stop` feature is disabled, this is a no-op.
+  /// When `Unstoppable` is used, this optimizes to nothing.
+  #[inline(always)]
+  pub(crate) fn check_stop(&self) -> Result<(), EncoderStatus> {
+    #[cfg(feature = "stop")]
+    { self.stop.check()?; }
+    Ok(())
+  }
+
   #[allow(clippy::erasing_op, clippy::identity_op)]
   /// # Panics
   ///
@@ -1034,6 +1075,8 @@ impl<T: Pixel> FrameInvariants<T> {
       sequence,
       config,
       coded_frame_data: None,
+      #[cfg(feature = "stop")]
+      stop: StopToken::new(Arc::new(enough::Unstoppable)),
     }
   }
 
@@ -1286,6 +1329,8 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_segmentation: self.enable_segmentation,
       t35_metadata: self.t35_metadata.clone(),
       cpu_feature_level: self.cpu_feature_level,
+      #[cfg(feature = "stop")]
+      stop: self.stop.clone(),
     }
   }
 
@@ -3418,7 +3463,7 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 #[profiling::function]
 fn encode_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, EncoderStatus> {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
@@ -3436,6 +3481,8 @@ fn encode_tile_group<T: Pixel>(
     .map(|(mut ctx, cdf)| {
       encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg)
     })
+    .collect::<Result<Vec<_>, _>>()?
+    .into_iter()
     .unzip();
 
   for tile_stats in stats {
@@ -3535,7 +3582,7 @@ fn encode_tile_group<T: Pixel>(
   debug_assert!(max_tile_size_bytes > 0 && max_tile_size_bytes <= 4);
   fs.max_tile_size_bytes = max_tile_size_bytes;
 
-  build_raw_tile_group(ti, &raw_tiles, max_tile_size_bytes)
+  Ok(build_raw_tile_group(ti, &raw_tiles, max_tile_size_bytes))
 }
 
 fn build_raw_tile_group(
@@ -3667,7 +3714,7 @@ fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>, ts: &'a mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
-) -> (Vec<u8>, EncoderStats) {
+) -> Result<(Vec<u8>, EncoderStats), EncoderStatus> {
   let mut enc_stats = EncoderStats::default();
   let mut w = WriterEncoder::new();
   let planes =
@@ -3685,6 +3732,7 @@ fn encode_tile<'a, T: Pixel>(
     cw.bc.reset_left_contexts(planes);
 
     for sbx in 0..ts.sb_width {
+      fi.check_stop()?;
       cw.fc_log.clear();
 
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
@@ -3864,7 +3912,7 @@ fn encode_tile<'a, T: Pixel>(
     ts.sbo.0.x,
     ts.sbo.0.y
   );
-  (w.done(), enc_stats)
+  Ok((w.done(), enc_stats))
 }
 
 #[allow(unused)]
@@ -3964,7 +4012,7 @@ fn get_initial_segmentation<T: Pixel>(
 #[profiling::function]
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, EncoderStatus> {
   debug_assert!(!fi.is_show_existing_frame());
   let obu_extension = 0;
 
@@ -3974,7 +4022,7 @@ pub fn encode_frame<T: Pixel>(
     fs.segmentation = get_initial_segmentation(fi);
     segmentation_optimize(fi, fs);
   }
-  let tile_group = encode_tile_group(fi, fs, inter_cfg);
+  let tile_group = encode_tile_group(fi, fs, inter_cfg)?;
 
   if fi.frame_type == FrameType::KEY {
     write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
@@ -4013,7 +4061,7 @@ pub fn encode_frame<T: Pixel>(
   buf2.clear();
 
   packet.write_all(&tile_group).unwrap();
-  packet
+  Ok(packet)
 }
 
 pub fn update_rec_buffer<T: Pixel>(

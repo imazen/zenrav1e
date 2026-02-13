@@ -258,6 +258,9 @@ pub(crate) struct ContextInner<T: Pixel> {
   opaque_q: BTreeMap<u64, Opaque>,
   /// Optional T35 metadata per frame
   t35_q: BTreeMap<u64, Box<[T35]>>,
+  /// Cooperative cancellation token.
+  #[cfg(feature = "stop")]
+  pub(crate) stop: Arc<dyn enough::Stop>,
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -331,6 +334,8 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
       t35_q: BTreeMap::new(),
+      #[cfg(feature = "stop")]
+      stop: Arc::new(enough::Unstoppable),
     }
   }
 
@@ -610,19 +615,23 @@ impl<T: Pixel> ContextInner<T> {
     let output_frameno_in_gop =
       output_frameno - self.gop_output_frameno_start[&output_frameno];
     if output_frameno_in_gop == 0 {
-      let fi = FrameInvariants::new_key_frame(
+      #[allow(unused_mut)]
+      let mut fi = FrameInvariants::new_key_frame(
         self.config.clone(),
         self.seq.clone(),
         self.gop_input_frameno_start[&output_frameno],
         t35_metadata,
       );
+      #[cfg(feature = "stop")]
+      { fi.stop = crate::encoder::StopToken::new(self.stop.clone()); }
       Ok(Some(fi))
     } else {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
         false,
       );
-      let fi = FrameInvariants::new_inter_frame(
+      #[allow(unused_mut)]
+      let mut fi = FrameInvariants::new_inter_frame(
         self.get_previous_coded_fi(output_frameno),
         &self.inter_cfg,
         self.gop_input_frameno_start[&output_frameno],
@@ -632,6 +641,8 @@ impl<T: Pixel> ContextInner<T> {
         t35_metadata,
       );
       assert!(fi.is_some());
+      #[cfg(feature = "stop")]
+      { fi.as_mut().unwrap().stop = crate::encoder::StopToken::new(self.stop.clone()); }
       Ok(fi)
     }
   }
@@ -1398,7 +1409,7 @@ impl<T: Pixel> ContextInner<T> {
 
     if self.rc_state.needs_trial_encode(fti) {
       let mut trial_fs = frame_data.fs.clone();
-      let data = encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
+      let data = encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg)?;
       self.rc_state.update_state(
         (data.len() * 8) as i64,
         fti,
@@ -1418,7 +1429,7 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     let data =
-      encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
+      encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg)?;
     #[cfg(feature = "dump_lookahead_data")]
     {
       let input_frameno = frame_data.fi.input_frameno;

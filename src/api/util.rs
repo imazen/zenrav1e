@@ -183,6 +183,9 @@ pub enum EncoderStatus {
   /// Generic fatal error.
   #[error("failure")]
   Failure,
+  /// Encoding was cancelled or timed out via a Stop token.
+  #[error("cancelled")]
+  Cancelled,
   /// A frame was encoded in the first pass of a 2-pass encode, but its stats
   /// data was not retrieved with [`Context::twopass_out()`], or not enough
   /// stats data was provided in the second pass of a 2-pass encode to encode
@@ -297,5 +300,12 @@ impl<T: Pixel> IntoFrame<T> for (Frame<T>, FrameParameters) {
 impl<T: Pixel> IntoFrame<T> for (Frame<T>, Option<FrameParameters>) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(Arc::new(self.0)), self.1)
+  }
+}
+
+#[cfg(feature = "stop")]
+impl From<enough::StopReason> for EncoderStatus {
+  fn from(_: enough::StopReason) -> Self {
+    EncoderStatus::Cancelled
   }
 }

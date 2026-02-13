@@ -49,6 +49,9 @@ use crate::encoder::*;
 pub use crate::frame::Frame;
 pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 
+#[cfg(feature = "stop")]
+pub use enough::{Stop, StopReason, Unstoppable};
+
 pub(crate) mod built_info {
   // The file has been placed there by the build script.
   include!(concat!(env!("OUT_DIR"), "/built.rs"));

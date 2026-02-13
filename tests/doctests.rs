@@ -85,6 +85,9 @@ fn encode_frames(
       Err(EncoderStatus::Failure) => {
         return Err(EncoderStatus::Failure);
       }
+      Err(EncoderStatus::Cancelled) => {
+        return Err(EncoderStatus::Cancelled);
+      }
     }
   }
 

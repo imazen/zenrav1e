@@ -175,6 +175,7 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
         rav1e::EncoderStatus::Encoded => EncoderStatus::Encoded,
         rav1e::EncoderStatus::Failure => EncoderStatus::Failure,
         rav1e::EncoderStatus::NotReady => EncoderStatus::NotReady,
+        rav1e::EncoderStatus::Cancelled => EncoderStatus::Failure,
       },
     }
   }

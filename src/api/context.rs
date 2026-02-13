@@ -278,6 +278,9 @@ impl<T: Pixel> Context<T> {
   ///             Err(EncoderStatus::Failure) => {
   ///                 return Err(EncoderStatus::Failure);
   ///             },
+  ///             Err(EncoderStatus::Cancelled) => {
+  ///                 return Err(EncoderStatus::Cancelled);
+  ///             },
   ///         }
   ///     }
   ///
@@ -452,6 +455,15 @@ impl<T: Pixel> Context<T> {
       .rc_state
       .parse_frame_data_packet(data)
       .map_err(|_| EncoderStatus::Failure)
+  }
+}
+
+#[cfg(feature = "stop")]
+impl<T: Pixel> Context<T> {
+  /// Set a cooperative cancellation token checked every superblock during
+  /// encoding. Use `Arc::new(enough::Unstoppable)` to clear.
+  pub fn set_stop(&mut self, stop: std::sync::Arc<dyn enough::Stop>) {
+    self.inner.stop = stop;
   }
 }
 
