@@ -12,7 +12,7 @@ include = [
   "/README.md",
   "/build.rs",
   "/src/**",
-  "!/src/bin/",
+  "!/src/bin/**",
   "!/src/capi.rs",
 ]
 license = "BSD-2-Clause"
