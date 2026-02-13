@@ -127,6 +127,17 @@ pub enum InvalidConfig {
   /// The configuration exceeded the specified level constraints.
   #[error("Constraints exceeded for specified level")]
   LevelConstraintsExceeded,
+
+  /// The pixel count (width * height) exceeds the configured maximum.
+  #[error(
+    "pixel count {actual} exceeds maximum {max}"
+  )]
+  PixelCountExceeded {
+    /// The actual pixel count.
+    actual: u64,
+    /// The configured maximum pixel count.
+    max: u64,
+  },
 }
 
 /// Contains the encoder configuration.
@@ -339,6 +350,15 @@ impl Config {
       return Err(InvalidRenderHeight(render_height));
     }
 
+    // Use u64 arithmetic for pixel count to avoid overflow on 32-bit platforms
+    let pixel_count = (config.width as u64) * (config.height as u64);
+    if config.max_pixel_count > 0 && pixel_count > config.max_pixel_count {
+      return Err(PixelCountExceeded {
+        actual: pixel_count,
+        max: config.max_pixel_count,
+      });
+    }
+
     if config.speed_settings.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
       || config.speed_settings.rdo_lookahead_frames < 1
     {
@@ -411,9 +431,7 @@ impl Config {
         if !AV1_LEVEL_DEFINED[level_idx as usize] {
           return Err(LevelUndefined);
         }
-        if config.width * config.height
-          > AV1_LEVEL_MAX_PIC_SIZE[level_idx as usize]
-        {
+        if pixel_count > AV1_LEVEL_MAX_PIC_SIZE[level_idx as usize] as u64 {
           return Err(LevelConstraintsExceeded);
         }
         if config.width > AV1_LEVEL_MAX_H_SIZE[level_idx as usize] {
@@ -422,7 +440,7 @@ impl Config {
         if config.height > AV1_LEVEL_MAX_V_SIZE[level_idx as usize] {
           return Err(LevelConstraintsExceeded);
         }
-        if ((config.width * config.height) as u64 * config.time_base.num)
+        if (pixel_count * config.time_base.num)
           .div_ceil(config.time_base.den)
           > AV1_LEVEL_MAX_DISPLAY_RATE[level_idx as usize] as u64
         {

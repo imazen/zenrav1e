@@ -18,7 +18,9 @@ use crate::serialize::{Deserialize, Serialize};
 use std::fmt;
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
-pub(crate) const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::MAX - 1;
+// Capped at 256 to prevent unbounded memory allocation.
+// Still images use 1 frame; video rarely needs more than 64.
+pub(crate) const MAX_RDO_LOOKAHEAD_FRAMES: usize = 256;
 // Due to the math in RCState::new() regarding the reservoir frame delay.
 pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::MAX as u64 / 3;
 
@@ -144,6 +146,10 @@ pub struct EncoderConfig {
   /// dependencies between coefficients. Encoder-only, bitstream compatible.
   pub enable_trellis: bool,
 
+  /// Maximum pixel count (width * height). Default 67_108_864 (64 megapixels).
+  /// Set to 0 to disable the limit. Validated in `Config::validate()`.
+  pub max_pixel_count: u64,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -207,6 +213,7 @@ impl EncoderConfig {
       vaq_strength: 1.0,
       seg_boost: 1.0,
       enable_trellis: false,
+      max_pixel_count: 67_108_864, // 64 megapixels
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
