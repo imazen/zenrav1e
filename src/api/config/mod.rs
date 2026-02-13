@@ -290,7 +290,7 @@ impl Config {
   /// # Examples
   ///
   /// ```
-  /// use rav1e::prelude::*;
+  /// use zenrav1e::prelude::*;
   ///
   /// # fn main() -> Result<(), InvalidConfig> {
   /// let cfg = Config::default();

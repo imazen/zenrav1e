@@ -271,7 +271,7 @@ macro_rules! plane_region_common {
       /// # Example
       ///
       /// ``` ignore
-      /// # use rav1e::tiling::*;
+      /// # use zenrav1e::tiling::*;
       /// # fn f(region: &PlaneRegion<'_, u16>) {
       /// // a subregion from (10, 8) to the end of the region
       /// let subregion = region.subregion(Area::StartingAt { x: 10, y: 8 });
@@ -279,8 +279,8 @@ macro_rules! plane_region_common {
       /// ```
       ///
       /// ``` ignore
-      /// # use rav1e::context::*;
-      /// # use rav1e::tiling::*;
+      /// # use zenrav1e::context::*;
+      /// # use zenrav1e::tiling::*;
       /// # fn f(region: &PlaneRegion<'_, u16>) {
       /// // a subregion from the top-left of block (2, 3) having size (64, 64)
       /// let bo = BlockOffset { x: 2, y: 3 };
@@ -453,7 +453,7 @@ impl<T: Pixel> PlaneRegionMut<'_, T> {
   /// # Example
   ///
   /// ``` ignore
-  /// # use rav1e::tiling::*;
+  /// # use zenrav1e::tiling::*;
   /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
   /// // a mutable subregion from (10, 8) having size (32, 32)
   /// let subregion = region.subregion_mut(Area::Rect { x: 10, y: 8, width: 32, height: 32 });
@@ -461,8 +461,8 @@ impl<T: Pixel> PlaneRegionMut<'_, T> {
   /// ```
   ///
   /// ``` ignore
-  /// # use rav1e::context::*;
-  /// # use rav1e::tiling::*;
+  /// # use zenrav1e::context::*;
+  /// # use zenrav1e::tiling::*;
   /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
   /// // a mutable subregion from the top-left of block (2, 3) to the end of the region
   /// let bo = BlockOffset { x: 2, y: 3 };

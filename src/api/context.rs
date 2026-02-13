@@ -38,7 +38,7 @@ impl<T: Pixel> Context<T> {
   /// # Examples
   ///
   /// ```
-  /// use rav1e::prelude::*;
+  /// use zenrav1e::prelude::*;
   ///
   /// # fn main() -> Result<(), InvalidConfig> {
   /// let cfg = Config::default();
@@ -76,7 +76,7 @@ impl<T: Pixel> Context<T> {
   /// # Examples
   ///
   /// ```
-  /// use rav1e::prelude::*;
+  /// use zenrav1e::prelude::*;
   ///
   /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
   /// # if false {
@@ -208,7 +208,7 @@ impl<T: Pixel> Context<T> {
   /// Encoding a single frame:
   ///
   /// ```
-  /// use rav1e::prelude::*;
+  /// use zenrav1e::prelude::*;
   ///
   /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
   /// # if false {
@@ -236,7 +236,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// ```
   /// use std::sync::Arc;
-  /// use rav1e::prelude::*;
+  /// use zenrav1e::prelude::*;
   ///
   /// fn encode_frames(
   ///     ctx: &mut Context<u8>,
