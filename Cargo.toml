@@ -1,7 +1,7 @@
 [package]
-name = "rav1e"
-version = "0.8.0"
-authors = ["Thomas Daede <tdaede@xiph.org>"]
+name = "zenrav1e"
+version = "0.1.0"
+authors = ["Thomas Daede <tdaede@xiph.org>", "Imazen <oss@imazen.io>"]
 edition = "2024"
 rust-version = "1.85.0"
 build = "build.rs"
@@ -11,13 +11,14 @@ include = [
   "/PATENTS",
   "/README.md",
   "/build.rs",
-  "/cbindgen.toml",
   "/src/**",
+  "!/src/bin/",
+  "!/src/capi.rs",
 ]
 license = "BSD-2-Clause"
-description = "The fastest and safest AV1 encoder"
+description = "AV1 encoder optimized for still and animated AVIF images (Imazen fork of rav1e)"
 readme = "README.md"
-repository = "https://github.com/xiph/rav1e/"
+repository = "https://github.com/imazen/zenrav1e/"
 autobenches = false
 autobins = false
 default-run = "rav1e"

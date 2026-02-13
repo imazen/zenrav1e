@@ -7,22 +7,17 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-//! rav1e is an [AV1] video encoder. It is designed to eventually cover all use
-//! cases, though in its current form it is most suitable for cases where
-//! libaom (the reference encoder) is too slow.
+//! zenrav1e is an [AV1] encoder optimized for still and animated AVIF images.
 //!
-//! ## Features
+//! This is Imazen's fork of [rav1e](https://github.com/xiph/rav1e), focused on
+//! compression efficiency for photographic content. Key improvements over upstream:
 //!
-//! * Intra and inter frames
-//! * 64x64 superblocks
-//! * 4x4 to 64x64 RDO-selected square and 2:1/1:2 rectangular blocks
-//! * DC, H, V, Paeth, smooth, and a subset of directional prediction modes
-//! * DCT, (FLIP-)ADST and identity transforms (up to 64x64, 16x16 and 32x32
-//!   respectively)
-//! * 8-, 10- and 12-bit depth color
-//! * 4:2:0 (full support), 4:2:2 and 4:4:4 (limited) chroma sampling
-//! * Variable speed settings
-//! * Near real-time encoding at high speed levels
+//! * **Quantization matrices** — frequency-dependent quantization weights (~10% BD-rate gain)
+//! * **Filter intra prediction** — 5 recursive filter modes for smooth gradients
+//! * **Lossless mode** — mathematically lossless encoding via `quantizer: 0`
+//! * **Still picture mode** — single-frame encoding without video overhead
+//!
+//! Also supports full video encoding (intra, inter, switch frames) inherited from upstream rav1e.
 //!
 //! ## Usage
 //!
@@ -160,7 +155,7 @@ pub mod config {
 /// The information is recovered from `Cargo.toml` and `git describe`, when available.
 ///
 /// ```
-/// use rav1e::version;
+/// use zenrav1e::version;
 /// use semver::Version;
 ///
 /// let major = version::major();

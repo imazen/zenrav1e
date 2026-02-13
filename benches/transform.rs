@@ -10,9 +10,9 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rav1e::bench::cpu_features::*;
-use rav1e::bench::transform;
-use rav1e::bench::transform::{
+use zenrav1e::bench::cpu_features::*;
+use zenrav1e::bench::transform;
+use zenrav1e::bench::transform::{
   TxSize, forward_transform, get_valid_txfm_types,
 };
 use std::mem::MaybeUninit;

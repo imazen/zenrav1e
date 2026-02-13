@@ -5,7 +5,7 @@ authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2024"
 description = "Simple ivf muxer"
 license = "BSD-2-Clause"
-homepage = "https://github.com/xiph/rav1e"
+homepage = "https://github.com/imazen/zenrav1e"
 
 [dependencies]
 bitstream-io = "4.1.0"

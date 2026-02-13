@@ -8,8 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 // Encode the same tiny blank frame 30 times
-use rav1e::config::SpeedSettings;
-use rav1e::*;
+use zenrav1e::config::SpeedSettings;
+use zenrav1e::*;
 
 fn main() {
   let enc = EncoderConfig {

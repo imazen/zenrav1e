@@ -1,7 +1,7 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rav1e::bench::frame::*;
+use zenrav1e::bench::frame::*;
 
 fn init_plane_u8(width: usize, height: usize) -> Plane<u8> {
   let mut ra = ChaChaRng::from_seed([0; 32]);
