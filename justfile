@@ -22,3 +22,11 @@ lint:
 
 # Full CI check
 ci: lint test
+
+# Address sanitizer (requires nightly + clang)
+asan:
+    RUSTFLAGS="-Zsanitizer=address -Clinker=clang" cargo +nightly test --no-default-features --features threading --target x86_64-unknown-linux-gnu -- --test-threads=1
+
+# Miri (unit tests only — encoder tests too slow)
+miri:
+    cargo +nightly miri test --no-default-features --features threading -- "quantize::trellis::tests"
