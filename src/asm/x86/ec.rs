@@ -9,13 +9,14 @@
 
 use crate::ec::rust;
 #[cfg(target_arch = "x86_64")]
+use safe_unaligned_simd::x86_64 as safe_simd;
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
 #[inline(always)]
 pub fn update_cdf<const N: usize>(cdf: &mut [u16; N], val: u32) {
   if cdf.len() == 4 {
-    // SAFETY: Calls Assembly code, which is only valid when the length of
-    // `cdf` is 4.
+    // SAFETY: Calls a function with #[target_feature(enable = "sse2")].
     return unsafe {
       update_cdf_4_sse2(cdf, val);
     };
@@ -26,8 +27,7 @@ pub fn update_cdf<const N: usize>(cdf: &mut [u16; N], val: u32) {
 
 #[target_feature(enable = "sse2")]
 #[inline]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
+fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let nsymbs = 4;
   let rate = 5 + (cdf[nsymbs - 1] >> 4) as usize;
   let count = cdf[nsymbs - 1] + (cdf[nsymbs - 1] < 32) as u16;
@@ -80,7 +80,8 @@ unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let indices = _mm_set_epi16(0, 0, 0, 0, 3, 2, 1, 0);
   let index_lt_val = _mm_cmplt_epi16(indices, val_splat);
   let k = _mm_avg_epu16(index_lt_val, _mm_setzero_si128());
-  let cdf_simd = _mm_loadl_epi64(cdf.as_mut_ptr() as *const __m128i);
+  let cdf_simd =
+    safe_simd::_mm_loadu_si64(cdf.first_chunk::<4>().unwrap());
   let k_minus_v = _mm_sub_epi16(k, cdf_simd);
   let negated_if_lt_val = _mm_sub_epi16(index_lt_val, k_minus_v);
   let shifted =
@@ -88,7 +89,7 @@ unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let fixed_if_lt_val = _mm_sub_epi16(shifted, index_lt_val);
   let result = _mm_sub_epi16(cdf_simd, fixed_if_lt_val);
 
-  _mm_storel_epi64(cdf.as_mut_ptr() as *mut __m128i, result);
+  safe_simd::_mm_storeu_si64(cdf.first_chunk_mut::<4>().unwrap(), result);
   cdf[nsymbs - 1] = count;
 }
 
@@ -102,7 +103,7 @@ mod test {
     let mut cdf2 = [7296, 3819, 1616, 0];
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
-      // SAFETY: We are only testing on cdfs of size 4
+      // SAFETY: target_feature function call
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }
@@ -113,7 +114,7 @@ mod test {
     let mut cdf2 = cdf;
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
-      // SAFETY: We are only testing on cdfs of size 4
+      // SAFETY: target_feature function call
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }

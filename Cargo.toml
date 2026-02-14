@@ -3,7 +3,7 @@ name = "zenrav1e"
 version = "0.1.0"
 authors = ["Thomas Daede <tdaede@xiph.org>", "Imazen <oss@imazen.io>"]
 edition = "2024"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 build = "build.rs"
 include = [
   "/Cargo.toml",
@@ -41,7 +41,7 @@ binaries = [
 stop = ["enough"]
 default = ["asm", "threading", "signal_support"]
 git_version = ["built/git2"]
-asm = ["nasm-rs", "cc"]
+asm = ["nasm-rs", "cc", "dep:safe_unaligned_simd"]
 threading = ["rayon/threads"]
 signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
@@ -126,6 +126,7 @@ tracing-chrome = { version = "0.7.1", optional = true }
 tracing = { version = "0.1.40", optional = true }
 aligned-vec = "0.6.0"
 enough = { version = "0.3", optional = true, default-features = false, features = ["std"] }
+safe_unaligned_simd = { version = "0.2.4", optional = true }
 
 [dependencies.image]
 version = "0.25.0"

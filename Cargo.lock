@@ -1613,6 +1613,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
+name = "safe_unaligned_simd"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1d612ce01a584cfab72164fb3f689112249fafeab7b4181c14601d19b34cb0a"
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2434,6 +2440,7 @@ dependencies = [
  "quickcheck",
  "rand 0.9.1",
  "rand_chacha",
+ "safe_unaligned_simd",
  "scan_fmt",
  "semver",
  "serde",
