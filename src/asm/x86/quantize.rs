@@ -90,6 +90,7 @@ pub fn dequantize<T: Coefficient>(
 }
 
 #[target_feature(enable = "avx2")]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn dequantize_avx2(
   qindex: u8, coeffs_ptr: *const i16, _eob: u16, rcoeffs_ptr: *mut i16,
   tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,

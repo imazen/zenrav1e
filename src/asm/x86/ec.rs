@@ -26,6 +26,7 @@ pub fn update_cdf<const N: usize>(cdf: &mut [u16; N], val: u32) {
 
 #[target_feature(enable = "sse2")]
 #[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let nsymbs = 4;
   let rate = 5 + (cdf[nsymbs - 1] >> 4) as usize;

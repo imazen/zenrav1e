@@ -68,6 +68,7 @@ use std::arch::x86_64::*;
 /// Horizontally sum 8 32-bit values in a YMM register
 #[inline]
 #[target_feature(enable = "avx2")]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
   // We split the vector in half and then add (2, 3) + (0, 1), and finally 0 + 1.
   let m1 = _mm256_extracti128_si256(ymm, 1);
@@ -93,6 +94,7 @@ unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
 /// - If `W` is not a multiple of 16
 #[inline]
 #[target_feature(enable = "avx2")]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn rav1e_sad_wxh_hbd_avx2_inner<const W: usize>(
   src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
   n_rows: usize,
@@ -132,6 +134,7 @@ unsafe fn rav1e_sad_wxh_hbd_avx2_inner<const W: usize>(
 /// By convention, `src_stride` and `dst_stride` are measured in bytes, not u16's
 #[inline]
 #[target_feature(enable = "avx2")]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn rav1e_sad_wxh_hbd_avx2<const W: usize>(
   src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
   n_rows: usize,
@@ -395,6 +398,7 @@ macro_rules! get_sad_hbd_ssse3 {
     $(
       pastey::item! {
         #[target_feature(enable = "ssse3")]
+        #[allow(unsafe_op_in_unsafe_fn)]
         unsafe extern fn [<rav1e_sad_ $W x $H _hbd_ssse3>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
         ) -> u32 {
@@ -445,6 +449,7 @@ macro_rules! get_sad_hbd_avx2_WxH {
     $(
       pastey::item! {
         #[target_feature(enable = "avx2")]
+        #[allow(unsafe_op_in_unsafe_fn)]
         unsafe extern fn [<rav1e_sad_ $W x $H _hbd_avx2>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
         ) -> u32 {

@@ -151,6 +151,7 @@ cpu_function_lookup_table!(
 );
 
 #[target_feature(enable = "avx2")]
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline]
 unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
   // We split the vector in half and then add the two halves and sum.
@@ -165,6 +166,7 @@ unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
 }
 
 #[target_feature(enable = "avx2")]
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline]
 unsafe fn rav1e_cdef_dist_kernel_8x8_hbd_avx2(
   src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
