@@ -17,6 +17,8 @@ include = [
 ]
 license = "BSD-2-Clause"
 description = "AV1 encoder optimized for still and animated AVIF images (Imazen fork of rav1e)"
+keywords = ["av1", "avif", "encoder", "video", "image"]
+categories = ["multimedia::encoding", "multimedia::images"]
 readme = "README.md"
 repository = "https://github.com/imazen/zenrav1e/"
 autobenches = false
