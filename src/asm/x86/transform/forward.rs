@@ -31,13 +31,13 @@ struct I32X8 {
 impl I32X8 {
   #[target_feature(enable = "avx2")]
   #[inline]
-  const unsafe fn vec(self) -> __m256i {
+  const fn vec(self) -> __m256i {
     self.data
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
-  const unsafe fn new(a: __m256i) -> I32X8 {
+  const fn new(a: __m256i) -> I32X8 {
     I32X8 { data: a }
   }
 }
@@ -50,60 +50,68 @@ impl TxOperations for I32X8 {
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn zero() -> Self {
-    I32X8::new(_mm256_setzero_si256())
+    unsafe { I32X8::new(_mm256_setzero_si256()) }
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn tx_mul<const SHIFT: i32>(self, mul: i32) -> Self {
-    I32X8::new(_mm256_srav_epi32(
-      _mm256_add_epi32(
-        _mm256_mullo_epi32(self.vec(), _mm256_set1_epi32(mul)),
-        _mm256_set1_epi32(1 << SHIFT >> 1),
-      ),
-      _mm256_set1_epi32(SHIFT),
-    ))
+    unsafe {
+      I32X8::new(_mm256_srav_epi32(
+        _mm256_add_epi32(
+          _mm256_mullo_epi32(self.vec(), _mm256_set1_epi32(mul)),
+          _mm256_set1_epi32(1 << SHIFT >> 1),
+        ),
+        _mm256_set1_epi32(SHIFT),
+      ))
+    }
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn rshift1(self) -> Self {
-    I32X8::new(_mm256_srai_epi32(
-      _mm256_sub_epi32(
-        self.vec(),
-        _mm256_cmpgt_epi32(_mm256_setzero_si256(), self.vec()),
-      ),
-      1,
-    ))
+    unsafe {
+      I32X8::new(_mm256_srai_epi32(
+        _mm256_sub_epi32(
+          self.vec(),
+          _mm256_cmpgt_epi32(_mm256_setzero_si256(), self.vec()),
+        ),
+        1,
+      ))
+    }
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn add(self, b: Self) -> Self {
-    I32X8::new(_mm256_add_epi32(self.vec(), b.vec()))
+    unsafe { I32X8::new(_mm256_add_epi32(self.vec(), b.vec())) }
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn sub(self, b: Self) -> Self {
-    I32X8::new(_mm256_sub_epi32(self.vec(), b.vec()))
+    unsafe { I32X8::new(_mm256_sub_epi32(self.vec(), b.vec())) }
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn add_avg(self, b: Self) -> Self {
-    I32X8::new(_mm256_srai_epi32(_mm256_add_epi32(self.vec(), b.vec()), 1))
+    unsafe {
+      I32X8::new(_mm256_srai_epi32(_mm256_add_epi32(self.vec(), b.vec()), 1))
+    }
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
   unsafe fn sub_avg(self, b: Self) -> Self {
-    I32X8::new(_mm256_srai_epi32(_mm256_sub_epi32(self.vec(), b.vec()), 1))
+    unsafe {
+      I32X8::new(_mm256_srai_epi32(_mm256_sub_epi32(self.vec(), b.vec()), 1))
+    }
   }
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_8x8_avx2(input: &[I32X8; 8], into: &mut [I32X8; 8]) {
+fn transpose_8x8_avx2(input: &[I32X8; 8], into: &mut [I32X8; 8]) {
   let stage1 = (
     _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
     _mm256_unpackhi_epi32(input[0].vec(), input[1].vec()),
@@ -140,7 +148,7 @@ unsafe fn transpose_8x8_avx2(input: &[I32X8; 8], into: &mut [I32X8; 8]) {
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_8x4_avx2(input: &[I32X8; 8], into: &mut [I32X8; 4]) {
+fn transpose_8x4_avx2(input: &[I32X8; 8], into: &mut [I32X8; 4]) {
   // Last 8 are empty
   let stage1 = (
     //0101
@@ -174,7 +182,7 @@ unsafe fn transpose_8x4_avx2(input: &[I32X8; 8], into: &mut [I32X8; 4]) {
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_4x8_avx2(input: &[I32X8; 4], into: &mut [I32X8; 8]) {
+fn transpose_4x8_avx2(input: &[I32X8; 4], into: &mut [I32X8; 8]) {
   let stage1 = (
     // 0101
     _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
@@ -207,7 +215,7 @@ unsafe fn transpose_4x8_avx2(input: &[I32X8; 4], into: &mut [I32X8; 8]) {
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_4x4_avx2(input: &[I32X8; 4], into: &mut [I32X8; 4]) {
+fn transpose_4x4_avx2(input: &[I32X8; 4], into: &mut [I32X8; 4]) {
   let stage1 = (
     _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
     _mm256_unpackhi_epi32(input[0].vec(), input[1].vec()),
@@ -223,13 +231,13 @@ unsafe fn transpose_4x4_avx2(input: &[I32X8; 4], into: &mut [I32X8; 4]) {
 
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn shift_left(a: I32X8, shift: u8) -> I32X8 {
+fn shift_left(a: I32X8, shift: u8) -> I32X8 {
   I32X8::new(_mm256_sllv_epi32(a.vec(), _mm256_set1_epi32(shift as i32)))
 }
 
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn shift_right(a: I32X8, shift: u8) -> I32X8 {
+fn shift_right(a: I32X8, shift: u8) -> I32X8 {
   I32X8::new(_mm256_srav_epi32(
     _mm256_add_epi32(a.vec(), _mm256_set1_epi32(1 << (shift as i32) >> 1)),
     _mm256_set1_epi32(shift as i32),
@@ -238,9 +246,9 @@ unsafe fn shift_right(a: I32X8, shift: u8) -> I32X8 {
 
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn round_shift_array_avx2(arr: &mut [I32X8], bit: i8) {
+fn round_shift_array_avx2(arr: &mut [I32X8], bit: i8) {
   if arr.len() % 4 != 0 {
-    debug_unreachable!();
+    unsafe { debug_unreachable!() };
   }
 
   if bit == 0 {
@@ -269,19 +277,15 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
   input: &[i16], output: &mut [MaybeUninit<T>], stride: usize,
   tx_size: TxSize, tx_type: TxType, bd: usize,
 ) {
-  // Note when assigning txfm_size_col, we use the txfm_size from the
-  // row configuration and vice versa. This is intentionally done to
-  // accurately perform rectangular transforms. When the transform is
-  // rectangular, the number of columns will be the same as the
-  // txfm_size stored in the row cfg struct. It will make no difference
-  // for square transforms.
   let txfm_size_col = tx_size.width();
   let txfm_size_row = tx_size.height();
 
   let col_class = SizeClass1D::from_length(txfm_size_col);
   let row_class = SizeClass1D::from_length(txfm_size_row);
 
-  let mut tmp: Aligned<[I32X8; 64 * 64 / 8]> = Aligned::uninitialized();
+  // SAFETY: MaybeUninit array does not require initialization
+  let mut tmp: Aligned<[I32X8; 64 * 64 / 8]> =
+    unsafe { Aligned::uninitialized() };
   let buf = &mut tmp.data[..txfm_size_col * (txfm_size_row / 8).max(1)];
   let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
@@ -293,21 +297,17 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
     let shift = cfg.shift[0] as u8;
     #[target_feature(enable = "avx2")]
     #[inline]
-    unsafe fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
-      // TODO: load 64-bits for x4 wide columns
-      shift_left(
-        I32X8::new(_mm256_cvtepi16_epi32(_mm_loadu_si128(
-          input_ptr as *const _,
-        ))),
-        shift,
-      )
+    fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
+      let loaded = I32X8::new(_mm256_cvtepi16_epi32(unsafe {
+        _mm_loadu_si128(input_ptr as *const _)
+      }));
+      shift_left(loaded, shift)
     }
 
     // Avoid zero initialization
     let tx_in = &mut [MaybeUninit::<I32X8>::uninit(); 64][..txfm_size_row];
 
     if cfg.ud_flip {
-      // flip upside down
       for (in_slice, out_reg) in
         input[cg..].chunks(stride).zip(tx_in.iter_mut().rev())
       {
@@ -321,12 +321,13 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
       }
     }
 
-    let col_coeffs = slice_assume_init_mut(tx_in);
+    // SAFETY: tx_in was initialized in the loop above
+    let col_coeffs = unsafe { slice_assume_init_mut(tx_in) };
 
-    txfm_func_col(col_coeffs);
+    // SAFETY: txfm_func_col requires target_feature(avx2) which we have
+    unsafe { txfm_func_col(col_coeffs) };
     round_shift_array_avx2(col_coeffs, -cfg.shift[1]);
 
-    // Transpose the array. Select the appropriate method to do so.
     match (row_class, col_class) {
       (SizeClass1D::X8UP, SizeClass1D::X8UP) => {
         for rg in (0..txfm_size_row).step_by(8) {
@@ -347,14 +348,12 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
         }
       }
       (SizeClass1D::X4, SizeClass1D::X8UP) => {
-        // Don't need to loop over rows
         let buf = &mut buf[cg..];
         let buf = cast_mut::<8, _>(buf);
         let input = cast::<4, _>(col_coeffs);
         transpose_4x8_avx2(input, buf);
       }
       (SizeClass1D::X4, SizeClass1D::X4) => {
-        // Don't need to loop over rows
         let buf = cast_mut::<4, _>(buf);
         let input = cast::<4, _>(col_coeffs);
         transpose_4x4_avx2(input, buf);
@@ -370,25 +369,17 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
       row_coeffs.reverse();
     }
 
-    txfm_func_row(row_coeffs);
+    // SAFETY: txfm_func_row requires target_feature(avx2) which we have
+    unsafe { txfm_func_row(row_coeffs) };
     round_shift_array_avx2(row_coeffs, -cfg.shift[2]);
 
-    // Write out the coefficients using the correct method for transforms of
-    // this size.
     match row_class {
       SizeClass1D::X8UP => {
-        // Store output in at most 32x32 chunks. See rust code for details.
-
-        // Output is grouped into 32x32 chunks so a stride of at most 32 is
-        // used for each chunk
         let output_stride = txfm_size_row.min(32);
-
-        // Split the first 32 rows from the last 32 rows and offset by rg % 32
         let output = &mut output[(rg & 31)
           + (rg >= 32) as usize * output_stride * txfm_size_col.min(32)..];
 
         for cg in (0..txfm_size_col).step_by(32) {
-          // Offset by zero or half of output
           let output = &mut output[txfm_size_row * cg..];
 
           for c in 0..txfm_size_col.min(32) {
@@ -397,38 +388,44 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
                 let vec = row_coeffs[c + cg].vec();
                 let lo = _mm256_castsi256_si128(vec);
                 let hi = _mm256_extracti128_si256(vec, 1);
-                _mm_storeu_si128(
-                  output[c * output_stride..].as_mut_ptr() as *mut _,
-                  _mm_packs_epi32(lo, hi),
-                );
+                unsafe {
+                  _mm_storeu_si128(
+                    output[c * output_stride..].as_mut_ptr() as *mut _,
+                    _mm_packs_epi32(lo, hi),
+                  );
+                }
               }
               PixelType::U16 => {
-                _mm256_storeu_si256(
-                  output[c * output_stride..].as_mut_ptr() as *mut _,
-                  row_coeffs[c + cg].vec(),
-                );
+                unsafe {
+                  _mm256_storeu_si256(
+                    output[c * output_stride..].as_mut_ptr() as *mut _,
+                    row_coeffs[c + cg].vec(),
+                  );
+                }
               }
             }
           }
         }
       }
       SizeClass1D::X4 => {
-        // Write out coefficients in normal order - it isn't possible to have
-        // more than 32 rows.
         for c in 0..txfm_size_col {
           match T::Pixel::type_enum() {
             PixelType::U8 => {
               let lo = _mm256_castsi256_si128(row_coeffs[c].vec());
-              _mm_storel_epi64(
-                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-                _mm_packs_epi32(lo, lo),
-              );
+              unsafe {
+                _mm_storel_epi64(
+                  output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                  _mm_packs_epi32(lo, lo),
+                );
+              }
             }
             PixelType::U16 => {
-              _mm256_storeu_si256(
-                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-                row_coeffs[c].vec(),
-              );
+              unsafe {
+                _mm256_storeu_si256(
+                  output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                  row_coeffs[c].vec(),
+                );
+              }
             }
           }
         }

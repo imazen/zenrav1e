@@ -222,6 +222,7 @@ macro_rules! impl_1d_tx {
   const SUB: $($s)* fn(T, T) -> T;
 
   #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
   $($s)* fn kernel<const SHIFT0: i32, const SHIFT1: i32>(p0: T, p1: T, m: (i32, i32)) -> (T, T) {
     let t = Self::ADD(p1, p0);
     let (a, out0) = (p0.tx_mul::<SHIFT0>(m.0), t.tx_mul::<SHIFT1>(m.1));
@@ -261,6 +262,7 @@ trait RotateKernel<T: TxOperations> {
   const SHIFT: $($s)* fn(T) -> T;
 
   #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
   $($s)* fn half_kernel<const SHIFT0: i32, const SHIFT1: i32, const SHIFT2: i32>(
     p0: (T, T), p1: T, m: (i32, i32, i32),
   ) -> (T, T) {
@@ -273,6 +275,7 @@ trait RotateKernel<T: TxOperations> {
   }
 
   #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
   $($s)* fn kernel<const SHIFT0: i32, const SHIFT1: i32, const SHIFT2: i32>(p0: T, p1: T, m: (i32, i32, i32)) -> (T, T) {
     Self::half_kernel::<SHIFT0, SHIFT1, SHIFT2>((p0, p0), p1, m)
   }
@@ -282,6 +285,7 @@ trait RotateKernelNeg<T: TxOperations> {
   const ADD: $($s)* fn(T, T) -> T;
 
   #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
   $($s)* fn kernel<const SHIFT0: i32, const SHIFT1: i32, const SHIFT2: i32>(p0: T, p1: T, m: (i32, i32, i32)) -> (T, T) {
     let t = Self::ADD(p0, p1);
     let (a, b, c) = (p0.tx_mul::<SHIFT0>(m.0), p1.tx_mul::<SHIFT1>(m.1), t.tx_mul::<SHIFT2>(m.2));
@@ -346,6 +350,7 @@ impl<T: TxOperations> RotateKernelNeg<T> for RotateNegAvg {
 
 #[inline]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn butterfly_add<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
   let p0 = p0.add(p1);
   let p0h = p0.rshift1();
@@ -355,6 +360,7 @@ $($s)* fn butterfly_add<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
 
 #[inline]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn butterfly_sub<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
   let p0 = p0.sub(p1);
   let p0h = p0.rshift1();
@@ -364,6 +370,7 @@ $($s)* fn butterfly_sub<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
 
 #[inline]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn butterfly_neg<T: TxOperations>(p0: T, p1: T) -> (T, (T, T)) {
   let p1 = p0.sub(p1);
   let p1h = p1.rshift1();
@@ -373,6 +380,7 @@ $($s)* fn butterfly_neg<T: TxOperations>(p0: T, p1: T) -> (T, (T, T)) {
 
 #[inline]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn butterfly_add_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
   let p1 = p1h.add(p0.0);
   let p0 = p0.1.sub(p1);
@@ -381,6 +389,7 @@ $($s)* fn butterfly_add_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
 
 #[inline]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn butterfly_sub_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
   let p1 = p1h.sub(p0.0);
   let p0 = p0.1.add(p1);
@@ -389,6 +398,7 @@ $($s)* fn butterfly_sub_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
 
 #[inline]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn butterfly_neg_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
   let p0 = p0h.add(p1.0);
   let p1 = p0.sub(p1.1);
@@ -396,11 +406,13 @@ $($s)* fn butterfly_neg_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_2_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
   butterfly_neg_asym(p0h, p1)
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_2_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
   //   473/512 = (Sin[3*Pi/8] + Cos[3*Pi/8])/Sqrt[2] = 0.9238795325112867
   // 3135/4096 = (Sin[3*Pi/8] - Cos[3*Pi/8])*Sqrt[2] = 0.7653668647301795
@@ -409,6 +421,7 @@ $($s)* fn daala_fdst_iv_2_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_4<T: TxOperations>(
   q0: T, q1: T, q2: T, q3: T, output: &mut [T],
 ) {
@@ -424,6 +437,7 @@ $($s)* fn daala_fdct_ii_4<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct4<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 4);
   let mut temp_out: [T; 4] = [T::zero(); 4];
@@ -436,6 +450,7 @@ $($s)* fn daala_fdct4<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_vii_4<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 4);
 
@@ -468,6 +483,7 @@ $($s)* fn daala_fdst_vii_4<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
   // 11585/8192 = Sin[Pi/4] + Cos[Pi/4]  = 1.4142135623730951
   // 11585/8192 = 2*Cos[Pi/4]            = 1.4142135623730951
@@ -476,6 +492,7 @@ $($s)* fn daala_fdct_ii_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
   // 10703/8192 = Sin[3*Pi/8] + Cos[3*Pi/8]  = 1.3065629648763766
   // 8867/16384 = Sin[3*Pi/8] - Cos[3*Pi/8]  = 0.5411961001461971
@@ -484,6 +501,7 @@ $($s)* fn daala_fdst_iv_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_4_asym<T: TxOperations>(
   q0h: T, q1: (T, T), q2h: T, q3: (T, T), output: &mut [T],
 ) {
@@ -499,6 +517,7 @@ $($s)* fn daala_fdct_ii_4_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_4_asym<T: TxOperations>(
   q0: (T, T), q1h: T, q2: (T, T), q3h: T, output: &mut [T],
 ) {
@@ -533,6 +552,7 @@ $($s)* fn daala_fdst_iv_4_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_8<T: TxOperations>(
   r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T],
 ) {
@@ -549,6 +569,7 @@ $($s)* fn daala_fdct_ii_8<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct8<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 8);
   let mut temp_out: [T; 8] = [T::zero(); 8];
@@ -575,6 +596,7 @@ $($s)* fn daala_fdct8<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_8<T: TxOperations>(
   r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T],
 ) {
@@ -631,6 +653,7 @@ $($s)* fn daala_fdst_iv_8<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst8<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 8);
   let mut temp_out: [T; 8] = [T::zero(); 8];
@@ -657,6 +680,7 @@ $($s)* fn daala_fdst8<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_4<T: TxOperations>(
   q0: T, q1: T, q2: T, q3: T, output: &mut [T],
 ) {
@@ -686,6 +710,7 @@ $($s)* fn daala_fdst_iv_4<T: TxOperations>(
 
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_8_asym<T: TxOperations>(
   r0h: T, r1: (T, T), r2h: T, r3: (T, T), r4h: T, r5: (T, T), r6h: T,
   r7: (T, T), output: &mut [T],
@@ -703,6 +728,7 @@ $($s)* fn daala_fdct_ii_8_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_8_asym<T: TxOperations>(
   r0: (T, T), r1h: T, r2: (T, T), r3h: T, r4: (T, T), r5h: T, r6: (T, T),
   r7h: T, output: &mut [T],
@@ -760,6 +786,7 @@ $($s)* fn daala_fdst_iv_8_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_16<T: TxOperations>(
   s0: T, s1: T, s2: T, s3: T, s4: T, s5: T, s6: T, s7: T, s8: T, s9: T, sa: T,
   sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T],
@@ -781,6 +808,7 @@ $($s)* fn daala_fdct_ii_16<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct16<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 16);
   let mut temp_out: [T; 16] = [T::zero(); 16];
@@ -823,6 +851,7 @@ $($s)* fn daala_fdct16<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_16<T: TxOperations>(
   s0: T, s1: T, s2: T, s3: T, s4: T, s5: T, s6: T, s7: T, s8: T, s9: T, sa: T,
   sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T],
@@ -948,6 +977,7 @@ $($s)* fn daala_fdst_iv_16<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst16<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 16);
   let mut temp_out: [T; 16] = [T::zero(); 16];
@@ -990,6 +1020,7 @@ $($s)* fn daala_fdst16<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_16_asym<T: TxOperations>(
   s0h: T, s1: (T, T), s2h: T, s3: (T, T), s4h: T, s5: (T, T), s6h: T,
   s7: (T, T), s8h: T, s9: (T, T), sah: T, sb: (T, T), sch: T, sd: (T, T),
@@ -1012,6 +1043,7 @@ $($s)* fn daala_fdct_ii_16_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_16_asym<T: TxOperations>(
   s0: (T, T), s1h: T, s2: (T, T), s3h: T, s4: (T, T), s5h: T, s6: (T, T),
   s7h: T, s8: (T, T), s9h: T, sa: (T, T), sbh: T, sc: (T, T), sdh: T,
@@ -1147,6 +1179,7 @@ $($s)* fn daala_fdst_iv_16_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_32<T: TxOperations>(
   t0: T, t1: T, t2: T, t3: T, t4: T, t5: T, t6: T, t7: T, t8: T, t9: T, ta: T,
   tb: T, tc: T, td: T, te: T, tf: T, tg: T, th: T, ti: T, tj: T, tk: T, tl: T,
@@ -1214,6 +1247,7 @@ $($s)* fn daala_fdct_ii_32<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct32<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 32);
   let mut temp_out: [T; 32] = [T::zero(); 32];
@@ -1288,6 +1322,7 @@ $($s)* fn daala_fdct32<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct_ii_32_asym<T: TxOperations>(
   t0h: T, t1: (T, T), t2h: T, t3: (T, T), t4h: T, t5: (T, T), t6h: T,
   t7: (T, T), t8h: T, t9: (T, T), tah: T, tb: (T, T), tch: T, td: (T, T),
@@ -1356,6 +1391,7 @@ $($s)* fn daala_fdct_ii_32_asym<T: TxOperations>(
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdst_iv_32_asym<T: TxOperations>(
   t0: (T, T), t1h: T, t2: (T, T), t3h: T, t4: (T, T), t5h: T, t6: (T, T),
   t7h: T, t8: (T, T), t9h: T, ta: (T, T), tbh: T, tc: (T, T), tdh: T,
@@ -1629,6 +1665,7 @@ $($s)* fn daala_fdst_iv_32_asym<T: TxOperations>(
 
 #[allow(clippy::identity_op)]
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 64);
   // Use arrays to avoid ridiculous variable names
@@ -1637,6 +1674,7 @@ $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
   // +/- Butterflies with asymmetric output.
   {
     #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
     #[inline]
     $($s)* fn butterfly_pair<T: TxOperations>(
       half: &mut [T; 32], asym: &mut [(T, T); 32], input: &[T], i: usize
@@ -1743,6 +1781,7 @@ $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
 
   // Store a reordered version of output in temp_out
   #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
   #[inline]
   $($s)* fn reorder_4<T: TxOperations>(
     output: &mut [T], i: usize, tmp: [T; 64], j: usize
@@ -1772,9 +1811,11 @@ $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn fidentity<T: TxOperations>(_coeffs: &mut [T]) {}
 
 #[$m]
+  #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn fwht4<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 4);
   let x0 = coeffs[0];
