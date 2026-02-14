@@ -157,11 +157,11 @@ semver = "1.0"
 
 # Exclude dependencies and features that don't work on wasm32:
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-criterion = { version = "0.6", default-features = false }
+criterion = { version = "0.8", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 assert_cmd = "2.0"
-criterion = "0.6"
+criterion = "0.8"
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"
