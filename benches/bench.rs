@@ -115,6 +115,8 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
                 IntraParam::None,
                 RDOType::PixelDistRealRate,
                 true,
+                false,
+                FilterIntraMode::FILTER_DC_PRED,
               );
             }
           }
