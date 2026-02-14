@@ -144,7 +144,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   }
 }
 
-extern {
+unsafe extern {
   fn rav1e_cdef_filter_4x4_avx2(
     dst: *mut u8, dst_stride: isize, tmp: *const u16, tmp_stride: isize,
     pri_strength: i32, sec_strength: i32, dir: i32, damping: i32,
@@ -248,7 +248,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
   dir
 }
 
-extern {
+unsafe extern {
   fn rav1e_cdef_dir_8bpc_ssse3(
     tmp: *const u8, tmp_stride: isize, var: *mut u32,
   ) -> i32;

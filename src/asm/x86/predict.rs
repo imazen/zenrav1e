@@ -20,7 +20,7 @@ use v_frame::pixel::PixelType;
 
 macro_rules! decl_angular_ipred_fn {
   ($($f:ident),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $f(
           dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
@@ -70,7 +70,7 @@ decl_angular_ipred_fn! {
 
 macro_rules! decl_angular_ipred_hbd_fn {
   ($($f:ident),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $f(
           dst: *mut u16, stride: libc::ptrdiff_t, topleft: *const u16,
@@ -118,7 +118,7 @@ decl_angular_ipred_hbd_fn! {
 // For z2 prediction, we need to provide extra parameters, dx and dy, which indicate
 // the distance between the predicted block's top-left pixel and the frame's edge.
 // It is required for the intra edge filtering process.
-extern {
+unsafe extern {
 
   fn rav1e_ipred_z2_8bpc_ssse3(
     dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
@@ -141,7 +141,7 @@ extern {
 
 macro_rules! decl_cfl_ac_fn {
   ($($f:ident),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $f(
           ac: *mut MaybeUninit<i16>, src: *const u8, stride: libc::ptrdiff_t,
@@ -164,7 +164,7 @@ decl_cfl_ac_fn! {
 
 macro_rules! decl_cfl_ac_hbd_fn {
   ($($f:ident),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $f(
           ac: *mut MaybeUninit<i16>, src: *const u16, stride: libc::ptrdiff_t,
@@ -187,7 +187,7 @@ decl_cfl_ac_hbd_fn! {
 
 macro_rules! decl_cfl_pred_fn {
   ($($f:ident),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $f(
           dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
@@ -212,7 +212,7 @@ decl_cfl_pred_fn! {
 
 macro_rules! decl_cfl_pred_hbd_fn {
   ($($f:ident),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $f(
           dst: *mut u16, stride: libc::ptrdiff_t, topleft: *const u16,

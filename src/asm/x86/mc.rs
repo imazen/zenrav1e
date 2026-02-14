@@ -322,7 +322,7 @@ pub fn mc_avg<T: Pixel>(
 macro_rules! decl_mc_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
     pastey::item! {
-      extern {
+      unsafe extern {
         $(
           fn [<$func_name _ssse3>](
             dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
@@ -390,7 +390,7 @@ cpu_function_lookup_table!(
 macro_rules! decl_mc_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
     pastey::item! {
-      extern {
+      unsafe extern {
         $(
           fn [<$func_name _ssse3>](
             dst: *mut u16, dst_stride: isize, src: *const u16, src_stride: isize,
@@ -445,7 +445,7 @@ cpu_function_lookup_table!(
 macro_rules! decl_mct_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
     pastey::item! {
-      extern {
+      unsafe extern {
         $(
           fn [<$func_name _sse2>](
             tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
@@ -526,7 +526,7 @@ cpu_function_lookup_table!(
 macro_rules! decl_mct_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
     pastey::item! {
-      extern {
+      unsafe extern {
         $(
           fn [<$func_name _ssse3>](
             tmp: *mut i16, src: *const u16, src_stride: libc::ptrdiff_t, w: i32,
@@ -578,7 +578,7 @@ cpu_function_lookup_table!(
   [SSSE3, AVX2]
 );
 
-extern {
+unsafe extern {
   fn rav1e_avg_8bpc_ssse3(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,

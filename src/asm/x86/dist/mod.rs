@@ -45,7 +45,7 @@ type SatdHBDFn = unsafe extern fn(
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
     $(
-      extern { fn $name (
+      unsafe extern { fn $name (
         src: *const $T, src_stride: isize, dst: *const $T, dst_stride: isize
       ) -> u32; }
     )+
@@ -55,7 +55,7 @@ macro_rules! declare_asm_dist_fn {
 macro_rules! declare_asm_satd_hbd_fn {
   ($($name: ident),+) => (
     $(
-      extern { pub(crate) fn $name (
+      unsafe extern { pub(crate) fn $name (
         src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize, bdmax: u32
       ) -> u32; }
     )+
