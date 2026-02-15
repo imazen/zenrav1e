@@ -8,7 +8,7 @@ AV1 encoder optimized for still and animated AVIF images. Fork of [rav1e](https:
 
 ## Fork of rav1e
 
-Fully synced with upstream rav1e — no upstream commits are missing. All changes are additive (38 commits on top of upstream HEAD).
+All changes are additive on top of upstream rav1e.
 
 ### Encoding features
 
