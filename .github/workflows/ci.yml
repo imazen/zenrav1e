@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  PURE_RUST: "--no-default-features --features threading"
+
+jobs:
+  # ==========================================================================
+  # Native x86_64 testing (pure Rust)
+  # ==========================================================================
+  test-x64:
+    name: Test x64 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (pure Rust)
+        run: cargo build ${{ env.PURE_RUST }}
+
+      - name: Test (pure Rust)
+        run: cargo test ${{ env.PURE_RUST }}
+
+  # ==========================================================================
+  # x86_64 asm testing (requires NASM)
+  # ==========================================================================
+  test-asm:
+    name: Test x64 asm (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install NASM
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (with asm)
+        run: cargo build
+
+      - name: Test (with asm)
+        run: cargo test
+
+  # ==========================================================================
+  # Native ARM64 testing (pure Rust)
+  # ==========================================================================
+  test-aarch64:
+    name: Test aarch64 (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04-arm, name: Linux }
+          - { os: macos-latest, name: macOS }
+          - { os: windows-11-arm, name: "Windows ARM" }
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (pure Rust)
+        run: cargo build ${{ env.PURE_RUST }}
+
+      - name: Test (pure Rust)
+        run: cargo test ${{ env.PURE_RUST }}
+
+  # ==========================================================================
+  # Cross-compiled testing with QEMU (32-bit targets)
+  # ==========================================================================
+  test-cross:
+    name: Cross (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - i686-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (cross, pure Rust)
+        run: cross build --target ${{ matrix.target }} ${{ env.PURE_RUST }}
+
+      - name: Test (cross/QEMU, pure Rust)
+        run: cross test --target ${{ matrix.target }} ${{ env.PURE_RUST }}
+
+  # ==========================================================================
+  # Clippy
+  # ==========================================================================
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install NASM
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  # ==========================================================================
+  # Format check
+  # ==========================================================================
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format check
+        run: cargo fmt --all -- --check
