@@ -141,3 +141,40 @@ jobs:
 
       - name: Clippy (pure Rust)
         run: cargo clippy ${{ env.PURE_RUST }} --all-targets
+
+  # ==========================================================================
+  # Format check
+  # ==========================================================================
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format check
+        run: cargo fmt -- --check
+
+  # ==========================================================================
+  # MSRV check
+  # ==========================================================================
+  msrv:
+    name: MSRV (1.88.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust 1.88.0
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check MSRV (pure Rust)
+        run: cargo check ${{ env.PURE_RUST }}
