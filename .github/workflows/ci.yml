@@ -42,8 +42,12 @@ jobs:
   # x86_64 asm testing (requires NASM)
   # ==========================================================================
   test-asm:
-    name: Test x64 asm (Linux)
-    runs-on: ubuntu-latest
+    name: Test x64 asm (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -74,7 +78,7 @@ jobs:
         include:
           - { os: ubuntu-24.04-arm, name: Linux }
           - { os: macos-latest, name: macOS }
-          - { os: windows-11-arm, name: "Windows ARM" }
+          - { os: windows-11-arm, name: Windows }
     steps:
       - uses: actions/checkout@v6
 
@@ -89,6 +93,34 @@ jobs:
 
       - name: Test (pure Rust)
         run: cargo test ${{ env.PURE_RUST }}
+
+  # ==========================================================================
+  # WASM testing
+  # ==========================================================================
+  test-wasm:
+    name: Test WASM SIMD128
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasmtime
+        run: |
+          curl https://wasmtime.dev/install.sh -sSf | bash
+          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+
+      - name: Test WASM (pure Rust, no threading)
+        env:
+          CARGO_TARGET_WASM32_WASIP1_RUNNER: "wasmtime --dir=. --"
+          RUSTFLAGS: "-C target-feature=+simd128"
+        run: cargo test --target wasm32-wasip1 --no-default-features --lib
 
   # ==========================================================================
   # Cross-compiled testing with QEMU (32-bit targets)
