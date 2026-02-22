@@ -2,6 +2,7 @@
 [package]
 name = "zenrav1e-fuzz"
 version = "0.0.1"
+edition = "2024"
 authors = ["Automatically generated"]
 publish = false
 
