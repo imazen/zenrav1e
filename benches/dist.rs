@@ -12,6 +12,7 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use std::hint::black_box;
 use zenrav1e::Pixel;
 use zenrav1e::bench::cpu_features::*;
 use zenrav1e::bench::dist;
@@ -21,7 +22,6 @@ use zenrav1e::bench::partition::*;
 use zenrav1e::bench::rdo::DistortionScale;
 use zenrav1e::bench::tiling::*;
 use zenrav1e::bench::util::Aligned;
-use std::hint::black_box;
 
 const DIST_BENCH_SET: &[(BlockSize, usize)] = &[
   (BLOCK_4X4, 8),

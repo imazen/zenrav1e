@@ -949,7 +949,9 @@ impl<T: Pixel> FrameInvariants<T> {
   #[inline(always)]
   pub(crate) fn check_stop(&self) -> Result<(), EncoderStatus> {
     #[cfg(feature = "stop")]
-    { self.stop.check()?; }
+    {
+      self.stop.check()?;
+    }
     Ok(())
   }
 

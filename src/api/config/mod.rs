@@ -129,9 +129,7 @@ pub enum InvalidConfig {
   LevelConstraintsExceeded,
 
   /// The pixel count (width * height) exceeds the configured maximum.
-  #[error(
-    "pixel count {actual} exceeds maximum {max}"
-  )]
+  #[error("pixel count {actual} exceeds maximum {max}")]
   PixelCountExceeded {
     /// The actual pixel count.
     actual: u64,
@@ -440,8 +438,7 @@ impl Config {
         if config.height > AV1_LEVEL_MAX_V_SIZE[level_idx as usize] {
           return Err(LevelConstraintsExceeded);
         }
-        if (pixel_count * config.time_base.num)
-          .div_ceil(config.time_base.den)
+        if (pixel_count * config.time_base.num).div_ceil(config.time_base.den)
           > AV1_LEVEL_MAX_DISPLAY_RATE[level_idx as usize] as u64
         {
           return Err(LevelConstraintsExceeded);

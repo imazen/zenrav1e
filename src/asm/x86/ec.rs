@@ -80,8 +80,7 @@ fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let indices = _mm_set_epi16(0, 0, 0, 0, 3, 2, 1, 0);
   let index_lt_val = _mm_cmplt_epi16(indices, val_splat);
   let k = _mm_avg_epu16(index_lt_val, _mm_setzero_si128());
-  let cdf_simd =
-    safe_simd::_mm_loadu_si64(cdf.first_chunk::<4>().unwrap());
+  let cdf_simd = safe_simd::_mm_loadu_si64(cdf.first_chunk::<4>().unwrap());
   let k_minus_v = _mm_sub_epi16(k, cdf_simd);
   let negated_if_lt_val = _mm_sub_epi16(index_lt_val, k_minus_v);
   let shifted =

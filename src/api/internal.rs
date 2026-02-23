@@ -623,7 +623,9 @@ impl<T: Pixel> ContextInner<T> {
         t35_metadata,
       );
       #[cfg(feature = "stop")]
-      { fi.stop = crate::encoder::StopToken::new(self.stop.clone()); }
+      {
+        fi.stop = crate::encoder::StopToken::new(self.stop.clone());
+      }
       Ok(Some(fi))
     } else {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
@@ -642,7 +644,10 @@ impl<T: Pixel> ContextInner<T> {
       );
       assert!(fi.is_some());
       #[cfg(feature = "stop")]
-      { fi.as_mut().unwrap().stop = crate::encoder::StopToken::new(self.stop.clone()); }
+      {
+        fi.as_mut().unwrap().stop =
+          crate::encoder::StopToken::new(self.stop.clone());
+      }
       Ok(fi)
     }
   }

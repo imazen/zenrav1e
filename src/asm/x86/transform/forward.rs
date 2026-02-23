@@ -395,14 +395,12 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
                   );
                 }
               }
-              PixelType::U16 => {
-                unsafe {
-                  _mm256_storeu_si256(
-                    output[c * output_stride..].as_mut_ptr() as *mut _,
-                    row_coeffs[c + cg].vec(),
-                  );
-                }
-              }
+              PixelType::U16 => unsafe {
+                _mm256_storeu_si256(
+                  output[c * output_stride..].as_mut_ptr() as *mut _,
+                  row_coeffs[c + cg].vec(),
+                );
+              },
             }
           }
         }
@@ -419,14 +417,12 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
                 );
               }
             }
-            PixelType::U16 => {
-              unsafe {
-                _mm256_storeu_si256(
-                  output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-                  row_coeffs[c].vec(),
-                );
-              }
-            }
+            PixelType::U16 => unsafe {
+              _mm256_storeu_si256(
+                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                row_coeffs[c].vec(),
+              );
+            },
           }
         }
       }

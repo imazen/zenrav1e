@@ -10,12 +10,12 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use std::mem::MaybeUninit;
 use zenrav1e::bench::cpu_features::*;
 use zenrav1e::bench::transform;
 use zenrav1e::bench::transform::{
   TxSize, forward_transform, get_valid_txfm_types,
 };
-use std::mem::MaybeUninit;
 
 fn init_buffers(size: usize) -> (Vec<i32>, Vec<i32>) {
   let mut ra = ChaChaRng::from_seed([0; 32]);

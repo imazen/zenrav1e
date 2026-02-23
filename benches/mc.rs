@@ -3,6 +3,8 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use std::hint::black_box;
+use std::sync::Arc;
 use zenrav1e::bench::context::BlockContext;
 use zenrav1e::bench::context::CDFContext;
 use zenrav1e::bench::context::ContextWriter;
@@ -16,8 +18,6 @@ use zenrav1e::bench::partition::RefType;
 use zenrav1e::bench::util::Aligned;
 use zenrav1e::context::{BlockOffset, TileBlockOffset};
 use zenrav1e::prelude::*;
-use std::hint::black_box;
-use std::sync::Arc;
 
 fn bench_put_8tap_top_left_lbd(c: &mut Criterion) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
