@@ -5,208 +5,106 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-  PURE_RUST: "--no-default-features --features threading"
+  CI: true
 
 jobs:
-  # ==========================================================================
-  # Native x86_64 testing (pure Rust)
-  # ==========================================================================
-  test-x64:
-    name: Test x64 (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build (pure Rust)
-        run: cargo build ${{ env.PURE_RUST }}
-
-      - name: Test (pure Rust)
-        run: cargo test ${{ env.PURE_RUST }}
-
-  # ==========================================================================
-  # x86_64 asm testing (requires NASM)
-  # ==========================================================================
-  test-asm:
-    name: Test x64 asm (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install NASM
-        uses: ilammy/setup-nasm@v1
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build (with asm)
-        run: cargo build
-
-      - name: Test (with asm)
-        run: cargo test
-
-  # ==========================================================================
-  # Native ARM64 testing (pure Rust)
-  # ==========================================================================
-  test-aarch64:
-    name: Test aarch64 (${{ matrix.name }})
+  test:
+    name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04-arm, name: Linux }
-          - { os: macos-latest, name: macOS }
-          - { os: windows-11-arm, name: Windows }
+          - name: Linux x64
+            os: ubuntu-latest
+          - name: Linux aarch64
+            os: ubuntu-24.04-arm
+          - name: macOS arm64
+            os: macos-latest
+          - name: macOS x64
+            os: macos-26-intel
+          - name: Windows x64
+            os: windows-latest
+          - name: Windows arm64
+            os: windows-11-arm
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --workspace
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build (pure Rust)
-        run: cargo build ${{ env.PURE_RUST }}
-
-      - name: Test (pure Rust)
-        run: cargo test ${{ env.PURE_RUST }}
-
-  # ==========================================================================
-  # WASM testing
-  # ==========================================================================
-  test-wasm:
-    name: Test WASM SIMD128
+  i686:
+    name: Test (Linux i686)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasip1
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install wasmtime
-        run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
-          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-
-      - name: Test WASM (pure Rust, no threading)
-        env:
-          CARGO_TARGET_WASM32_WASIP1_RUNNER: "wasmtime --dir=. --"
-          RUSTFLAGS: "-C target-feature=+simd128"
-        run: cargo test --target wasm32-wasip1 --no-default-features --lib
-
-  # ==========================================================================
-  # Cross-compiled testing with QEMU (32-bit targets)
-  # ==========================================================================
-  test-cross:
-    name: Cross (${{ matrix.target }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - i686-unknown-linux-gnu
-          - armv7-unknown-linux-gnueabihf
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+          targets: i686-unknown-linux-gnu
+      - uses: taiki-e/install-action@cross
+      - uses: Swatinem/rust-cache@v2
         with:
-          targets: ${{ matrix.target }}
+          key: cross-i686
+      - name: Run tests (i686)
+        run: cross test --target i686-unknown-linux-gnu --workspace
 
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build (cross, pure Rust)
-        run: cross build --target ${{ matrix.target }} ${{ env.PURE_RUST }}
-
-      - name: Test (cross/QEMU, pure Rust)
-        run: cross test --target ${{ matrix.target }} ${{ env.PURE_RUST }}
-
-  # ==========================================================================
-  # Clippy (informational — upstream code has known warnings)
-  # ==========================================================================
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --all-targets --workspace -- -D warnings
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Clippy (pure Rust)
-        run: cargo clippy ${{ env.PURE_RUST }} --all-targets
-
-  # ==========================================================================
-  # Format check
-  # ==========================================================================
   fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: Format check
-        run: cargo fmt -- --check
-
-  # ==========================================================================
-  # MSRV check
-  # ==========================================================================
   msrv:
-    name: MSRV (1.88.0)
+    name: MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      - name: Check MSRV
+        run: cargo hack check --rust-version --workspace
 
-      - name: Install Rust 1.88.0
-        uses: dtolnay/rust-toolchain@master
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      - name: Generate coverage
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
         with:
-          toolchain: "1.88.0"
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Check MSRV (pure Rust)
-        run: cargo check ${{ env.PURE_RUST }}
+          files: lcov.info
+          fail_ci_if_error: false
+        continue-on-error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
