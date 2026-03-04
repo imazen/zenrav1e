@@ -34,12 +34,15 @@ jobs:
             os: windows-latest
           - name: Windows arm64
             os: windows-11-arm
+            # MSVC cl.exe cannot compile .S (GAS syntax) assembly files,
+            # so disable the asm feature on Windows ARM64.
+            cargo_flags: --no-default-features --features threading
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --workspace ${{ matrix.cargo_flags }}
 
   i686:
     name: Test (Linux i686)
