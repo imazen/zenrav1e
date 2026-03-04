@@ -3,7 +3,7 @@ name = "zenrav1e"
 version = "0.1.0"
 authors = ["Thomas Daede <tdaede@xiph.org>", "Imazen <oss@imazen.io>"]
 edition = "2024"
-rust-version = "1.88.0"
+rust-version = "1.89"
 build = "build.rs"
 include = [
   "/Cargo.toml",
