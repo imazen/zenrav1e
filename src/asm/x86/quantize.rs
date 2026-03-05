@@ -19,6 +19,8 @@ use crate::transform::TxSize;
 use crate::util::*;
 use std::mem::MaybeUninit;
 
+// Used by future SIMD dequantize path
+#[allow(dead_code)]
 type DequantizeFn = unsafe fn(
   qindex: u8,
   coeffs_ptr: *const i16,
@@ -36,6 +38,8 @@ cpu_function_lookup_table!(
   [(AVX2, Some(dequantize_avx2))]
 );
 
+// Used by future SIMD dequantize path
+#[allow(dead_code)]
 #[inline(always)]
 pub fn dequantize<T: Coefficient>(
   qindex: u8, coeffs: &[T], eob: u16, rcoeffs: &mut [MaybeUninit<T>],
@@ -89,6 +93,8 @@ pub fn dequantize<T: Coefficient>(
   }
 }
 
+// Used by future SIMD dequantize path
+#[allow(dead_code)]
 #[target_feature(enable = "avx2")]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn dequantize_avx2(

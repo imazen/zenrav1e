@@ -523,7 +523,7 @@ pub enum FilterIntraMode {
 /// - 5 modes (DC, V, H, D157, Paeth)
 /// - 8 output pixels per 4x2 subblock (row-major: pixels 0-3 = top row, 4-7 = bottom row)
 /// - 7 taps per pixel: [top_left, above0, above1, above2, above3, left0, left1]
-/// From AV1 spec Section 7.11.2.6.
+///   From AV1 spec Section 7.11.2.6.
 pub const FILTER_INTRA_TAPS: [[[i8; 7]; 8]; 5] = [
   // FILTER_DC_PRED
   [

@@ -130,7 +130,7 @@ pub struct EncoderConfig {
   /// Controls how aggressively bits are redistributed based on variance.
   /// 0.0 = no redistribution, 1.0 = default SSIM weighting,
   /// >1.0 = stronger redistribution toward smooth areas.
-  /// Only effective when `enable_vaq` is true.
+  /// > Only effective when `enable_vaq` is true.
   pub vaq_strength: f64,
 
   /// Segmentation boost power (default 1.0 = disabled).

@@ -15,6 +15,7 @@ pub mod trellis;
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
+    #[allow(unused_imports)] // re-export used by future SIMD dequantize path
     pub use crate::asm::x86::quantize::*;
   } else {
     pub use self::rust::*;
@@ -422,13 +423,12 @@ impl QuantizationContext {
 
     // When QM is enabled, per-position weights can cause the actual eob to
     // differ from the deadzone-predicted eob. Recompute from quantized data.
-    let eob = if qm.is_some() {
-      let actual = scan
+    if qm.is_some() {
+      scan
         .iter()
         .rposition(|&i| qcoeffs[i as usize] != T::cast_from(0))
         .map(|n| n + 1)
-        .unwrap_or(0) as u16;
-      actual
+        .unwrap_or(0) as u16
     } else {
       // Without QM the deadzone prediction is exact
       debug_assert_eq!(
@@ -440,9 +440,7 @@ impl QuantizationContext {
           .unwrap_or(0)
       );
       eob
-    };
-
-    eob
+    }
   }
 }
 
@@ -459,6 +457,8 @@ pub mod rust {
   use crate::cpu_features::CpuFeatureLevel;
   use std::mem::MaybeUninit;
 
+  // Used by future SIMD dequantize path
+  #[allow(dead_code)]
   pub fn dequantize<T: Coefficient>(
     qindex: u8, coeffs: &[T], _eob: u16, rcoeffs: &mut [MaybeUninit<T>],
     tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
