@@ -160,7 +160,7 @@ decl_cfl_pred_hbd_fn! {
   rav1e_ipred_cfl_top_16bpc_neon
 }
 
-extern {
+unsafe extern {
   fn rav1e_ipred_z1_upsample_edge_8bpc_neon(
     out: *mut u8, hsz: c_int, _in: *const u8, end: c_int,
   );

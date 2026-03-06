@@ -463,7 +463,7 @@ cpu_function_lookup_table!(
   [NEON]
 );
 
-extern {
+unsafe extern {
   fn rav1e_avg_8bpc_neon(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
@@ -476,7 +476,7 @@ cpu_function_lookup_table!(
   [(NEON, Some(rav1e_avg_8bpc_neon))]
 );
 
-extern {
+unsafe extern {
   fn rav1e_avg_16bpc_neon(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,

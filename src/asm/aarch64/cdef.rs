@@ -226,7 +226,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   }
 }
 
-extern {
+unsafe extern {
   fn rav1e_cdef_filter4_8bpc_neon(
     dst: *mut u8, dst_stride: isize, tmp: *const u16, pri_strength: i32,
     sec_strength: i32, dir: i32, damping: i32, h: i32, edges: isize,
@@ -389,13 +389,13 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
   dir
 }
 
-extern {
+unsafe extern {
   fn rav1e_cdef_find_dir_8bpc_neon(
     tmp: *const u8, tmp_stride: isize, var: *mut u32,
   ) -> i32;
 }
 
-extern {
+unsafe extern {
   fn rav1e_cdef_find_dir_16bpc_neon(
     tmp: *const u16, tmp_stride: isize, var: *mut u32, max_bitdepth: i32,
   ) -> i32;

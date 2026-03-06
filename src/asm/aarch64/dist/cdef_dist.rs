@@ -30,7 +30,7 @@ type CdefDistKernelHBDFn = unsafe extern fn(
   ret_ptr: *mut u32,
 );
 
-extern {
+unsafe extern {
   fn rav1e_cdef_dist_kernel_4x4_neon(
     src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
     ret_ptr: *mut u32,
