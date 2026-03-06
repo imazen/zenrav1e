@@ -60,7 +60,7 @@ macro_rules! decl_itx_fns {
       // For each tx type, declare an function for the current WxH
       $(
         $(
-          extern {
+          unsafe extern {
             // Note: type1 and type2 are flipped
             fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _8bpc_$OPT_LOWER>](
               dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
@@ -91,7 +91,7 @@ macro_rules! decl_itx_hbd_fns {
       // For each tx type, declare an function for the current WxH
       $(
         $(
-          extern {
+          unsafe extern {
             // Note: type1 and type2 are flipped
             fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _16bpc_$OPT_LOWER>](
               dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16,

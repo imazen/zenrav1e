@@ -305,7 +305,7 @@ pub fn mc_avg<T: Pixel>(
 
 macro_rules! decl_mc_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $func_name(
           dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
@@ -345,7 +345,7 @@ cpu_function_lookup_table!(
 
 macro_rules! decl_mc_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $func_name(
           dst: *mut u16, dst_stride: isize, src: *const u16, src_stride: isize,
@@ -385,7 +385,7 @@ cpu_function_lookup_table!(
 
 macro_rules! decl_mct_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $func_name(
           tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
@@ -425,7 +425,7 @@ cpu_function_lookup_table!(
 
 macro_rules! decl_mct_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    extern {
+    unsafe extern {
       $(
         fn $func_name(
           tmp: *mut i16, src: *const u16, src_stride: libc::ptrdiff_t, w: i32,

@@ -38,7 +38,7 @@ type SatdHbdFn = SadHbdFn;
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
     $(
-      extern { fn $name (
+      unsafe extern { fn $name (
         src: *const $T, src_stride: isize, dst: *const $T, dst_stride: isize
       ) -> u32; }
     )+
