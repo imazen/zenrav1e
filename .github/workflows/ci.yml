@@ -40,6 +40,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install nasm (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y nasm
+      - name: Install nasm (macOS)
+        if: runner.os == 'macOS'
+        run: brew install nasm
+      - name: Install nasm (Windows x64)
+        if: runner.os == 'Windows' && matrix.name != 'Windows arm64'
+        run: choco install nasm -y
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --workspace ${{ matrix.cargo_flags }}
@@ -52,6 +61,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-unknown-linux-gnu
+      - run: sudo apt-get install -y nasm
       - uses: taiki-e/install-action@cross
       - uses: Swatinem/rust-cache@v2
         with:
@@ -67,6 +77,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - run: sudo apt-get install -y nasm
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
         run: cargo clippy --all-targets --workspace -- -D warnings
@@ -88,6 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get install -y nasm
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
       - name: Check MSRV
@@ -99,6 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get install -y nasm
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: Swatinem/rust-cache@v2
       - name: Generate coverage
