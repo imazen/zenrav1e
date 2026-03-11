@@ -18,6 +18,7 @@ cfg_if::cfg_if! {
     #[allow(unused_imports)] // re-export used by future SIMD dequantize path
     pub use crate::asm::x86::quantize::*;
   } else {
+    #[allow(unused_imports)] // re-export used by future SIMD dequantize path
     pub use self::rust::*;
   }
 }
