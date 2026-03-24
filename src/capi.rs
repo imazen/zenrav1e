@@ -240,9 +240,13 @@ impl EncContext {
       ctx.receive_packet().map(|p| {
         let mut p = std::mem::ManuallyDrop::new(p);
         let opaque = p.opaque.take().map_or_else(std::ptr::null_mut, |o| {
-          let mut opaque = o.downcast::<FrameOpaque>().unwrap();
-          opaque.cb = None;
-          opaque.opaque
+          match o.downcast::<FrameOpaque>() {
+            Ok(mut opaque) => {
+              opaque.cb = None;
+              opaque.opaque
+            }
+            Err(_) => std::ptr::null_mut(),
+          }
         });
         let p = std::mem::ManuallyDrop::into_inner(p);
         let rav1e::Packet {
@@ -394,7 +398,7 @@ pub struct Packet {
 /// Can be parsed by [semver](https://crates.io/crates/semver).
 /// This returns the version of the loaded library, regardless
 /// of which version the library user was built against.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_version_short() -> *const c_char {
   concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
@@ -409,7 +413,7 @@ static FULL_VERSION_C: std::sync::OnceLock<CString> =
 ///
 /// This returns the version of the loaded library, regardless
 /// of which version the library user was built against.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_version_full() -> *const c_char {
   FULL_VERSION_C
     .get_or_init(|| {
@@ -430,7 +434,7 @@ pub struct Data {
 }
 
 /// Free a `RaData` buffer
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
   if !data.is_null() {
     let data = Box::from_raw(data);
@@ -443,7 +447,7 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
 }
 
 /// Create a `RaConfig` filled with default parameters.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
   let cfg = rav1e::Config::default();
 
@@ -484,7 +488,7 @@ unsafe fn decode_slice<'a>(
 /// `0` on success
 /// `> 0` if the buffer has to be larger
 /// `< 0` on failure
-#[no_mangle]
+#[unsafe(no_mangle)]
 // Panic can never occur here
 #[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_config_set_rc_summary(
@@ -502,13 +506,13 @@ pub unsafe extern fn rav1e_config_set_rc_summary(
     return needed;
   }
 
-  let summary = rav1e::RateControlSummary::from_slice(maybe_buf.unwrap()).ok();
-  if summary.is_none() {
-    -1
-  } else {
-    (*cfg).cfg.rate_control.summary = summary;
-
-    0
+  let summary = maybe_buf.and_then(|buf| rav1e::RateControlSummary::from_slice(buf).ok());
+  match summary {
+    Some(s) => {
+      (*cfg).cfg.rate_control.summary = Some(s);
+      0
+    }
+    None => -1,
   }
 }
 
@@ -516,7 +520,7 @@ pub unsafe extern fn rav1e_config_set_rc_summary(
 ///
 /// Set emit to 0 to not emit pass data, non-zero to emit pass data.
 ///
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_emit_data(
   cfg: *mut Config, emit: c_int,
 ) {
@@ -526,7 +530,7 @@ pub unsafe extern fn rav1e_config_set_emit_data(
 /// Set the display aspect ratio of the stream
 ///
 /// Needed for anamorphic video.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_sample_aspect_ratio(
   cfg: *mut Config, sample_aspect_ratio: Rational,
 ) {
@@ -536,7 +540,7 @@ pub unsafe extern fn rav1e_config_set_sample_aspect_ratio(
 /// Set the time base of the stream
 ///
 /// Needed for rate control.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_time_base(
   cfg: *mut Config, time_base: Rational,
 ) {
@@ -550,7 +554,7 @@ pub unsafe extern fn rav1e_config_set_time_base(
 /// Valid values for `pixel_range` are 0 and 1.
 ///
 /// Returns a negative value on error or 0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_pixel_format(
   cfg: *mut Config, bit_depth: u8, subsampling: ChromaSampling,
   chroma_pos: ChromaSamplePosition, pixel_range: PixelRange,
@@ -590,7 +594,7 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
 /// respectively.
 ///
 /// Return a negative value on error or 0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_color_description(
   cfg: *mut Config, matrix: MatrixCoefficients, primaries: ColorPrimaries,
   transfer: TransferCharacteristics,
@@ -607,7 +611,7 @@ pub unsafe extern fn rav1e_config_set_color_description(
 /// Set the content light level information for HDR10 streams.
 ///
 /// Return a negative value on error or 0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_content_light(
   cfg: *mut Config, max_content_light_level: u16,
   max_frame_average_light_level: u16,
@@ -629,7 +633,7 @@ pub unsafe extern fn rav1e_config_set_content_light(
 ///
 /// Returns a negative value on error or 0.
 /// cbindgen:ptrs-as-arrays=[[primaries;3]]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_set_mastering_display(
   cfg: *mut Config, primaries: *const rav1e::ChromaticityPoint,
   white_point: rav1e::ChromaticityPoint, max_luminance: u32,
@@ -648,7 +652,7 @@ pub unsafe extern fn rav1e_config_set_mastering_display(
 }
 
 /// Free the `RaConfig`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_unref(cfg: *mut Config) {
   if !cfg.is_null() {
     let _ = Box::from_raw(cfg);
@@ -760,7 +764,7 @@ unsafe fn option_match(
 /// - `"no_scene_detection"`: flag to disable scene detection, default `false`
 ///
 /// Return a negative value on error or 0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_config_parse(
   cfg: *mut Config, key: *const c_char, value: *const c_char,
 ) -> c_int {
@@ -772,7 +776,7 @@ pub unsafe extern fn rav1e_config_parse(
 /// Available keys and values are the same as `rav1e_config_parse()`
 ///
 /// Return a negative value on error or 0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 // Panic can never occur here
 #[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_config_parse_int(
@@ -798,7 +802,7 @@ unsafe fn config_parse_bool(
 /// Multiple contexts can be generated through it.
 /// Returns `Null` if context creation failed, e.g. by passing
 /// an invalid `Config`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   let cfg = &(*cfg).cfg;
   let enc = &cfg.enc;
@@ -816,7 +820,7 @@ pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
 }
 
 /// Free the `RaContext`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
   if !ctx.is_null() {
     let _ = Box::from_raw(ctx);
@@ -829,7 +833,7 @@ pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
 ///
 /// The frame is reference counted and must be released passing it to `rav1e_frame_unref()`,
 /// see `rav1e_send_frame()`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   let fi = (*ctx).ctx.new_frame();
   let frame_type = rav1e::FrameTypeOverride::No;
@@ -840,7 +844,7 @@ pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
 }
 
 /// Free the `RaFrame`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
   if !frame.is_null() {
     let _ = Box::from_raw(frame);
@@ -850,7 +854,7 @@ pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
 /// Overrides the encoders frame type decision for a frame
 ///
 /// Must be called before `rav1e_send_frame()` if used.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_set_type(
   frame: *mut Frame, frame_type: FrameTypeOverride,
 ) -> c_int {
@@ -871,7 +875,7 @@ pub unsafe extern fn rav1e_frame_set_type(
 ///   `rav1e_send_frame` is called.
 /// - it will call the destructor if `rav1e_frame_unref` is called
 ///   otherwise.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_set_opaque(
   frame: *mut Frame, opaque: *mut c_void, cb: FrameOpaqueCb,
 ) {
@@ -889,7 +893,7 @@ pub unsafe extern fn rav1e_frame_set_opaque(
 ///
 /// Can be called multiple times to add multiple T35 metadata
 /// blocks.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_add_t35_metadata(
   frame: *mut Frame, country_code: u8, country_code_extension_byte: u8,
   data: *const u8, data_len: size_t,
@@ -915,7 +919,7 @@ pub unsafe extern fn rav1e_frame_add_t35_metadata(
 /// of the previous frame's data.
 ///
 /// Must be freed with `rav1e_data_unref()`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 // Panic can never occur here
 #[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_twopass_out(ctx: *mut Context) -> *mut Data {
@@ -961,7 +965,7 @@ pub enum RcDataKind {
 ///
 /// It is useful mainly to preserve space when saving
 /// both Rate Control Summary and Frame Packets in a single file
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_rc_summary_size(ctx: *const Context) -> size_t {
   (*ctx).ctx.rc_summary_size() as size_t + 8
 }
@@ -976,7 +980,7 @@ pub unsafe extern fn rav1e_rc_summary_size(ctx: *const Context) -> size_t {
 /// use `rav1e_data_unref()` to free the data.
 ///
 /// It will return a `RcDataKind::Summary` once the encoder is flushed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_rc_receive_pass_data(
   ctx: *mut Context, data: *mut *mut Data,
 ) -> RcDataKind {
@@ -1020,7 +1024,7 @@ pub unsafe extern fn rav1e_rc_receive_pass_data(
 /// }
 /// ```
 ///
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_rc_second_pass_data_required(
   ctx: *const Context,
 ) -> i32 {
@@ -1039,7 +1043,7 @@ pub unsafe extern fn rav1e_rc_second_pass_data_required(
 /// - `0` on success,
 /// - `> 0` the amount of bytes needed
 /// - `< 0` on unrecoverable failure
-#[no_mangle]
+#[unsafe(no_mangle)]
 // Panic can never occur here
 #[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_rc_send_pass_data(
@@ -1069,7 +1073,7 @@ pub unsafe extern fn rav1e_rc_send_pass_data(
 /// be called for encoding the second pass to work, so long as the
 /// application continues to provide more data to `rav1e_twopass_in()` in a loop
 /// until `rav1e_twopass_in()` returns 0.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
   (*ctx).ctx.twopass_bytes_needed() as size_t
 }
@@ -1080,7 +1084,7 @@ pub unsafe extern fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
 /// this should be called repeatedly in a loop before every call to
 /// `rav1e_receive_packet()` (including the very first one) until no bytes are
 /// consumed, or until `twopass_bytes_needed()` returns 0. Returns -1 on failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_twopass_in(
   ctx: *mut Context, buf: *mut u8, buf_size: size_t,
 ) -> c_int {
@@ -1109,7 +1113,7 @@ pub unsafe extern fn rav1e_twopass_in(
 /// - `0` on success,
 /// - `> 0` if the input queue is full
 /// - `< 0` on unrecoverable failure
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_send_frame(
   ctx: *mut Context, frame: *mut Frame,
 ) -> EncoderStatus {
@@ -1159,14 +1163,14 @@ pub unsafe extern fn rav1e_send_frame(
 }
 
 /// Return the last encoder status
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
   (*ctx).last_err.into()
 }
 
 /// Return a static string matching the `EncoderStatus` variant.
 ///
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_status_to_str(
   status: EncoderStatus,
 ) -> *const c_char {
@@ -1183,7 +1187,7 @@ pub unsafe extern fn rav1e_status_to_str(
 /// - `0` on success
 /// - `> 0` if additional frame data is required
 /// - `< 0` on unrecoverable failure
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_receive_packet(
   ctx: *mut Context, pkt: *mut *mut Packet,
 ) -> EncoderStatus {
@@ -1202,7 +1206,7 @@ pub unsafe extern fn rav1e_receive_packet(
 }
 
 /// Free the `RaPacket`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
   if !pkt.is_null() {
     let pkt = Box::from_raw(pkt);
@@ -1221,7 +1225,7 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
 ///
 /// Use `rav1e_data_unref()` to free it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_container_sequence_header(
   ctx: *const Context,
 ) -> *mut Data {
@@ -1237,7 +1241,15 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
   f: &mut Arc<rav1e::Frame<T>>, plane: c_int, data_slice: &[u8],
   stride: ptrdiff_t, bytewidth: c_int,
 ) {
-  let input = Arc::get_mut(f).unwrap();
+  let Some(input) = Arc::get_mut(f) else {
+    // Frame has outstanding references (e.g., passed to multiple contexts).
+    // The C API has no error return here (void fn), so we must abort rather
+    // than silently skip the copy — the caller expects the plane to be filled.
+    #[cfg(debug_assertions)]
+    panic!("rav1e_frame_fill_plane: frame has outstanding Arc references, cannot mutate");
+    #[cfg(not(debug_assertions))]
+    return;
+  };
   input.planes[plane as usize].copy_from_raw_u8(
     data_slice,
     stride as usize,
@@ -1279,7 +1291,7 @@ fn rav1e_frame_extract_plane_internal<T: rav1e::Pixel>(
 /// `data_len`: Length of the buffer
 /// `stride`: Plane line in bytes, including padding
 /// `bytewidth`: Number of bytes per component, either 1 or 2
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_fill_plane(
   frame: *mut Frame, plane: c_int, data: *const u8, data_len: size_t,
   stride: ptrdiff_t, bytewidth: c_int,
@@ -1312,7 +1324,7 @@ pub unsafe extern fn rav1e_frame_fill_plane(
 /// `data_len`: Length of the buffer
 /// `stride`: Plane line in bytes, including padding
 /// `bytewidth`: Number of bytes per component, either 1 or 2
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_frame_extract_plane(
   frame: *const Frame, plane: c_int, data: *mut u8, data_len: size_t,
   stride: ptrdiff_t, bytewidth: c_int,
