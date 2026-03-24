@@ -569,8 +569,15 @@ impl fmt::Debug for CDFContext {
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
     let cdf = $self.fc.offset($cdf);
+    #[cfg(feature = "desync_finder")]
+    let _cdf_ptr = ($cdf).as_ptr() as usize;
     $w.symbol_with_update($s, cdf, &mut $self.fc_log, &mut $self.fc);
-    symbol_with_update!($self, $cdf);
+    #[cfg(feature = "desync_finder")]
+    {
+      if let Some(map) = $self.fc_map.as_ref() {
+        map.lookup(_cdf_ptr);
+      }
+    }
   };
   ($self:ident, $cdf:expr) => {
     #[cfg(feature = "desync_finder")]

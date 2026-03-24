@@ -167,7 +167,13 @@ pub struct WriterCheckpoint {
 /// Constructor for a counting Writer
 impl WriterCounter {
   #[inline]
+  #[cfg(not(feature = "desync_finder"))]
   pub const fn new() -> WriterBase<WriterCounter> {
+    WriterBase::new(WriterCounter { bits: 0 })
+  }
+  #[inline]
+  #[cfg(feature = "desync_finder")]
+  pub fn new() -> WriterBase<WriterCounter> {
     WriterBase::new(WriterCounter { bits: 0 })
   }
 }
@@ -175,7 +181,13 @@ impl WriterCounter {
 /// Constructor for a recording Writer
 impl WriterRecorder {
   #[inline]
+  #[cfg(not(feature = "desync_finder"))]
   pub const fn new() -> WriterBase<WriterRecorder> {
+    WriterBase::new(WriterRecorder { storage: Vec::new(), bits: 0 })
+  }
+  #[inline]
+  #[cfg(feature = "desync_finder")]
+  pub fn new() -> WriterBase<WriterRecorder> {
     WriterBase::new(WriterRecorder { storage: Vec::new(), bits: 0 })
   }
 }
@@ -183,7 +195,13 @@ impl WriterRecorder {
 /// Constructor for a encoding Writer
 impl WriterEncoder {
   #[inline]
+  #[cfg(not(feature = "desync_finder"))]
   pub const fn new() -> WriterBase<WriterEncoder> {
+    WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 })
+  }
+  #[inline]
+  #[cfg(feature = "desync_finder")]
+  pub fn new() -> WriterBase<WriterEncoder> {
     WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 })
   }
 }

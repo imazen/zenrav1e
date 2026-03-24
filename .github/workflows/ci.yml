@@ -69,6 +69,22 @@ jobs:
       - name: Run tests (i686)
         run: cross test --target i686-unknown-linux-gnu --workspace
 
+  features:
+    name: Feature permutations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: features
+      - name: Test threading + serialize
+        run: cargo test --workspace --no-default-features --features "threading,serialize"
+      - name: Check threading + channel-api
+        run: cargo check --no-default-features --features "threading,channel-api"
+      - name: Check threading + stop
+        run: cargo check --no-default-features --features "threading,stop"
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

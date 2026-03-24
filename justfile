@@ -20,8 +20,14 @@ lint:
     cargo fmt
     cargo clippy --no-default-features --features threading
 
+# Test feature permutations
+feature-check:
+    cargo test --workspace --no-default-features --features "threading,serialize"
+    cargo check --no-default-features --features "threading,channel-api"
+    cargo check --no-default-features --features "threading,stop"
+
 # Full CI check
-ci: lint test
+ci: lint test feature-check
 
 # Address sanitizer (requires nightly + clang)
 asan:
