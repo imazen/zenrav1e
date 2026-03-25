@@ -1,3 +1,5 @@
+> **Note:** This file is inherited from the upstream rav1e project. Contributions to zenrav1e (Imazen's fork) should be directed to the [zenrav1e repository](https://github.com/imazen/zenrav1e).
+
 # Contributing to rav1e
 
 ## Development Container
