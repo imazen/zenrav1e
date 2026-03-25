@@ -14,15 +14,15 @@ All changes are additive on top of upstream rav1e.
 
 - **Quantization matrices** — frequency-dependent quantization weights, ~10% BD-rate improvement
 - **Filter intra prediction** — 5 recursive filter modes, auto-enabled at speed <= 6
-- **Trellis quantization** — Viterbi DP with CDF-based rate estimation and quality-adaptive dampening
-- **Variance adaptive quantization (VAQ)** — configurable strength parameter
+- **Trellis quantization** (experimental, disabled by default — marginal gains at +34% encode time)
+- **Variance adaptive quantization (VAQ)** (experimental, disabled by default)
 - **Tune::StillImage mode** — tuning preset for photographic content
 - **Lossless mode** — mathematically lossless encoding via `quantizer: 0`
 - **Cooperative cancellation** — `enough::Stop` support behind the `stop` feature
 
 ### Modernization
 
-- Rust 2024 edition (MSRV 1.88)
+- Rust 2024 edition (MSRV 1.89)
 - `safe_unaligned_simd` for safe SIMD load/store in entropy coding
 
 All upstream rav1e video encoding capabilities are preserved.
@@ -59,7 +59,7 @@ cargo test --no-default-features --features threading
 cargo check --features threading
 ```
 
-Requires Rust 1.88+. The `asm` feature needs [NASM](https://nasm.us/) 2.14.02+ on x86_64.
+Requires Rust 1.89+. The `asm` feature needs [NASM](https://nasm.us/) 2.14.02+ on x86_64.
 
 ## License
 
