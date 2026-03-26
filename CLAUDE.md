@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Fork of xiph/rav1e focused on best-in-class still image AVIF encoding.
+Fork of xiph/rav1e, extending it for still and animated AVIF encoding.
 Hard fork — free to make breaking changes for still image quality.
 
 ## License
