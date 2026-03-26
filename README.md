@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/zenrav1e.svg)](https://crates.io/crates/zenrav1e)
 [![docs.rs](https://docs.rs/zenrav1e/badge.svg)](https://docs.rs/zenrav1e)
-[![license](https://img.shields.io/crates/l/zenrav1e.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg?style=for-the-badge)](LICENSE-AGPL3)
 
 AV1 encoder optimized for still and animated AVIF images. Fork of [rav1e](https://github.com/xiph/rav1e) by Imazen.
 
@@ -63,4 +63,34 @@ Requires Rust 1.89+. The `asm` feature needs [NASM](https://nasm.us/) 2.14.02+ o
 
 ## License
 
-BSD-2-Clause, same as upstream rav1e. See [LICENSE](LICENSE) and [PATENTS](PATENTS).
+Dual-licensed: [AGPL-3.0](LICENSE-AGPL3) or [commercial](LICENSE-COMMERCIAL).
+
+I've maintained and developed open-source image server software — and the 40+
+library ecosystem it depends on — full-time since 2011. Fifteen years of
+continual maintenance, backwards compatibility, support, and the (very rare)
+security patch. That kind of stability requires sustainable funding, and
+dual-licensing is how we make it work without venture capital or rug-pulls.
+Support sustainable and secure software; swap patch tuesday for patch leap-year.
+
+[Our open-source products](https://www.imazen.io/open-source)
+
+**Your options:**
+
+- **Startup license** — $1 if your company has under $1M revenue and fewer
+  than 5 employees. [Get a key →](https://www.imazen.io/pricing)
+- **Commercial subscription** — Governed by the Imazen Site-wide Subscription
+  License v1.1 or later. Apache 2.0-like terms, no source-sharing requirement.
+  Sliding scale by company size.
+  [Pricing & 60-day free trial →](https://www.imazen.io/pricing)
+- **AGPL v3** — Free and open. Share your source if you distribute.
+
+See [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL) for details.
+
+Upstream code from [xiph/rav1e](https://github.com/xiph/rav1e) is licensed under BSD-2-Clause.
+Our additions and improvements are dual-licensed (AGPL-3.0 or commercial) as above.
+
+### Upstream Contribution
+
+We are willing to release our improvements under the original BSD-2-Clause
+license if upstream takes over maintenance of those improvements. We'd rather
+contribute back than maintain a parallel codebase. Open an issue or reach out.

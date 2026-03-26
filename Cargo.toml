@@ -15,7 +15,7 @@ include = [
   "!/src/bin/**",
   "!/src/capi.rs",
 ]
-license = "BSD-2-Clause"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 description = "AV1 encoder optimized for still and animated AVIF images (Imazen fork of rav1e)"
 keywords = ["av1", "avif", "encoder", "video", "image"]
 categories = ["multimedia::encoding", "multimedia::images"]
