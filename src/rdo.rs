@@ -1084,61 +1084,61 @@ pub fn rdo_mode_decision<T: Pixel>(
       best.filter_intra_mode,
     );
     cw.rollback(&cw_checkpoint);
-    if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
-      if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, best.tx_size, fi) {
-        let mut wr = WriterCounter::new();
-        let tell = wr.tell_frac();
+    if fi.sequence.chroma_sampling != ChromaSampling::Cs400
+      && let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, best.tx_size, fi)
+    {
+      let mut wr = WriterCounter::new();
+      let tell = wr.tell_frac();
 
-        encode_block_pre_cdef(
-          &fi.sequence,
-          ts,
-          cw,
-          &mut wr,
-          bsize,
-          tile_bo,
-          best.skip,
-        );
-        let (has_coeff, _) = encode_block_post_cdef(
-          fi,
-          ts,
-          cw,
-          &mut wr,
-          best.pred_mode_luma,
-          chroma_mode,
-          angle_delta,
-          best.ref_frames,
-          best.mvs,
-          bsize,
-          tile_bo,
-          best.skip,
-          cfl,
-          best.tx_size,
-          best.tx_type,
-          0,
-          &[],
-          rdo_type,
-          true, // For CFL, luma should be always reconstructed.
-          None,
-          false,
-          FilterIntraMode::FILTER_DC_PRED,
-        );
+      encode_block_pre_cdef(
+        &fi.sequence,
+        ts,
+        cw,
+        &mut wr,
+        bsize,
+        tile_bo,
+        best.skip,
+      );
+      let (has_coeff, _) = encode_block_post_cdef(
+        fi,
+        ts,
+        cw,
+        &mut wr,
+        best.pred_mode_luma,
+        chroma_mode,
+        angle_delta,
+        best.ref_frames,
+        best.mvs,
+        bsize,
+        tile_bo,
+        best.skip,
+        cfl,
+        best.tx_size,
+        best.tx_type,
+        0,
+        &[],
+        rdo_type,
+        true, // For CFL, luma should be always reconstructed.
+        None,
+        false,
+        FilterIntraMode::FILTER_DC_PRED,
+      );
 
-        let rate = wr.tell_frac() - tell;
+      let rate = wr.tell_frac() - tell;
 
-        // For CFL, tx-domain distortion is not an option.
-        let distortion =
-          compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
-        let rd = compute_rd_cost(fi, rate, distortion);
-        if rd < best.rd_cost {
-          best.rd_cost = rd;
-          best.pred_mode_chroma = chroma_mode;
-          best.angle_delta = angle_delta;
-          best.has_coeff = has_coeff;
-          best.pred_cfl_params = cfl;
-        }
-
-        cw.rollback(&cw_checkpoint);
+      // For CFL, tx-domain distortion is not an option.
+      let distortion =
+        compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
+      let rd = compute_rd_cost(fi, rate, distortion);
+      if rd < best.rd_cost {
+        best.rd_cost = rd;
+        best.pred_mode_chroma = chroma_mode;
+        best.angle_delta = angle_delta;
+        best.has_coeff = has_coeff;
+        best.pred_cfl_params = cfl;
       }
+
+      cw.rollback(&cw_checkpoint);
     }
   }
 
@@ -1288,36 +1288,35 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   // To use non single reference modes, block width and height must be greater than 4.
   if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
     // Adding compound candidate
-    if let Some(r0) = fwdref {
-      if let Some(r1) = bwdref {
-        let ref_frames = [ref_frames_set[r0][0], ref_frames_set[r1][0]];
-        ref_frames_set.push(ref_frames);
-        let mv0 = mvs_from_me[r0][0];
-        let mv1 = mvs_from_me[r1][0];
-        mvs_from_me.push([mv0, mv1]);
-        let mut mv_stack = ArrayVec::<CandidateMV, 9>::new();
-        mode_contexts.push(cw.find_mvrefs(
-          tile_bo,
-          ref_frames,
-          &mut mv_stack,
-          bsize,
-          fi,
-          true,
-        ));
-        for &x in RAV1E_INTER_COMPOUND_MODES {
-          // exclude any NEAR mode based on speed setting
-          if fi.config.speed_settings.motion.include_near_mvs
-            || !x.has_nearmv()
-          {
-            let mv_stack_idx = ref_frames_set.len() - 1;
-            // exclude NEAR modes if the mv_stack is too short
-            if !(x.has_nearmv() && x.ref_mv_idx() >= mv_stack.len()) {
-              inter_mode_set.push((x, mv_stack_idx));
-            }
+    if let Some(r0) = fwdref
+      && let Some(r1) = bwdref
+    {
+      let ref_frames = [ref_frames_set[r0][0], ref_frames_set[r1][0]];
+      ref_frames_set.push(ref_frames);
+      let mv0 = mvs_from_me[r0][0];
+      let mv1 = mvs_from_me[r1][0];
+      mvs_from_me.push([mv0, mv1]);
+      let mut mv_stack = ArrayVec::<CandidateMV, 9>::new();
+      mode_contexts.push(cw.find_mvrefs(
+        tile_bo,
+        ref_frames,
+        &mut mv_stack,
+        bsize,
+        fi,
+        true,
+      ));
+      for &x in RAV1E_INTER_COMPOUND_MODES {
+        // exclude any NEAR mode based on speed setting
+        if fi.config.speed_settings.motion.include_near_mvs || !x.has_nearmv()
+        {
+          let mv_stack_idx = ref_frames_set.len() - 1;
+          // exclude NEAR modes if the mv_stack is too short
+          if !(x.has_nearmv() && x.ref_mv_idx() >= mv_stack.len()) {
+            inter_mode_set.push((x, mv_stack_idx));
           }
         }
-        mv_stacks.push(mv_stack);
       }
+      mv_stacks.push(mv_stack);
     }
   }
 
@@ -2168,12 +2167,12 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
       }
     };
 
-    if let Some(rd) = cost {
-      if rd < best_rd {
-        best_rd = rd;
-        best_partition = partition;
-        best_pred_modes.clone_from(&child_modes);
-      }
+    if let Some(rd) = cost
+      && rd < best_rd
+    {
+      best_rd = rd;
+      best_partition = partition;
+      best_pred_modes.clone_from(&child_modes);
     }
     cw.rollback(&cw_checkpoint);
     w_pre_cdef.rollback(&w_pre_checkpoint);

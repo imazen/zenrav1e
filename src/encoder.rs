@@ -1133,7 +1133,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
 
     fi.frame_type = if (inter_cfg.switch_frame_interval > 0)
-      && (output_frameno_in_gop % inter_cfg.switch_frame_interval == 0)
+      && output_frameno_in_gop.is_multiple_of(inter_cfg.switch_frame_interval)
       && (fi.pyramid_level == 0)
     {
       FrameType::SWITCH
@@ -1527,7 +1527,7 @@ fn diff<T: Pixel>(
   dst: &mut [MaybeUninit<i16>], src1: &PlaneRegion<'_, T>,
   src2: &PlaneRegion<'_, T>,
 ) {
-  debug_assert!(dst.len() % src1.rect().width == 0);
+  debug_assert!(dst.len().is_multiple_of(src1.rect().width));
   debug_assert_eq!(src1.rows_iter().count(), src1.rect().height);
 
   let width = src1.rect().width;

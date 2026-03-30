@@ -49,8 +49,8 @@ impl TileRect {
   pub fn to_frame_block_offset(
     &self, tile_bo: TileBlockOffset, xdec: usize, ydec: usize,
   ) -> PlaneBlockOffset {
-    debug_assert!(self.x % (MI_SIZE >> xdec) == 0);
-    debug_assert!(self.y % (MI_SIZE >> ydec) == 0);
+    debug_assert!(self.x.is_multiple_of(MI_SIZE >> xdec));
+    debug_assert!(self.y.is_multiple_of(MI_SIZE >> ydec));
     let bx = self.x >> (MI_SIZE_LOG2 - xdec);
     let by = self.y >> (MI_SIZE_LOG2 - ydec);
     PlaneBlockOffset(BlockOffset { x: bx + tile_bo.0.x, y: by + tile_bo.0.y })
@@ -62,8 +62,8 @@ impl TileRect {
     ydec: usize,
   ) -> PlaneSuperBlockOffset {
     debug_assert!(sb_size_log2 == 6 || sb_size_log2 == 7);
-    debug_assert!(self.x % (1 << (sb_size_log2 - xdec)) == 0);
-    debug_assert!(self.y % (1 << (sb_size_log2 - ydec)) == 0);
+    debug_assert!(self.x.is_multiple_of(1 << (sb_size_log2 - xdec)));
+    debug_assert!(self.y.is_multiple_of(1 << (sb_size_log2 - ydec)));
     let sbx = self.x >> (sb_size_log2 - xdec);
     let sby = self.y >> (sb_size_log2 - ydec);
     PlaneSuperBlockOffset(SuperBlockOffset {

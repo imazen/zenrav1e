@@ -382,7 +382,7 @@ impl PredictionMode {
   }
 
   /// Inter prediction that determines whether compound mode is being used based
-  /// on the second [`RefType`] in [`ref_frames`].
+  /// on the second `RefType` in `ref_frames`.
   pub fn predict_inter<T: Pixel>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,

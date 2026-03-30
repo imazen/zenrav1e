@@ -393,10 +393,10 @@ impl Config {
       });
     }
 
-    if let Some(delay) = config.reservoir_frame_delay {
-      if !(12..=131_072).contains(&delay) {
-        return Err(InvalidReservoirFrameDelay(delay));
-      }
+    if let Some(delay) = config.reservoir_frame_delay
+      && !(12..=131_072).contains(&delay)
+    {
+      return Err(InvalidReservoirFrameDelay(delay));
     }
 
     if config.switch_frame_interval > 0 && !config.low_latency {
@@ -408,16 +408,15 @@ impl Config {
     }
 
     // <https://aomediacodec.github.io/av1-spec/#color-config-syntax>
-    if let Some(color_description) = config.color_description {
-      if config.chroma_sampling != ChromaSampling::Cs400
-        && color_description.is_srgb_triple()
-      {
-        if config.pixel_range != PixelRange::Full {
-          return Err(ColorConfigurationMismatch);
-        }
-        if config.chroma_sampling != ChromaSampling::Cs444 {
-          return Err(ColorConfigurationMismatch);
-        }
+    if let Some(color_description) = config.color_description
+      && config.chroma_sampling != ChromaSampling::Cs400
+      && color_description.is_srgb_triple()
+    {
+      if config.pixel_range != PixelRange::Full {
+        return Err(ColorConfigurationMismatch);
+      }
+      if config.chroma_sampling != ChromaSampling::Cs444 {
+        return Err(ColorConfigurationMismatch);
       }
     }
 

@@ -7,7 +7,8 @@ rust-version = "1.89"
 build = "build.rs"
 include = [
   "/Cargo.toml",
-  "/LICENSE",
+  "/LICENSE-AGPL3",
+  "/LICENSE-COMMERCIAL",
   "/PATENTS",
   "/README.md",
   "/build.rs",
@@ -51,7 +52,7 @@ quick_test = []
 desync_finder = ["backtrace"]
 bench = []
 check_asm = []
-capi = ["scan_fmt"]
+capi = ["scan_fmt"] # only usable with cargo-c builds; src/capi.rs excluded from published package
 tracing = [
   "profiling/profile-with-tracing",
   "tracing-subscriber",

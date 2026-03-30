@@ -239,15 +239,16 @@ impl EncContext {
     {
       ctx.receive_packet().map(|p| {
         let mut p = std::mem::ManuallyDrop::new(p);
-        let opaque = p.opaque.take().map_or_else(std::ptr::null_mut, |o| {
-          match o.downcast::<FrameOpaque>() {
+        let opaque =
+          p.opaque.take().map_or_else(std::ptr::null_mut, |o| match o
+            .downcast::<FrameOpaque>(
+          ) {
             Ok(mut opaque) => {
               opaque.cb = None;
               opaque.opaque
             }
             Err(_) => std::ptr::null_mut(),
-          }
-        });
+          });
         let p = std::mem::ManuallyDrop::into_inner(p);
         let rav1e::Packet {
           data, rec, source, input_frameno, frame_type, ..
@@ -506,7 +507,8 @@ pub unsafe extern fn rav1e_config_set_rc_summary(
     return needed;
   }
 
-  let summary = maybe_buf.and_then(|buf| rav1e::RateControlSummary::from_slice(buf).ok());
+  let summary =
+    maybe_buf.and_then(|buf| rav1e::RateControlSummary::from_slice(buf).ok());
   match summary {
     Some(s) => {
       (*cfg).cfg.rate_control.summary = Some(s);
@@ -1246,7 +1248,9 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
     // The C API has no error return here (void fn), so we must abort rather
     // than silently skip the copy — the caller expects the plane to be filled.
     #[cfg(debug_assertions)]
-    panic!("rav1e_frame_fill_plane: frame has outstanding Arc references, cannot mutate");
+    panic!(
+      "rav1e_frame_fill_plane: frame has outstanding Arc references, cannot mutate"
+    );
     #[cfg(not(debug_assertions))]
     return;
   };

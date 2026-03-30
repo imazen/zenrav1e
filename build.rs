@@ -59,10 +59,10 @@ fn hash_changed(
 
   let hash_path = Path::new(&out_dir).join("asm.hash");
 
-  if let Ok(old_hash) = std::fs::read(&hash_path) {
-    if old_hash == hash {
-      return None;
-    }
+  if let Ok(old_hash) = std::fs::read(&hash_path)
+    && old_hash == hash
+  {
+    return None;
   }
 
   Some((hash, hash_path))

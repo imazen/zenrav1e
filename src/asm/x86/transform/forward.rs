@@ -247,7 +247,7 @@ fn shift_right(a: I32X8, shift: u8) -> I32X8 {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn round_shift_array_avx2(arr: &mut [I32X8], bit: i8) {
-  if arr.len() % 4 != 0 {
+  if !arr.len().is_multiple_of(4) {
     unsafe { debug_unreachable!() };
   }
 

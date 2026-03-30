@@ -79,7 +79,7 @@ impl InterConfig {
     let group_input_len = 1 << pyramid_depth;
     let group_output_len = group_input_len + pyramid_depth;
     let switch_frame_interval = enc_config.switch_frame_interval;
-    assert!(switch_frame_interval % group_input_len == 0);
+    assert!(switch_frame_interval.is_multiple_of(group_input_len));
     InterConfig {
       reorder,
       multiref: reorder || enc_config.speed_settings.multiref,
@@ -468,10 +468,10 @@ impl<T: Pixel> ContextInner<T> {
       .cloned();
     let mut next_limit =
       gop_input_frameno_start + self.config.max_key_frame_interval;
-    if let Some(limit) = self.limit {
-      if !ignore_limit {
-        next_limit = next_limit.min(limit);
-      }
+    if let Some(limit) = self.limit
+      && !ignore_limit
+    {
+      next_limit = next_limit.min(limit);
     }
     if next_detected.is_none() {
       return next_limit;
@@ -560,8 +560,8 @@ impl<T: Pixel> ContextInner<T> {
         self.get_previous_fi(output_frameno).input_frameno;
       if input_frameno >= next_keyframe_input_frameno {
         if !self.inter_cfg.reorder
-          || ((output_frameno_in_gop - 1) % self.inter_cfg.group_output_len
-            == 0
+          || ((output_frameno_in_gop - 1)
+            .is_multiple_of(self.inter_cfg.group_output_len)
             && prev_input_frameno == (next_keyframe_input_frameno - 1))
         {
           input_frameno = next_keyframe_input_frameno;
