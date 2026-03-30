@@ -1,5 +1,6 @@
 [package]
 name = "ivf"
+publish = false
 version = "0.1.4"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2024"
