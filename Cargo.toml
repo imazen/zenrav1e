@@ -102,7 +102,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 dav1d-sys = { version = "0.7.0", package = "libdav1d-sys", optional = true }
 aom-sys = { version = "0.3.3", optional = true }
 scan_fmt = { version = "0.2.6", optional = true, default-features = false }
-ivf = { version = "0.1", path = "ivf/", optional = true }
+ivf = { version = "0.1", optional = true }
 v_frame = "0.3.7"
 av-metrics = { version = "0.9.1", optional = true, default-features = false }
 rayon = { package = "maybe-rayon", version = "0.1", default-features = false }
