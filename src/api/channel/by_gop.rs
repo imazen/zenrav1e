@@ -15,12 +15,12 @@ use crate::api::util::*;
 
 use crossbeam::channel::*;
 
+#[cfg(not(feature = "scenechange"))]
+use crate::av_scenechange as scene_detect;
 use crate::frame::*;
 use crate::util::Pixel;
 #[cfg(feature = "scenechange")]
 use av_scenechange as scene_detect;
-#[cfg(not(feature = "scenechange"))]
-use crate::av_scenechange as scene_detect;
 use scene_detect::SceneChangeDetector;
 
 use std::collections::BTreeMap;

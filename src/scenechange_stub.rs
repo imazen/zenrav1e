@@ -17,8 +17,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
   pub fn new(
     _dims: (usize, usize), _bit_depth: usize, _time_base: Rational32,
     _chroma_sampling: v_frame::prelude::ChromaSampling,
-    _lookahead_distance: usize, _speed: SceneDetectionSpeed,
-    _min_kf: usize, _max_kf: usize, _cpu: CpuFeatureLevel,
+    _lookahead_distance: usize, _speed: SceneDetectionSpeed, _min_kf: usize,
+    _max_kf: usize, _cpu: CpuFeatureLevel,
   ) -> Self {
     Self { intra_costs: None, _marker: std::marker::PhantomData }
   }

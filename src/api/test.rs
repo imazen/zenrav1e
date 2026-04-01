@@ -721,1075 +721,1074 @@ fn pyramid_level_reorder_minus(missing: u64) {
 mod scenechange_tests {
   use super::*;
 
-#[interpolate_test(0, 0)]
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
-#[interpolate_test(4, 4)]
-fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
-  // Test output_frameno configurations when there's a scene change at the
-  // <scene_change_at>th frame.
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
+    // Test output_frameno configurations when there's a scene change at the
+    // <scene_change_at>th frame.
 
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
 
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
-  let limit = 10;
-  send_frames(&mut ctx, limit, scene_change_at);
-  ctx.flush();
+    let limit = 10;
+    send_frames(&mut ctx, limit, scene_change_at);
+    ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
 
-  assert_eq!(
-    &data[..],
-    match scene_change_at {
-      0 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5),
-          Some(9),
-          Some(7),
-          Some(6),
-          Some(7),
-          Some(8),
-          Some(9),
-        ][..]
+    assert_eq!(
+      &data[..],
+      match scene_change_at {
+        0 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(9),
+            Some(7),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+          ][..]
+        }
+        1 => {
+          &[
+            Some(0), // I-frame
+            Some(1), // I-frame
+            Some(5),
+            Some(3),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            None,
+            Some(8),
+            Some(7),
+            Some(8),
+            Some(9),
+            None,
+          ][..]
+        }
+        2 => {
+          &[
+            Some(0), // I-frame
+            None,
+            None,
+            Some(1),
+            None,
+            None,
+            None,
+            Some(2), // I-frame
+            Some(6),
+            Some(4),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            None,
+            Some(9),
+            Some(8),
+            Some(9),
+            None,
+            None,
+          ][..]
+        }
+        3 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(2),
+            Some(1),
+            Some(2),
+            None,
+            None,
+            Some(3), // I-frame
+            Some(7),
+            Some(5),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            None,
+            None,
+            Some(9),
+            None,
+            None,
+            None,
+          ][..]
+        }
+        4 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            None,
+            Some(4), // I-frame
+            Some(8),
+            Some(6),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+          ][..]
+        }
+        _ => unreachable!(),
       }
-      1 => {
-        &[
-          Some(0), // I-frame
-          Some(1), // I-frame
-          Some(5),
-          Some(3),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5),
-          Some(6),
-          None,
-          Some(8),
-          Some(7),
-          Some(8),
-          Some(9),
-          None,
-        ][..]
-      }
-      2 => {
-        &[
-          Some(0), // I-frame
-          None,
-          None,
-          Some(1),
-          None,
-          None,
-          None,
-          Some(2), // I-frame
-          Some(6),
-          Some(4),
-          Some(3),
-          Some(4),
-          Some(5),
-          Some(6),
-          Some(7),
-          None,
-          Some(9),
-          Some(8),
-          Some(9),
-          None,
-          None,
-        ][..]
-      }
-      3 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(2),
-          Some(1),
-          Some(2),
-          None,
-          None,
-          Some(3), // I-frame
-          Some(7),
-          Some(5),
-          Some(4),
-          Some(5),
-          Some(6),
-          Some(7),
-          Some(8),
-          None,
-          None,
-          Some(9),
-          None,
-          None,
-          None,
-        ][..]
-      }
-      4 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          None,
-          Some(4), // I-frame
-          Some(8),
-          Some(6),
-          Some(5),
-          Some(6),
-          Some(7),
-          Some(8),
-          Some(9),
-        ][..]
-      }
-      _ => unreachable!(),
-    }
-  );
-}
-
-#[interpolate_test(0, 0)]
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
-#[interpolate_test(4, 4)]
-fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
-  // Test pyramid_level configurations when there's a scene change at the
-  // <scene_change_at>th frame.
-
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
-
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-
-  let limit = 10;
-  send_frames(&mut ctx, limit, scene_change_at);
-  ctx.flush();
-
-  // data[output_frameno] = pyramid_level
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.pyramid_level))
-    .collect::<Vec<_>>();
-
-  assert_eq!(
-    &data[..],
-    match scene_change_at {
-      0 => {
-        &[
-          Some(0), // I-frame
-          Some(0),
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(0),
-          Some(0),
-          Some(0),
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(0),
-        ][..]
-      }
-      1 => {
-        &[
-          Some(0), // I-frame
-          Some(0), // I-frame
-          Some(0),
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(0),
-          Some(0),
-          None,
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          None,
-        ][..]
-      }
-      2 => {
-        &[
-          Some(0), // I-frame
-          None,
-          None,
-          Some(2),
-          None,
-          None,
-          None,
-          Some(0), // I-frame
-          Some(0),
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(0),
-          Some(0),
-          None,
-          Some(1),
-          Some(2),
-          Some(1),
-          None,
-          None,
-        ][..]
-      }
-      3 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(1),
-          Some(2),
-          Some(1),
-          None,
-          None,
-          Some(0), // I-frame
-          Some(0),
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(0),
-          Some(0),
-          None,
-          None,
-          Some(2),
-          None,
-          None,
-          None,
-        ][..]
-      }
-      4 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          None,
-          Some(0), // I-frame
-          Some(0),
-          Some(1),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(0),
-          Some(0),
-        ][..]
-      }
-      _ => unreachable!(),
-    }
-  );
-}
-
-#[interpolate_test(0, 0)]
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
-#[interpolate_test(4, 4)]
-fn output_frameno_incremental_reorder_minus(missing: u64) {
-  // Test output_frameno configurations when there are <missing> less frames
-  // than the perfect subgop size, computing the lookahead data incrementally.
-
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    5,
-    5,
-    0,
-    false,
-    0,
-    true,
-    10,
-    None,
-  );
-
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-
-  let limit = 10 - missing;
-  for _ in 0..limit {
-    send_frames(&mut ctx, 1, 0);
+    );
   }
-  ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
+    // Test pyramid_level configurations when there's a scene change at the
+    // <scene_change_at>th frame.
 
-  assert_eq!(
-    &data[..],
-    match missing {
-      0 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5), // I-frame
-          Some(9),
-          Some(7),
-          Some(6),
-          Some(7),
-          Some(8),
-          Some(9),
-        ][..]
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 10;
+    send_frames(&mut ctx, limit, scene_change_at);
+    ctx.flush();
+
+    // data[output_frameno] = pyramid_level
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.pyramid_level))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match scene_change_at {
+        0 => {
+          &[
+            Some(0), // I-frame
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(0),
+            Some(0),
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(0),
+          ][..]
+        }
+        1 => {
+          &[
+            Some(0), // I-frame
+            Some(0), // I-frame
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(0),
+            Some(0),
+            None,
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            None,
+          ][..]
+        }
+        2 => {
+          &[
+            Some(0), // I-frame
+            None,
+            None,
+            Some(2),
+            None,
+            None,
+            None,
+            Some(0), // I-frame
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(0),
+            Some(0),
+            None,
+            Some(1),
+            Some(2),
+            Some(1),
+            None,
+            None,
+          ][..]
+        }
+        3 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(1),
+            Some(2),
+            Some(1),
+            None,
+            None,
+            Some(0), // I-frame
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(0),
+            Some(0),
+            None,
+            None,
+            Some(2),
+            None,
+            None,
+            None,
+          ][..]
+        }
+        4 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            None,
+            Some(0), // I-frame
+            Some(0),
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(0),
+            Some(0),
+          ][..]
+        }
+        _ => unreachable!(),
       }
-      1 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5), // I-frame
-          None,
-          Some(7),
-          Some(6),
-          Some(7),
-          Some(8),
-          None,
-        ][..]
-      }
-      2 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5), // I-frame
-          None,
-          Some(7),
-          Some(6),
-          Some(7),
-          None,
-          None,
-        ][..]
-      }
-      3 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5), // I-frame
-          None,
-          None,
-          Some(6),
-          None,
-          None,
-          None,
-        ][..]
-      }
-      4 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5), // I-frame
-        ][..]
-      }
-      _ => unreachable!(),
+    );
+  }
+
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_incremental_reorder_minus(missing: u64) {
+    // Test output_frameno configurations when there are <missing> less frames
+    // than the perfect subgop size, computing the lookahead data incrementally.
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      5,
+      5,
+      0,
+      false,
+      0,
+      true,
+      10,
+      None,
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 10 - missing;
+    for _ in 0..limit {
+      send_frames(&mut ctx, 1, 0);
     }
-  );
-}
+    ctx.flush();
 
-#[interpolate_test(0, 0)]
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
-#[interpolate_test(4, 4)]
-fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
-  // Test output_frameno configurations when there's a scene change at the
-  // <scene_change_at>th frame, computing the lookahead data incrementally.
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
 
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
-
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-
-  let limit = 10;
-  for i in 0..limit {
-    send_frames(&mut ctx, 1, scene_change_at.saturating_sub(i));
+    assert_eq!(
+      &data[..],
+      match missing {
+        0 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5), // I-frame
+            Some(9),
+            Some(7),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+          ][..]
+        }
+        1 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5), // I-frame
+            None,
+            Some(7),
+            Some(6),
+            Some(7),
+            Some(8),
+            None,
+          ][..]
+        }
+        2 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5), // I-frame
+            None,
+            Some(7),
+            Some(6),
+            Some(7),
+            None,
+            None,
+          ][..]
+        }
+        3 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5), // I-frame
+            None,
+            None,
+            Some(6),
+            None,
+            None,
+            None,
+          ][..]
+        }
+        4 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5), // I-frame
+          ][..]
+        }
+        _ => unreachable!(),
+      }
+    );
   }
-  ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
+    // Test output_frameno configurations when there's a scene change at the
+    // <scene_change_at>th frame, computing the lookahead data incrementally.
 
-  assert_eq!(
-    &data[..],
-    match scene_change_at {
-      0 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5),
-          Some(9),
-          Some(7),
-          Some(6),
-          Some(7),
-          Some(8),
-          Some(9),
-        ][..]
-      }
-      1 => {
-        &[
-          Some(0), // I-frame
-          Some(1), // I-frame
-          Some(5),
-          Some(3),
-          Some(2),
-          Some(3),
-          Some(4),
-          Some(5),
-          Some(6),
-          None,
-          Some(8),
-          Some(7),
-          Some(8),
-          Some(9),
-          None,
-        ][..]
-      }
-      2 => {
-        &[
-          Some(0), // I-frame
-          None,
-          None,
-          Some(1),
-          None,
-          None,
-          None,
-          Some(2), // I-frame
-          Some(6),
-          Some(4),
-          Some(3),
-          Some(4),
-          Some(5),
-          Some(6),
-          Some(7),
-          None,
-          Some(9),
-          Some(8),
-          Some(9),
-          None,
-          None,
-        ][..]
-      }
-      3 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(2),
-          Some(1),
-          Some(2),
-          None,
-          None,
-          Some(3), // I-frame
-          Some(7),
-          Some(5),
-          Some(4),
-          Some(5),
-          Some(6),
-          Some(7),
-          Some(8),
-          None,
-          None,
-          Some(9),
-          None,
-          None,
-          None,
-        ][..]
-      }
-      4 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          None,
-          Some(4), // I-frame
-          Some(8),
-          Some(6),
-          Some(5),
-          Some(6),
-          Some(7),
-          Some(8),
-          Some(9),
-        ][..]
-      }
-      _ => unreachable!(),
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 10;
+    for i in 0..limit {
+      send_frames(&mut ctx, 1, scene_change_at.saturating_sub(i));
     }
-  );
-}
+    ctx.flush();
 
-fn send_frame_kf<T: Pixel>(ctx: &mut Context<T>, keyframe: bool) {
-  let input = ctx.new_frame();
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
 
-  let frame_type_override =
-    if keyframe { FrameTypeOverride::Key } else { FrameTypeOverride::No };
-
-  let opaque = Some(Opaque::new(keyframe));
-
-  let fp = FrameParameters {
-    frame_type_override,
-    opaque,
-    t35_metadata: Box::new([]),
-  };
-
-  let _ = ctx.send_frame((input, fp));
-}
-
-#[test]
-fn test_opaque_delivery() {
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
-
-  let kf_at = 3;
-
-  let limit = 5;
-  for i in 0..limit {
-    send_frame_kf(&mut ctx, kf_at == i);
+    assert_eq!(
+      &data[..],
+      match scene_change_at {
+        0 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(9),
+            Some(7),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+          ][..]
+        }
+        1 => {
+          &[
+            Some(0), // I-frame
+            Some(1), // I-frame
+            Some(5),
+            Some(3),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            None,
+            Some(8),
+            Some(7),
+            Some(8),
+            Some(9),
+            None,
+          ][..]
+        }
+        2 => {
+          &[
+            Some(0), // I-frame
+            None,
+            None,
+            Some(1),
+            None,
+            None,
+            None,
+            Some(2), // I-frame
+            Some(6),
+            Some(4),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            None,
+            Some(9),
+            Some(8),
+            Some(9),
+            None,
+            None,
+          ][..]
+        }
+        3 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(2),
+            Some(1),
+            Some(2),
+            None,
+            None,
+            Some(3), // I-frame
+            Some(7),
+            Some(5),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            None,
+            None,
+            Some(9),
+            None,
+            None,
+            None,
+          ][..]
+        }
+        4 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            None,
+            Some(4), // I-frame
+            Some(8),
+            Some(6),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+            Some(9),
+          ][..]
+        }
+        _ => unreachable!(),
+      }
+    );
   }
-  ctx.flush();
 
-  while let Ok(pkt) = ctx.receive_packet() {
-    let Packet { opaque, input_frameno, .. } = pkt;
-    if let Some(opaque) = opaque {
-      let kf = opaque.downcast::<bool>().unwrap();
-      assert_eq!(kf, Box::new(input_frameno == kf_at));
+  fn send_frame_kf<T: Pixel>(ctx: &mut Context<T>, keyframe: bool) {
+    let input = ctx.new_frame();
+
+    let frame_type_override =
+      if keyframe { FrameTypeOverride::Key } else { FrameTypeOverride::No };
+
+    let opaque = Some(Opaque::new(keyframe));
+
+    let fp = FrameParameters {
+      frame_type_override,
+      opaque,
+      t35_metadata: Box::new([]),
+    };
+
+    let _ = ctx.send_frame((input, fp));
+  }
+
+  #[test]
+  fn test_opaque_delivery() {
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
+
+    let kf_at = 3;
+
+    let limit = 5;
+    for i in 0..limit {
+      send_frame_kf(&mut ctx, kf_at == i);
     }
-  }
-}
+    ctx.flush();
 
-fn send_frame_t35<T: Pixel>(ctx: &mut Context<T>) {
-  let input = ctx.new_frame();
-
-  let frame_type_override = FrameTypeOverride::No;
-
-  let opaque = None;
-
-  let t35_metadata = Box::new([T35 {
-    country_code: 0xFF,
-    country_code_extension_byte: 0x00,
-    data: Box::new(*b"AYAYA"),
-  }]);
-
-  let fp = FrameParameters { frame_type_override, opaque, t35_metadata };
-
-  let _ = ctx.send_frame((input, fp));
-}
-
-#[test]
-fn test_t35_parameter() {
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
-
-  let limit = 2;
-  for _ in 0..limit {
-    send_frame_t35(&mut ctx);
-  }
-  ctx.flush();
-
-  while ctx.receive_packet().is_ok() {}
-}
-
-#[interpolate_test(0, 0)]
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
-#[interpolate_test(4, 4)]
-fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
-  // Test output_frameno configurations when there's a forced keyframe at the
-  // <kf_at>th frame, computing the lookahead data incrementally.
-
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
-
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-
-  let limit = 5;
-  for i in 0..limit {
-    send_frame_kf(&mut ctx, kf_at == i);
-  }
-  ctx.flush();
-
-  // data[output_frameno] = (input_frameno, !invalid)
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
-
-  assert_eq!(
-    &data[..],
-    match kf_at {
-      0 => {
-        &[
-          Some(0), // I-frame
-          Some(4),
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          Some(4),
-        ][..]
+    while let Ok(pkt) = ctx.receive_packet() {
+      let Packet { opaque, input_frameno, .. } = pkt;
+      if let Some(opaque) = opaque {
+        let kf = opaque.downcast::<bool>().unwrap();
+        assert_eq!(kf, Box::new(input_frameno == kf_at));
       }
-      1 => {
-        &[
-          Some(0), // I-frame
-          Some(1), // I-frame
-          None,
-          Some(3),
-          Some(2),
-          Some(3),
-          Some(4),
-          None,
-        ][..]
-      }
-      2 => {
-        &[
-          Some(0), // I-frame
-          None,
-          None,
-          Some(1),
-          None,
-          None,
-          None,
-          Some(2), // I-frame
-          None,
-          Some(4),
-          Some(3),
-          Some(4),
-          None,
-          None,
-        ][..]
-      }
-      3 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(2),
-          Some(1),
-          Some(2),
-          None,
-          None,
-          Some(3), // I-frame
-          None,
-          None,
-          Some(4),
-          None,
-          None,
-          None,
-        ][..]
-      }
-      4 => {
-        &[
-          Some(0), // I-frame
-          None,
-          Some(2),
-          Some(1),
-          Some(2),
-          Some(3),
-          None,
-          Some(4), // I-frame
-        ][..]
-      }
-      _ => unreachable!(),
-    }
-  );
-}
-
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
-fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
-  // Test output_frameno configurations when there's a single-frame flash at the
-  // <flash_at>th frame.
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    5,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
-
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-
-  let limit = 5;
-  for i in 0..limit {
-    if i == flash_at {
-      send_test_frame(&mut ctx, u8::MIN);
-    } else {
-      send_test_frame(&mut ctx, u8::MAX);
     }
   }
-  ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
+  fn send_frame_t35<T: Pixel>(ctx: &mut Context<T>) {
+    let input = ctx.new_frame();
 
-  assert_eq!(
-    &data[..],
-    &[
-      Some(0), // I-frame
-      Some(4),
-      Some(2),
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(4),
-    ]
-  );
-}
+    let frame_type_override = FrameTypeOverride::No;
 
-#[test]
-fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
-  // Test output_frameno configurations when there's a multi-frame flash
-  // with length equal to the max flash length
+    let opaque = None;
 
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    10,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
+    let t35_metadata = Box::new([T35 {
+      country_code: 0xFF,
+      country_code_extension_byte: 0x00,
+      data: Box::new(*b"AYAYA"),
+    }]);
 
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-  assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+    let fp = FrameParameters { frame_type_override, opaque, t35_metadata };
 
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  ctx.flush();
+    let _ = ctx.send_frame((input, fp));
+  }
 
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
-
-  assert_eq!(
-    &data[..],
-    &[
-      Some(0), // I-frame
-      Some(4),
-      Some(2),
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(4),
+  #[test]
+  fn test_t35_parameter() {
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
       None,
-      Some(6),
-      Some(5),
-      Some(6),
-      Some(7),
-      None,
-    ]
-  );
-}
+    );
 
-#[test]
-fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
-  // Test output_frameno configurations when there's a multi-frame flash
-  // with length greater than the max flash length
+    let limit = 2;
+    for _ in 0..limit {
+      send_frame_t35(&mut ctx);
+    }
+    ctx.flush();
 
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    10,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
+    while ctx.receive_packet().is_ok() {}
+  }
 
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-  assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
+    // Test output_frameno configurations when there's a forced keyframe at the
+    // <kf_at>th frame, computing the lookahead data incrementally.
 
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MAX);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  ctx.flush();
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
 
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
-  assert_eq!(
-    &data[..],
-    &[
-      Some(0), // I-frame
-      None,
-      None,
-      Some(1),
-      None,
-      None,
-      None,
-      Some(2), // I-frame
-      Some(6),
-      Some(4),
-      Some(3),
-      Some(4),
-      Some(5),
-      Some(6),
-      Some(10),
-      Some(8),
-      Some(7),
-      Some(8),
-      Some(9),
-      Some(10),
-      None,
-      None,
-      Some(11),
-      None,
-      None,
-      None,
-    ]
-  );
-}
+    let limit = 5;
+    for i in 0..limit {
+      send_frame_kf(&mut ctx, kf_at == i);
+    }
+    ctx.flush();
 
-#[test]
-fn output_frameno_scene_change_after_multiple_flashes() {
-  // Test output_frameno configurations when there are multiple consecutive flashes
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
 
-  let mut ctx = setup_encoder::<u8>(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    0,
-    10,
-    0,
-    false,
-    0,
-    false,
-    10,
-    None,
-  );
+    assert_eq!(
+      &data[..],
+      match kf_at {
+        0 => {
+          &[
+            Some(0), // I-frame
+            Some(4),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+          ][..]
+        }
+        1 => {
+          &[
+            Some(0), // I-frame
+            Some(1), // I-frame
+            None,
+            Some(3),
+            Some(2),
+            Some(3),
+            Some(4),
+            None,
+          ][..]
+        }
+        2 => {
+          &[
+            Some(0), // I-frame
+            None,
+            None,
+            Some(1),
+            None,
+            None,
+            None,
+            Some(2), // I-frame
+            None,
+            Some(4),
+            Some(3),
+            Some(4),
+            None,
+            None,
+          ][..]
+        }
+        3 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(2),
+            Some(1),
+            Some(2),
+            None,
+            None,
+            Some(3), // I-frame
+            None,
+            None,
+            Some(4),
+            None,
+            None,
+            None,
+          ][..]
+        }
+        4 => {
+          &[
+            Some(0), // I-frame
+            None,
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            None,
+            Some(4), // I-frame
+          ][..]
+        }
+        _ => unreachable!(),
+      }
+    );
+  }
 
-  // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-  assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
-
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, u8::MIN);
-  send_test_frame(&mut ctx, 40);
-  send_test_frame(&mut ctx, 100);
-  send_test_frame(&mut ctx, 160);
-  send_test_frame(&mut ctx, 240);
-  send_test_frame(&mut ctx, 240);
-  send_test_frame(&mut ctx, 240);
-  send_test_frame(&mut ctx, 240);
-  send_test_frame(&mut ctx, 240);
-  send_test_frame(&mut ctx, 240);
-  ctx.flush();
-
-  let data = get_frame_invariants(ctx)
-    .map(|fi| fi.map(|fi| fi.input_frameno))
-    .collect::<Vec<_>>();
-
-  assert_eq!(
-    &data[..],
-    &[
-      Some(0), // I-frame
-      Some(4),
-      Some(2),
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(4),
-      Some(5),
-      Some(9),
-      Some(7),
-      Some(6),
-      Some(7),
-      Some(8),
-      Some(9),
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
+    // Test output_frameno configurations when there's a single-frame flash at the
+    // <flash_at>th frame.
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      0,
+      false,
+      10,
       None,
-      None,
-      Some(10),
-      None,
-      None,
-      None,
-    ]
-  );
-}
+    );
 
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 5;
+    for i in 0..limit {
+      if i == flash_at {
+        send_test_frame(&mut ctx, u8::MIN);
+      } else {
+        send_test_frame(&mut ctx, u8::MAX);
+      }
+    }
+    ctx.flush();
+
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        Some(0), // I-frame
+        Some(4),
+        Some(2),
+        Some(1),
+        Some(2),
+        Some(3),
+        Some(4),
+      ]
+    );
+  }
+
+  #[test]
+  fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
+    // Test output_frameno configurations when there's a multi-frame flash
+    // with length equal to the max flash length
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      10,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    ctx.flush();
+
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        Some(0), // I-frame
+        Some(4),
+        Some(2),
+        Some(1),
+        Some(2),
+        Some(3),
+        Some(4),
+        None,
+        Some(6),
+        Some(5),
+        Some(6),
+        Some(7),
+        None,
+      ]
+    );
+  }
+
+  #[test]
+  fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
+    // Test output_frameno configurations when there's a multi-frame flash
+    // with length greater than the max flash length
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      10,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MAX);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    ctx.flush();
+
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        Some(0), // I-frame
+        None,
+        None,
+        Some(1),
+        None,
+        None,
+        None,
+        Some(2), // I-frame
+        Some(6),
+        Some(4),
+        Some(3),
+        Some(4),
+        Some(5),
+        Some(6),
+        Some(10),
+        Some(8),
+        Some(7),
+        Some(8),
+        Some(9),
+        Some(10),
+        None,
+        None,
+        Some(11),
+        None,
+        None,
+        None,
+      ]
+    );
+  }
+
+  #[test]
+  fn output_frameno_scene_change_after_multiple_flashes() {
+    // Test output_frameno configurations when there are multiple consecutive flashes
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      10,
+      0,
+      false,
+      0,
+      false,
+      10,
+      None,
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, u8::MIN);
+    send_test_frame(&mut ctx, 40);
+    send_test_frame(&mut ctx, 100);
+    send_test_frame(&mut ctx, 160);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    ctx.flush();
+
+    let data = get_frame_invariants(ctx)
+      .map(|fi| fi.map(|fi| fi.input_frameno))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        Some(0), // I-frame
+        Some(4),
+        Some(2),
+        Some(1),
+        Some(2),
+        Some(3),
+        Some(4),
+        Some(5),
+        Some(9),
+        Some(7),
+        Some(6),
+        Some(7),
+        Some(8),
+        Some(9),
+        None,
+        None,
+        Some(10),
+        None,
+        None,
+        None,
+      ]
+    );
+  }
 } // mod scenechange_tests
 
 #[derive(Clone, Copy)]

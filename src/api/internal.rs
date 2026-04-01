@@ -13,6 +13,8 @@ use crate::api::lookahead::*;
 use crate::api::{
   EncoderConfig, EncoderStatus, FrameType, Opaque, Packet, T35,
 };
+#[cfg(not(feature = "scenechange"))]
+use crate::av_scenechange as scene_detect;
 use crate::color::ChromaSampling::Cs400;
 use crate::dist::get_satd;
 use crate::encoder::*;
@@ -28,8 +30,6 @@ use crate::util::Pixel;
 use arrayvec::ArrayVec;
 #[cfg(feature = "scenechange")]
 use av_scenechange as scene_detect;
-#[cfg(not(feature = "scenechange"))]
-use crate::av_scenechange as scene_detect;
 use scene_detect::SceneChangeDetector;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
