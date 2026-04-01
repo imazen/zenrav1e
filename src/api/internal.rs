@@ -26,7 +26,11 @@ use crate::stats::EncoderStats;
 use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
-use av_scenechange::SceneChangeDetector;
+#[cfg(feature = "scenechange")]
+use av_scenechange as scene_detect;
+#[cfg(not(feature = "scenechange"))]
+use crate::av_scenechange as scene_detect;
+use scene_detect::SceneChangeDetector;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -279,7 +283,7 @@ impl<T: Pixel> ContextInner<T> {
     let mut keyframe_detector = SceneChangeDetector::new(
       (enc.width, enc.height),
       enc.bit_depth,
-      av_scenechange::Rational32::new(
+      scene_detect::Rational32::new(
         enc.time_base.den as i32,
         enc.time_base.num as i32,
       ),
@@ -287,18 +291,18 @@ impl<T: Pixel> ContextInner<T> {
       lookahead_distance,
       match enc.speed_settings.scene_detection_mode {
         super::SceneDetectionSpeed::Fast => {
-          av_scenechange::SceneDetectionSpeed::Fast
+          scene_detect::SceneDetectionSpeed::Fast
         }
         super::SceneDetectionSpeed::Standard => {
-          av_scenechange::SceneDetectionSpeed::Standard
+          scene_detect::SceneDetectionSpeed::Standard
         }
         super::SceneDetectionSpeed::None => {
-          av_scenechange::SceneDetectionSpeed::None
+          scene_detect::SceneDetectionSpeed::None
         }
       },
       enc.min_key_frame_interval as usize,
       enc.max_key_frame_interval as usize,
-      av_scenechange::CpuFeatureLevel::default(),
+      scene_detect::CpuFeatureLevel::default(),
     );
     keyframe_detector.enable_cache();
 

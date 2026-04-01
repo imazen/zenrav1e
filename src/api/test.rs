@@ -716,6 +716,11 @@ fn pyramid_level_reorder_minus(missing: u64) {
   );
 }
 
+// Scene-change tests require the `scenechange` feature (av-scenechange crate).
+#[cfg(feature = "scenechange")]
+mod scenechange_tests {
+  use super::*;
+
 #[interpolate_test(0, 0)]
 #[interpolate_test(1, 1)]
 #[interpolate_test(2, 2)]
@@ -1784,6 +1789,8 @@ fn output_frameno_scene_change_after_multiple_flashes() {
     ]
   );
 }
+
+} // mod scenechange_tests
 
 #[derive(Clone, Copy)]
 struct LookaheadTestExpectations {

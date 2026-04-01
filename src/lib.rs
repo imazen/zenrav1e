@@ -110,6 +110,10 @@ mod stats;
 pub mod tiling;
 mod token_cdfs;
 
+#[cfg(not(feature = "scenechange"))]
+#[path = "scenechange_stub.rs"]
+mod av_scenechange;
+
 mod api;
 mod frame;
 mod header;
