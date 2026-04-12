@@ -81,7 +81,7 @@ pub fn select_dc_qi(quantizer: i64, bit_depth: usize) -> u8 {
     8 => &dc_qlookup_Q3,
     10 => &dc_qlookup_10_Q3,
     12 => &dc_qlookup_12_Q3,
-    _ => unimplemented!(),
+    _ => unreachable!("AV1 only supports 8/10/12-bit depth"),
   };
   select_qi(quantizer, qlookup)
 }
@@ -91,7 +91,7 @@ pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
     8 => &ac_qlookup_Q3,
     10 => &ac_qlookup_10_Q3,
     12 => &ac_qlookup_12_Q3,
-    _ => unimplemented!(),
+    _ => unreachable!("AV1 only supports 8/10/12-bit depth"),
   };
   select_qi(quantizer, qlookup)
 }

@@ -10,9 +10,9 @@
 
 use std::io::Read;
 
-use crate::color::ChromaSampling::Cs400;
 use crate::decoder::{DecodeError, Decoder, FrameBuilder, VideoDetails};
-use rav1e::prelude::*;
+use zenrav1e::color::ChromaSampling::Cs400;
+use zenrav1e::prelude::*;
 
 impl Decoder for y4m::Decoder<Box<dyn Read + Send>> {
   fn get_video_details(&self) -> VideoDetails {
@@ -94,9 +94,9 @@ impl From<y4m::Error> for DecodeError {
 pub const fn map_y4m_color_space(
   color_space: y4m::Colorspace,
 ) -> (ChromaSampling, ChromaSamplePosition) {
-  use crate::ChromaSamplePosition::*;
-  use crate::ChromaSampling::*;
   use y4m::Colorspace::*;
+  use zenrav1e::color::ChromaSamplePosition::*;
+  use zenrav1e::color::ChromaSampling::*;
   match color_space {
     Cmono | Cmono12 => (Cs400, Unknown),
     C420jpeg | C420paldv => (Cs420, Unknown),
@@ -104,6 +104,6 @@ pub const fn map_y4m_color_space(
     C420 | C420p10 | C420p12 => (Cs420, Colocated),
     C422 | C422p10 | C422p12 => (Cs422, Colocated),
     C444 | C444p10 | C444p12 => (Cs444, Colocated),
-    _ => unimplemented!(),
+    _ => panic!("unsupported y4m colorspace"),
   }
 }

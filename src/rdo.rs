@@ -1362,7 +1362,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         [MotionVector::default(); 2]
       }
       _ => {
-        unimplemented!();
+        unreachable!("only modes in RAV1E_INTER_COMPOUND_MODES are searched");
       }
     };
     mvs_set.push(mvs);

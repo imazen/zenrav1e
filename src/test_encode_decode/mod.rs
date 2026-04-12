@@ -840,7 +840,7 @@ pub(crate) fn get_decoder<T: Pixel>(
     "aom" => Box::new(AomDecoder::<T>::setup_decoder(w, h)),
     #[cfg(feature = "decode_test_dav1d")]
     "dav1d" => Box::new(Dav1dDecoder::<T>::setup_decoder(w, h)),
-    _ => unimplemented!(),
+    _ => unreachable!("unknown decoder: {decoder}"),
   }
 }
 

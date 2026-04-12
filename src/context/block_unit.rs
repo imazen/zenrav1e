@@ -780,7 +780,9 @@ impl ContextWriter<'_> {
     ydec: usize, cs: ChromaSampling,
   ) {
     if enable {
-      unimplemented!(); // TODO
+      unreachable!(
+        "palette mode is not implemented; always called with enable=false"
+      );
     }
 
     let (ctx_luma, ctx_chroma) = (0, 0); // TODO: increase based on surrounding block info

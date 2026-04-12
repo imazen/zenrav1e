@@ -11,12 +11,12 @@
 use super::Muxer;
 use crate::error::*;
 use ivf::*;
-use rav1e::prelude::*;
 use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
 use std::path::Path;
+use zenrav1e::prelude::*;
 
 pub struct IvfMuxer {
   output: Box<dyn Write + Send>,

@@ -654,13 +654,13 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
     8 => sgrproj_box_ab_r1::<8>,
     10 => sgrproj_box_ab_r1::<10>,
     12 => sgrproj_box_ab_r1::<12>,
-    _ => unimplemented!(),
+    _ => unreachable!("AV1 only supports 8/10/12-bit depth"),
   };
   let fn_ab_r2 = match fi.sequence.bit_depth {
     8 => sgrproj_box_ab_r2::<8>,
     10 => sgrproj_box_ab_r2::<10>,
     12 => sgrproj_box_ab_r2::<12>,
-    _ => unimplemented!(),
+    _ => unreachable!("AV1 only supports 8/10/12-bit depth"),
   };
 
   /* prime the intermediate arrays */
@@ -873,13 +873,13 @@ pub fn sgrproj_solve<T: Pixel>(
     8 => sgrproj_box_ab_r1::<8>,
     10 => sgrproj_box_ab_r1::<10>,
     12 => sgrproj_box_ab_r1::<12>,
-    _ => unimplemented!(),
+    _ => unreachable!("AV1 only supports 8/10/12-bit depth"),
   };
   let fn_ab_r2 = match fi.sequence.bit_depth {
     8 => sgrproj_box_ab_r2::<8>,
     10 => sgrproj_box_ab_r2::<10>,
     12 => sgrproj_box_ab_r2::<12>,
-    _ => unimplemented!(),
+    _ => unreachable!("AV1 only supports 8/10/12-bit depth"),
   };
 
   /* prime the intermediate arrays */

@@ -8,9 +8,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::decoder::VideoDetails;
-use rav1e::prelude::*;
 use std::io::Write;
 use std::slice;
+use zenrav1e::prelude::*;
 
 #[profiling::function]
 pub fn write_y4m_frame<T: Pixel>(
