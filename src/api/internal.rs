@@ -302,7 +302,8 @@ impl<T: Pixel> ContextInner<T> {
       },
       enc.min_key_frame_interval as usize,
       enc.max_key_frame_interval as usize,
-      scene_detect::CpuFeatureLevel,
+      #[allow(clippy::default_constructed_unit_structs)]
+      scene_detect::CpuFeatureLevel::default(),
     );
     keyframe_detector.enable_cache();
 
