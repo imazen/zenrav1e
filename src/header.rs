@@ -201,8 +201,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(false)?; // reserved
 
     if obu_extension != 0 {
-      unimplemented!();
-      //self.write(8, obu_extension & 0xFF)?; size += 8;
+      unreachable!("OBU extensions are not used by the encoder");
     }
 
     Ok(())
@@ -538,11 +537,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     );
 
     if fi.sequence.frame_id_numbers_present_flag {
-      unimplemented!();
-
-      //TODO:
-      //let frame_id_len = fi.sequence.frame_id_length;
-      //self.write(frame_id_len, fi.current_frame_id);
+      unreachable!("frame_id_numbers_present_flag is always false");
     }
 
     if fi.frame_type != FrameType::SWITCH
@@ -562,14 +557,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     if fi.sequence.decoder_model_info_present_flag {
-      unimplemented!();
+      unreachable!("decoder_model_info_present_flag is always false");
     }
 
     if fi.frame_type == FrameType::KEY {
       if !fi.show_frame {
-        // unshown keyframe (forward keyframe)
-        unimplemented!();
-        self.write_var(REF_FRAMES as u32, fi.refresh_frame_flags)?;
+        unreachable!("keyframes always have show_frame=true");
       } else {
         assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
       }
@@ -618,7 +611,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if fi.sequence.enable_order_hint {
         self.write_bit(frame_refs_short_signaling)?;
         if frame_refs_short_signaling {
-          unimplemented!();
+          unreachable!("frame_refs_short_signaling is always false");
         }
       }
 
@@ -627,7 +620,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           self.write_var(REF_FRAMES_LOG2 as u32, fi.ref_frames[i])?;
         }
         if fi.sequence.frame_id_numbers_present_flag {
-          unimplemented!();
+          unreachable!("frame_id_numbers_present_flag is always false");
         }
       }
 
@@ -839,8 +832,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
               mv_y >> bits_diff,
             )?;
           }
-          GlobalMVMode::ROTZOOM => unimplemented!(),
-          GlobalMVMode::AFFINE => unimplemented!(),
+          GlobalMVMode::ROTZOOM => {
+            unreachable!("global motion is always IDENTITY")
+          }
+          GlobalMVMode::AFFINE => {
+            unreachable!("global motion is always IDENTITY")
+          }
         };
       }
     }
@@ -945,7 +942,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     if fi.large_scale_tile {
-      unimplemented!();
+      unreachable!("large_scale_tile is always false");
     }
     self.byte_align()?;
 
@@ -987,7 +984,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_var(height_bits, height as u16)?;
     }
     if fi.sequence.enable_superres {
-      unimplemented!();
+      unreachable!("enable_superres is always false");
     }
     Ok(())
   }
@@ -1028,7 +1025,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_frame_size(fi)?;
       self.write_render_size(fi)?;
     } else if fi.sequence.enable_superres {
-      unimplemented!();
+      unreachable!("enable_superres is always false");
     }
     Ok(())
   }

@@ -88,7 +88,7 @@ impl ContextWriter<'_> {
       symbol_with_update!(self, w, comp_ref_type, cdf);
 
       if comp_ref_type == 0 {
-        unimplemented!();
+        unreachable!("comp_ref_type is always 1 (bidir)");
       } else {
         let compref = rf[0] == GOLDEN_FRAME || rf[0] == LAST3_FRAME;
         let ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
