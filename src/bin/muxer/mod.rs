@@ -13,7 +13,7 @@ use self::ivf::IvfMuxer;
 mod y4m;
 pub use self::y4m::write_y4m_frame;
 
-use rav1e::prelude::*;
+use zenrav1e::prelude::*;
 
 use std::ffi::OsStr;
 use std::io;
@@ -39,10 +39,10 @@ pub fn create_muxer<P: AsRef<Path>>(
     IvfMuxer::check_file(path.as_ref())?;
   }
 
-  if let Some(path) = path.as_ref().to_str() {
-    if path == "-" {
-      return IvfMuxer::open(path);
-    }
+  if let Some(path) = path.as_ref().to_str()
+    && path == "-"
+  {
+    return IvfMuxer::open(path);
   }
 
   let ext = path

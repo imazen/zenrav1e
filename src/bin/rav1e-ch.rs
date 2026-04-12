@@ -21,8 +21,8 @@ mod stats;
 use crate::common::*;
 use crate::error::*;
 use crate::stats::*;
-use rav1e::config::CpuFeatureLevel;
-use rav1e::prelude::*;
+use zenrav1e::config::CpuFeatureLevel;
+use zenrav1e::prelude::*;
 
 use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
@@ -235,7 +235,7 @@ fn do_encode<T: Pixel, D: Decoder>(
           pkt.frame_type,
         );
         output.flush().unwrap();
-        if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
+        if let (Some(ref mut y4m_enc_uw), Some(rec)) =
           (y4m_enc.as_mut(), &pkt.rec)
         {
           write_y4m_frame(y4m_enc_uw, rec, y4m_details);
@@ -338,7 +338,7 @@ fn init_logger() {
     // field which defaults to the module path but can be overwritten with the `target`
     // parameter:
     // `info!(target="special_target", "This log message is about special_target");`
-    .level_for("rav1e", level)
+    .level_for("zenrav1e", level)
     .level_for("rav1e_ch", level)
     // output to stdout
     .chain(std::io::stderr())

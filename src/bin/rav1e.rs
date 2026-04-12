@@ -21,8 +21,8 @@ mod stats;
 use crate::common::*;
 use crate::error::*;
 use crate::stats::*;
-use rav1e::config::CpuFeatureLevel;
-use rav1e::prelude::*;
+use zenrav1e::config::CpuFeatureLevel;
+use zenrav1e::prelude::*;
 
 use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
@@ -148,7 +148,7 @@ fn process_frame<T: Pixel, D: Decoder>(
         pkt.data.as_ref(),
         pkt.frame_type,
       );
-      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
+      if let (Some(ref mut y4m_enc_uw), Some(rec)) =
         (y4m_enc.as_mut(), &pkt.rec)
       {
         write_y4m_frame(y4m_enc_uw, rec, y4m_details);
@@ -182,37 +182,37 @@ fn process_frame<T: Pixel, D: Decoder>(
   }?;
 
   // Save first pass data from pass 1.
-  if let Some(passfile) = pass1file.as_mut() {
-    if emit_pass_data {
-      match ctx.rc_receive_pass_data() {
-        Some(RcData::Frame(outbuf)) => {
-          let len = outbuf.len() as u64;
-          passfile.write_all(&len.to_be_bytes()).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
+  if let Some(passfile) = pass1file.as_mut()
+    && emit_pass_data
+  {
+    match ctx.rc_receive_pass_data() {
+      Some(RcData::Frame(outbuf)) => {
+        let len = outbuf.len() as u64;
+        passfile
+          .write_all(&len.to_be_bytes())
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
 
-          passfile.write_all(&outbuf).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-        }
-        Some(RcData::Summary(outbuf)) => {
-          // The last packet of rate control data we get is the summary data.
-          // Let's put it at the start of the file.
-          passfile.rewind().map_err(|e| {
-            e.context("Unable to seek in the two-pass data file.")
-          })?;
-          let len = outbuf.len() as u64;
-
-          passfile.write_all(&len.to_be_bytes()).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-
-          passfile.write_all(&outbuf).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-        }
-        None => {}
+        passfile
+          .write_all(&outbuf)
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
       }
+      Some(RcData::Summary(outbuf)) => {
+        // The last packet of rate control data we get is the summary data.
+        // Let's put it at the start of the file.
+        passfile.rewind().map_err(|e| {
+          e.context("Unable to seek in the two-pass data file.")
+        })?;
+        let len = outbuf.len() as u64;
+
+        passfile
+          .write_all(&len.to_be_bytes())
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+
+        passfile
+          .write_all(&outbuf)
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+      }
+      None => {}
     }
   }
 
@@ -332,7 +332,7 @@ fn init_logger() {
     // field which defaults to the module path but can be overwritten with the `target`
     // parameter:
     // `info!(target="special_target", "This log message is about special_target");`
-    .level_for("rav1e", level)
+    .level_for("zenrav1e", level)
     // output to stdout
     .chain(std::io::stderr())
     .apply()

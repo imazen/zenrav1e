@@ -14,15 +14,15 @@ use clap::builder::Styles;
 use clap::builder::styling::AnsiColor;
 use clap::{CommandFactory, Parser as Clap, Subcommand};
 use clap_complete::{Shell, generate};
-use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
+use zenrav1e::prelude::*;
 
-use rav1e::config::CpuFeatureLevel;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use zenrav1e::config::CpuFeatureLevel;
 
 pub mod built_info {
   // The file has been placed there by the build script.
@@ -275,7 +275,7 @@ fn get_version() -> &'static str {
   VERSION_STR.get_or_init(|| {
     format!(
       "{} ({})",
-      rav1e::version::full(),
+      zenrav1e::version::full(),
       // We cannot use `built_info::DEBUG` because that tells us if there are debug symbols,
       // not if there are optimizations.
       if cfg!(debug_assertions) { "debug" } else { "release" }
@@ -532,9 +532,7 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
     panic!("A target bitrate must be specified when using passes");
   }
 
-  if quantizer == 0 {
-    unimplemented!("Lossless encoding not yet implemented");
-  } else if quantizer > 255 {
+  if quantizer > 255 {
     panic!("Quantizer must be between 0-255");
   }
 

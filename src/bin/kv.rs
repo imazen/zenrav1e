@@ -210,7 +210,7 @@ impl<'a> ser::SerializeStruct for &mut KVString {
 
 #[cfg(test)]
 mod test {
-  use rav1e::prelude::SpeedSettings;
+  use zenrav1e::prelude::SpeedSettings;
 
   #[test]
   fn serialize_speed_settings() {

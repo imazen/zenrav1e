@@ -74,6 +74,21 @@ mod binary {
 
   #[interpolate_test(low_bitdepth, false)]
   #[interpolate_test(high_bitdepth, true)]
+  fn one_pass_lossless(high_bitdepth: bool) {
+    let outfile = get_tempfile_path("ivf");
+
+    get_rav1e_command(high_bitdepth)
+      .args(["--quantizer", "0"])
+      .arg("-o")
+      .arg(&outfile)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+  }
+
+  #[interpolate_test(low_bitdepth, false)]
+  #[interpolate_test(high_bitdepth, true)]
   fn one_pass_bitrate_based(high_bitdepth: bool) {
     let outfile = get_tempfile_path("ivf");
 

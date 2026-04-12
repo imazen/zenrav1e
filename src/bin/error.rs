@@ -37,9 +37,9 @@ impl ToError for std::num::ParseIntError {
 }
 
 impl ToError for std::io::Error {}
-impl ToError for rav1e::InvalidConfig {}
-impl ToError for rav1e::EncoderStatus {}
-impl ToError for rav1e::config::RateControlError {}
+impl ToError for zenrav1e::InvalidConfig {}
+impl ToError for zenrav1e::EncoderStatus {}
+impl ToError for zenrav1e::config::RateControlError {}
 
 pub fn print_error(e: &dyn std::error::Error) {
   error!("{}", e);
