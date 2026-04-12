@@ -839,7 +839,7 @@ pub(crate) mod rust {
         height,
         bit_depth,
       ),
-      _ => unimplemented!(),
+      _ => unreachable!("inter modes cannot reach intra prediction"),
     }
   }
 

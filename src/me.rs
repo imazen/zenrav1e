@@ -561,7 +561,7 @@ pub fn estimate_motion<T: Pixel>(
       0 => &rec.frame.planes[0],
       1 => &rec.input_hres,
       2 => &rec.input_qres,
-      _ => unimplemented!(),
+      _ => unreachable!("ssdec is only 0, 1, or 2"),
     };
 
     let org_region = &match ssdec {
@@ -569,7 +569,7 @@ pub fn estimate_motion<T: Pixel>(
         .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
       1 => ts.input_hres.region(Area::StartingAt { x: po.x, y: po.y }),
       2 => ts.input_qres.region(Area::StartingAt { x: po.x, y: po.y }),
-      _ => unimplemented!(),
+      _ => unreachable!("ssdec is only 0, 1, or 2"),
     };
 
     let mut best: MotionSearchResult = full_pixel_me(
@@ -652,7 +652,7 @@ fn refine_subsampled_motion_estimate<T: Pixel>(
       0 => &rec.frame.planes[0],
       1 => &rec.input_hres,
       2 => &rec.input_qres,
-      _ => unimplemented!(),
+      _ => unreachable!("ssdec is only 0, 1, or 2"),
     };
 
     let org_region = &match ssdec {
@@ -660,7 +660,7 @@ fn refine_subsampled_motion_estimate<T: Pixel>(
         .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
       1 => ts.input_hres.region(Area::StartingAt { x: po.x, y: po.y }),
       2 => ts.input_qres.region(Area::StartingAt { x: po.x, y: po.y }),
-      _ => unimplemented!(),
+      _ => unreachable!("ssdec is only 0, 1, or 2"),
     };
 
     let mv =

@@ -104,6 +104,6 @@ pub const fn map_y4m_color_space(
     C420 | C420p10 | C420p12 => (Cs420, Colocated),
     C422 | C422p10 | C422p12 => (Cs422, Colocated),
     C444 | C444p10 | C444p12 => (Cs444, Colocated),
-    _ => unimplemented!(),
+    _ => panic!("unsupported y4m colorspace"),
   }
 }
