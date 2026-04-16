@@ -1637,8 +1637,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
 
         let (tx_size, tx_type) = rdo_tx_size_type_with_filter_intra(
-          fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
-          true, fi_mode,
+          fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false, true,
+          fi_mode,
         );
 
         // Use DC_PRED for chroma when filter intra is used on luma
@@ -1888,8 +1888,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   cw: &mut ContextWriter, cw_checkpoint: &mut Option<ContextWriterCheckpoint>,
   mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
-  tx_types: &[TxType], cur_best_rd: f64,
-  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
+  tx_types: &[TxType], cur_best_rd: f64, use_filter_intra: bool,
+  filter_intra_mode: FilterIntraMode,
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = f64::MAX;
