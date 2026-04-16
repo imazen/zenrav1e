@@ -8,10 +8,22 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use crate::predict::PredictionMode;
 use crate::predict::PredictionMode::*;
+use crate::predict::{FilterIntraMode, PredictionMode};
 use crate::transform::TxType::*;
 use std::mem::MaybeUninit;
+
+/// AV1 spec Table 5.11.40: map filter_intra mode to intra direction for tx type CDF indexing.
+fn fimode_to_intradir(fi_mode: FilterIntraMode) -> PredictionMode {
+  match fi_mode {
+    FilterIntraMode::FILTER_DC_PRED => DC_PRED,
+    FilterIntraMode::FILTER_V_PRED => V_PRED,
+    FilterIntraMode::FILTER_H_PRED => H_PRED,
+    FilterIntraMode::FILTER_D157_PRED => D157_PRED,
+    FilterIntraMode::FILTER_PAETH_PRED => PAETH_PRED,
+    FilterIntraMode::FILTER_INTRA_MODES => DC_PRED,
+  }
+}
 
 pub const MAX_TX_SIZE: usize = 64;
 
@@ -530,6 +542,7 @@ impl ContextWriter<'_> {
   pub fn write_tx_type<W: Writer>(
     &mut self, w: &mut W, tx_size: TxSize, tx_type: TxType,
     y_mode: PredictionMode, is_inter: bool, use_reduced_tx_set: bool,
+    use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
   ) {
     let square_tx_size = tx_size.sqr();
     let tx_set = get_tx_set(tx_size, is_inter, use_reduced_tx_set);
@@ -554,10 +567,13 @@ impl ContextWriter<'_> {
           symbol_with_update!(self, w, s, cdf);
         }
       } else {
-        let intra_dir = y_mode;
-        // TODO: Once use_filter_intra is enabled,
-        // intra_dir =
-        // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
+        // AV1 spec 5.11.40: when filter_intra is active, the tx type CDF
+        // is indexed by fimode_to_intradir[filter_intra_mode], not y_mode.
+        let intra_dir = if use_filter_intra {
+          fimode_to_intradir(filter_intra_mode)
+        } else {
+          y_mode
+        };
 
         let s = av1_tx_ind[tx_set as usize][tx_type as usize] as u32;
         if tx_set_index == 1 {

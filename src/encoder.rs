@@ -1789,6 +1789,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       fi.use_reduced_tx_set,
       frame_clipped_txw,
       frame_clipped_txh,
+      use_filter_intra,
+      filter_intra_mode,
     )
   } else {
     true

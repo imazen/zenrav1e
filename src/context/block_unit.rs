@@ -1778,7 +1778,8 @@ impl ContextWriter<'_> {
     eob: u16, pred_mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
     plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool, frame_clipped_txw: usize,
-    frame_clipped_txh: usize,
+    frame_clipped_txh: usize, use_filter_intra: bool,
+    filter_intra_mode: crate::predict::FilterIntraMode,
   ) -> bool {
     debug_assert!(frame_clipped_txw != 0);
     debug_assert!(frame_clipped_txh != 0);
@@ -1838,6 +1839,8 @@ impl ContextWriter<'_> {
         pred_mode,
         is_inter,
         use_reduced_tx_set,
+        use_filter_intra,
+        filter_intra_mode,
       );
     }
 
