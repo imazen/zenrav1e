@@ -765,6 +765,27 @@ pub fn rdo_tx_size_type<T: Pixel>(
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   skip: bool,
 ) -> (TxSize, TxType) {
+  rdo_tx_size_type_with_filter_intra(
+    fi,
+    ts,
+    cw,
+    bsize,
+    tile_bo,
+    luma_mode,
+    ref_frames,
+    mvs,
+    skip,
+    false,
+    FilterIntraMode::FILTER_DC_PRED,
+  )
+}
+
+pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+  skip: bool, use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
+) -> (TxSize, TxType) {
   // In lossless mode, always use WHT_WHT with 4x4 transform
   if fi.is_lossless() {
     return (TxSize::TX_4X4, TxType::WHT_WHT);
@@ -817,6 +838,8 @@ pub fn rdo_tx_size_type<T: Pixel>(
       tx_set,
       tx_types,
       best_rd,
+      use_filter_intra,
+      filter_intra_mode,
     );
 
     if rd_cost < best_rd {
@@ -1613,8 +1636,9 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       for sidx in select_segment(fi, ts, tile_bo, bsize, false) {
         cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
 
-        let (tx_size, tx_type) = rdo_tx_size_type(
+        let (tx_size, tx_type) = rdo_tx_size_type_with_filter_intra(
           fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
+          true, fi_mode,
         );
 
         // Use DC_PRED for chroma when filter intra is used on luma
@@ -1865,6 +1889,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
   tx_types: &[TxType], cur_best_rd: f64,
+  use_filter_intra: bool, filter_intra_mode: FilterIntraMode,
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = f64::MAX;
@@ -1941,8 +1966,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         true,
         rdo_type,
         need_recon_pixel,
-        false,
-        FilterIntraMode::FILTER_DC_PRED,
+        use_filter_intra,
+        filter_intra_mode,
       )
     };
 
