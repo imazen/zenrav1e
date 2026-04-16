@@ -2469,6 +2469,9 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   rdo_type: RDOType, need_recon_pixel: bool, use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
 ) -> (bool, ScaledDistortion) {
+  if skip {
+    return (false, ScaledDistortion::zero());
+  }
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);

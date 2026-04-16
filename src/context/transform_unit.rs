@@ -13,14 +13,16 @@ use crate::predict::{FilterIntraMode, PredictionMode};
 use crate::transform::TxType::*;
 use std::mem::MaybeUninit;
 
-/// AV1 spec Table 5.11.40: map filter_intra mode to intra direction for tx type CDF indexing.
+/// AV1 spec: map filter_intra mode to intra direction for tx type CDF indexing.
+/// Must match dav1d's `dav1d_filter_mode_to_y_mode` table.
 fn fimode_to_intradir(fi_mode: FilterIntraMode) -> PredictionMode {
   match fi_mode {
     FilterIntraMode::FILTER_DC_PRED => DC_PRED,
     FilterIntraMode::FILTER_V_PRED => V_PRED,
     FilterIntraMode::FILTER_H_PRED => H_PRED,
     FilterIntraMode::FILTER_D157_PRED => D157_PRED,
-    FilterIntraMode::FILTER_PAETH_PRED => PAETH_PRED,
+    // Spec and dav1d both map FILTER_PAETH_PRED to DC_PRED, not PAETH_PRED
+    FilterIntraMode::FILTER_PAETH_PRED => DC_PRED,
     FilterIntraMode::FILTER_INTRA_MODES => DC_PRED,
   }
 }
