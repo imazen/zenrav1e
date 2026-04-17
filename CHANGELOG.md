@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-04-17
+
 ### Fixed
 - Filter intra: forward `use_filter_intra` / `filter_intra_mode` through `rdo_tx_type_decision` so tx_type cost is estimated against the correctly remapped CDF instead of DC_PRED's (04129b4e). See imazen/zenrav1e#5 for the remaining speed 1 quality regression.
 - Filter intra: map `FILTER_PAETH_PRED` to `DC_PRED` in `fimode_to_intradir` (matches AV1 spec and dav1d), and add the skip early-return to `write_tx_blocks` that the inter path already had — both fixed CDF/arithmetic-coder desync on 8-bit content (2d0ae25c).
