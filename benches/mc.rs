@@ -34,7 +34,7 @@ fn bench_put_8tap_top_left_lbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_top_left_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -65,7 +65,7 @@ fn bench_put_8tap_top_lbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_top_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -96,7 +96,7 @@ fn bench_put_8tap_left_lbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_left_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -127,7 +127,7 @@ fn bench_put_8tap_center_lbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_center_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -158,7 +158,7 @@ fn bench_put_8tap_top_left_hbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_top_left_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -189,7 +189,7 @@ fn bench_put_8tap_top_hbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_top_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -220,7 +220,7 @@ fn bench_put_8tap_left_hbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_left_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -251,7 +251,7 @@ fn bench_put_8tap_center_hbd(c: &mut Criterion) {
   );
   c.bench_function("put_8tap_center_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(put_8tap(
+      black_box(put_8tap(
         &mut dst_plane.as_region_mut(),
         src,
         8,
@@ -282,7 +282,7 @@ fn bench_prep_8tap_top_left_lbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_top_left_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -313,7 +313,7 @@ fn bench_prep_8tap_top_lbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_top_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -344,7 +344,7 @@ fn bench_prep_8tap_left_lbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_left_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -375,7 +375,7 @@ fn bench_prep_8tap_center_lbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_center_lbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -406,7 +406,7 @@ fn bench_prep_8tap_top_left_hbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_top_left_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -437,7 +437,7 @@ fn bench_prep_8tap_top_hbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_top_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -468,7 +468,7 @@ fn bench_prep_8tap_left_hbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_left_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -499,7 +499,7 @@ fn bench_prep_8tap_center_hbd(c: &mut Criterion) {
   );
   c.bench_function("prep_8tap_center_hbd", |b| {
     b.iter(|| {
-      let _ = black_box(prep_8tap(
+      black_box(prep_8tap(
         &mut dst.data,
         src,
         8,
@@ -534,7 +534,7 @@ fn bench_motion_compensate(c: &mut Criterion) {
   fs.apply_tile_state_mut(|ts| {
     c.bench_function("motion_compensate", |b| {
       b.iter(|| {
-        let _ = black_box(motion_compensate(
+        black_box(motion_compensate(
           &fi,
           ts,
           &mut cw,
@@ -569,7 +569,7 @@ fn bench_motion_compensate_hbd(c: &mut Criterion) {
   fs.apply_tile_state_mut(|ts| {
     c.bench_function("motion_compensate_hbd", |b| {
       b.iter(|| {
-        let _ = black_box(motion_compensate(
+        black_box(motion_compensate(
           &fi,
           ts,
           &mut cw,
@@ -629,7 +629,7 @@ fn new_plane<T: Pixel>(
 
 fn get_params<T: Pixel>(
   rec_plane: &Plane<T>, po: PlaneOffset, mv: MotionVector,
-) -> (i32, i32, PlaneSlice<T>) {
+) -> (i32, i32, PlaneSlice<'_, T>) {
   let rec_cfg = &rec_plane.cfg;
   let shift_row = 3 + rec_cfg.ydec;
   let shift_col = 3 + rec_cfg.xdec;

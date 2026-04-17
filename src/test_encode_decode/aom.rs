@@ -88,7 +88,11 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
           let img = aom_codec_get_frame(&mut self.dec, &mut self.iter);
           debug!("Retrieved.");
           if img.is_null() {
-            return DecodeResult::Done;
+            return if corrupted_count > 0 {
+              DecodeResult::Corrupted(corrupted_count)
+            } else {
+              DecodeResult::Done
+            };
           }
           let mut corrupted = 0;
           let ret = aom_codec_control(

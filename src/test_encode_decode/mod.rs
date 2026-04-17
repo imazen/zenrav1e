@@ -220,7 +220,7 @@ fn speed(s: u8, decoder: &str) {
   for b in DIMENSION_OFFSETS.iter() {
     let w = w + b.0;
     let h = h + b.1;
-    let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+    let mut dec = get_decoder::<u8>(decoder, w, h);
     dec.encode_decode(
       true,
       w,
@@ -314,7 +314,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
   let speed = 10;
   let still_picture = w < 16 || h < 16;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -395,7 +395,7 @@ fn bitrate(decoder: &str) {
 
   for &q in [172, 220, 252, 255].iter() {
     for &r in [100, 1000, 10_000].iter() {
-      let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+      let mut dec = get_decoder::<u8>(decoder, w, h);
       dec.encode_decode(
         true,
         w,
@@ -429,7 +429,7 @@ fn keyframes(decoder: &str) {
   let speed = 9;
   let q = 100;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -462,7 +462,7 @@ fn reordering(decoder: &str) {
   let q = 100;
 
   for keyint in &[4, 5, 6] {
-    let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+    let mut dec = get_decoder::<u8>(decoder, w, h);
     dec.encode_decode(
       true,
       w,
@@ -497,7 +497,7 @@ fn reordering_short_video(decoder: &str) {
   let q = 100;
   let keyint = 12;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -530,7 +530,7 @@ fn error_resilient(decoder: &str) {
   let q = 100;
   let keyint = 12;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -563,7 +563,7 @@ fn error_resilient_reordering(decoder: &str) {
   let q = 100;
 
   for keyint in &[4, 5, 6] {
-    let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+    let mut dec = get_decoder::<u8>(decoder, w, h);
     dec.encode_decode(
       true,
       w,
@@ -597,7 +597,7 @@ fn switch_frame(decoder: &str) {
   let q = 100;
   let keyint = 12;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -630,7 +630,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
   let speed = 0;
   let qindex = 100;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -664,7 +664,7 @@ fn low_bit_depth(decoder: &str) {
   let h = 80;
 
   // 8-bit
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -694,7 +694,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
   let w = 64;
   let h = 80;
 
-  let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u16>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -741,7 +741,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let w = 64;
   let h = 80;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true, w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0,
     0, false, None,
@@ -777,7 +777,7 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
   let speed = 10;
   let q = 100;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -809,7 +809,7 @@ fn still_picture_mode(decoder: &str) {
   let speed = 6;
   let qindex = 100;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -854,7 +854,7 @@ fn rdo_loop_decision_lrf_sanity(decoder: &str) {
   let speed = 9;
   let q = 240;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -887,7 +887,7 @@ fn rdo_loop_decision_cdef_sanity(decoder: &str) {
   let speed = 9;
   let q = 240;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     true,
     w,
@@ -920,7 +920,7 @@ fn film_grain_table_luma_only(decoder: &str) {
   let w = 64;
   let h = 80;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     false,
     w,
@@ -990,7 +990,7 @@ fn film_grain_table_chroma(decoder: &str) {
   let w = 64;
   let h = 80;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w, h);
   dec.encode_decode(
     false,
     w,

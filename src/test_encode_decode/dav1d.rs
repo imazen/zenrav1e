@@ -97,7 +97,7 @@ struct SafeDav1dData(Dav1dData);
 impl SafeDav1dData {
   fn new(packet: &[u8]) -> Self {
     unsafe {
-      let mut data = Self { 0: mem::zeroed() };
+      let mut data = Self(mem::zeroed());
       let ptr = dav1d_data_create(&mut data.0, packet.len());
       ptr::copy_nonoverlapping(packet.as_ptr(), ptr, packet.len());
       data
@@ -119,7 +119,7 @@ struct SafeDav1dPicture(Dav1dPicture);
 
 impl Default for SafeDav1dPicture {
   fn default() -> Self {
-    Self { 0: unsafe { mem::zeroed() } }
+    Self(unsafe { mem::zeroed() })
   }
 }
 
