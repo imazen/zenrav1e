@@ -182,6 +182,7 @@ macro_rules! impl_1d_tx {
 };
 
 ($m:meta, $($s:ident),*) => {
+  #[allow(clippy::missing_safety_doc)]
   pub trait TxOperations: Copy {
     $($s)* fn zero() -> Self;
 

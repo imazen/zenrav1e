@@ -519,6 +519,10 @@ impl<T: Pixel> FrameState<T> {
     }
   }
 
+  /// # Panics
+  ///
+  /// Panics if the `frame_me_stats` lock is poisoned (some other thread
+  /// panicked while holding it).
   pub fn apply_tile_state_mut<F, R>(&mut self, f: F) -> R
   where
     F: FnOnce(&mut TileStateMut<'_, T>) -> R,
@@ -601,6 +605,10 @@ impl SegmentationState {
     }
   }
 
+  /// # Panics
+  ///
+  /// Panics if writing the buffer or the on-disk file fails. This helper is
+  /// only compiled in for debugging (`dump_lookahead_data` feature).
   #[cfg(feature = "dump_lookahead_data")]
   pub fn dump_threshold(
     &self, data_location: std::path::PathBuf, input_frameno: u64,
@@ -893,6 +901,10 @@ impl<T: Pixel> CodedFrameData<T> {
     inv_mean.blog64() >> 1
   }
 
+  /// # Panics
+  ///
+  /// Panics if writing the buffer or the on-disk file fails. This helper is
+  /// only compiled in for debugging (`dump_lookahead_data` feature).
   #[cfg(feature = "dump_lookahead_data")]
   pub fn dump_scales(
     &self, data_location: std::path::PathBuf, scales: Scales,

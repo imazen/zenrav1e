@@ -349,7 +349,7 @@ impl Config {
     self.validate()?;
 
     // TODO: make it user-settable
-    let input_len = self.enc.speed_settings.rdo_lookahead_frames as usize * 4;
+    let input_len = self.enc.speed_settings.rdo_lookahead_frames * 4;
     let frame_limit = i32::MAX as u64;
 
     let (send_frame, receive_frame) = bounded(input_len);
@@ -361,7 +361,7 @@ impl Config {
 
     // TODO: move the accounting threads outside the threadpool
     let run = move || {
-      let _ = rayon::scope_fifo(|s| {
+      rayon::scope_fifo(|s| {
         let sg_recv = cfg.scenechange(s, receive_frame);
         cfg.encode(s, slots, sg_recv, send_packet);
       });

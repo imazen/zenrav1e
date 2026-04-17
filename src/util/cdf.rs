@@ -7,6 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+/// # Panics
+///
+/// Panics at compile time if `CDF_LEN <= VARS` (the array must have room for
+/// at least one trailing zero), or if any value in `vars` exceeds 32768.
 pub const fn cdf<const VARS: usize, const CDF_LEN: usize>(
   vars: [u16; VARS],
 ) -> [u16; CDF_LEN] {

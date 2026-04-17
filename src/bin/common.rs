@@ -385,7 +385,7 @@ fn build_speed_long_help() -> Option<&'static str> {
     )
   });
 
-  Some(&help)
+  Some(help)
 }
 
 #[cfg(not(feature = "serialize"))]

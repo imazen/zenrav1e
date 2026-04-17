@@ -15,8 +15,14 @@
 //!
 //! This is the C-compatible API
 #![deny(missing_docs)]
-// Basically everything will be unsafe since this is a FFI
+// Basically everything will be unsafe since this is a FFI.
+// Edition 2024 opts into unsafe_op_in_unsafe_fn by default; allow it here since
+// every function in this module is already `unsafe extern` and the body cannot
+// be written in safe Rust. Wrapping each call site in its own `unsafe {}` block
+// would add noise without improving auditability for an all-unsafe FFI surface.
+#![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(clippy::missing_safety_doc)]
 // const extern fns are unstable
 #![allow(clippy::missing_const_for_fn)]
 
@@ -150,16 +156,16 @@ pub enum EncoderStatus {
 }
 
 impl EncoderStatus {
-  const fn to_c(&self) -> *const u8 {
+  const fn to_c(self) -> *const c_char {
     use self::EncoderStatus::*;
     match self {
-      Success => "Normal operation\0".as_ptr(),
-      NeedMoreData => "The encoder needs more data to produce an output packet\0".as_ptr(),
-      EnoughData => "There are enough frames in the queue\0".as_ptr(),
-      LimitReached => "The encoder has already produced the number of frames requested\0".as_ptr(),
-      Encoded => "A Frame had been encoded but not emitted yet\0".as_ptr(),
-      Failure => "Generic fatal error\0".as_ptr(),
-      NotReady => "First-pass stats data not retrieved or not enough second-pass data provided\0".as_ptr(),
+      Success => c"Normal operation".as_ptr(),
+      NeedMoreData => c"The encoder needs more data to produce an output packet".as_ptr(),
+      EnoughData => c"There are enough frames in the queue".as_ptr(),
+      LimitReached => c"The encoder has already produced the number of frames requested".as_ptr(),
+      Encoded => c"A Frame had been encoded but not emitted yet".as_ptr(),
+      Failure => c"Generic fatal error".as_ptr(),
+      NotReady => c"First-pass stats data not retrieved or not enough second-pass data provided".as_ptr(),
     }
   }
 }
@@ -414,6 +420,11 @@ static FULL_VERSION_C: std::sync::OnceLock<CString> =
 ///
 /// This returns the version of the loaded library, regardless
 /// of which version the library user was built against.
+///
+/// # Panics
+///
+/// Panics if the build-time version string contains an interior nul byte,
+/// which would only happen if the build metadata were corrupted.
 #[unsafe(no_mangle)]
 pub unsafe extern fn rav1e_version_full() -> *const c_char {
   FULL_VERSION_C
@@ -439,11 +450,7 @@ pub struct Data {
 pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
   if !data.is_null() {
     let data = Box::from_raw(data);
-    let _ = Vec::from_raw_parts(
-      data.data as *mut u8,
-      data.len as usize,
-      data.len as usize,
-    );
+    drop(Vec::from_raw_parts(data.data as *mut u8, data.len, data.len));
   }
 }
 
@@ -464,7 +471,7 @@ unsafe fn decode_slice<'a>(
     return (8, None);
   }
 
-  let buf = slice::from_raw_parts(*data, *len as usize);
+  let buf = slice::from_raw_parts(*data, *len);
   let (len_bytes, rest) = buf.split_at(std::mem::size_of::<u64>());
   let buf_len = u64::from_be_bytes(len_bytes.try_into().unwrap()) as usize;
   let full_len = buf_len + 8;
@@ -1090,7 +1097,7 @@ pub unsafe extern fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
 pub unsafe extern fn rav1e_twopass_in(
   ctx: *mut Context, buf: *mut u8, buf_size: size_t,
 ) -> c_int {
-  let buf_slice = slice::from_raw_parts(buf, buf_size as usize);
+  let buf_slice = slice::from_raw_parts(buf, buf_size);
   let r = (*ctx).ctx.twopass_in(buf_slice);
   match r {
     Ok(v) => v as c_int,
@@ -1176,11 +1183,13 @@ pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
 pub unsafe extern fn rav1e_status_to_str(
   status: EncoderStatus,
 ) -> *const c_char {
-  if EncoderStatus::from_i32(std::mem::transmute(status)).is_none() {
+  if EncoderStatus::from_i32(std::mem::transmute::<EncoderStatus, i32>(status))
+    .is_none()
+  {
     return std::ptr::null();
   }
 
-  status.to_c() as *const c_char
+  status.to_c()
 }
 
 /// Receive encoded data
@@ -1212,11 +1221,7 @@ pub unsafe extern fn rav1e_receive_packet(
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
   if !pkt.is_null() {
     let pkt = Box::from_raw(pkt);
-    let _ = Vec::from_raw_parts(
-      pkt.data as *mut u8,
-      pkt.len as usize,
-      pkt.len as usize,
-    );
+    drop(Vec::from_raw_parts(pkt.data as *mut u8, pkt.len, pkt.len));
     rav1e_frame_unref(pkt.rec);
     rav1e_frame_unref(pkt.source);
   }
@@ -1300,7 +1305,7 @@ pub unsafe extern fn rav1e_frame_fill_plane(
   frame: *mut Frame, plane: c_int, data: *const u8, data_len: size_t,
   stride: ptrdiff_t, bytewidth: c_int,
 ) {
-  let data_slice = slice::from_raw_parts(data, data_len as usize);
+  let data_slice = slice::from_raw_parts(data, data_len);
 
   match (*frame).fi {
     FrameInternal::U8(ref mut f) => {
@@ -1333,7 +1338,7 @@ pub unsafe extern fn rav1e_frame_extract_plane(
   frame: *const Frame, plane: c_int, data: *mut u8, data_len: size_t,
   stride: ptrdiff_t, bytewidth: c_int,
 ) {
-  let data_slice = slice::from_raw_parts_mut(data, data_len as usize);
+  let data_slice = slice::from_raw_parts_mut(data, data_len);
 
   match (*frame).fi {
     FrameInternal::U8(ref f) => rav1e_frame_extract_plane_internal(

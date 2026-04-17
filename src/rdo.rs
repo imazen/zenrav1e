@@ -514,6 +514,11 @@ pub fn spatiotemporal_scale<T: Pixel>(
 /// Get the segmentation scale for a block (for segment selection).
 /// Uses segmentation_scores (possibly boosted) when available,
 /// falls back to spatiotemporal_scale when seg_boost is disabled.
+///
+/// # Panics
+///
+/// Panics if `fi.coded_frame_data` is `None`; callers invoke this only after
+/// the lookahead has populated that field.
 pub fn segmentation_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {

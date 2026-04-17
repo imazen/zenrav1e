@@ -102,7 +102,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
       w, h, speed, quantizer, bit_depth, bitrate
     );
     #[cfg(feature = "dump_ivf")]
-    let mut out = std::fs::File::create(&format!(
+    let mut out = std::fs::File::create(format!(
       "out-{}x{}-s{}-q{}-r{}-{:?}.ivf",
       w, h, speed, quantizer, bitrate, chroma_sampling
     ))

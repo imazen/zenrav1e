@@ -22,6 +22,11 @@ pub fn init_slice_repeat_mut<T: Copy>(
 }
 
 /// Assume all the elements are initialized.
+///
+/// # Safety
+///
+/// Every element of `slice` must be initialized. Reading uninitialized memory
+/// through the returned `&mut [T]` is undefined behavior.
 #[inline(always)]
 pub unsafe fn slice_assume_init_mut<T: Copy>(
   slice: &'_ mut [MaybeUninit<T>],

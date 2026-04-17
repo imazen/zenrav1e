@@ -1296,7 +1296,7 @@ impl ContextWriter<'_> {
     /* TODO: Find nearest match and assign nearest and near mvs */
 
     // 7.10.2.11 Sort MV stack according to weight
-    mv_stack.sort_by(|a, b| b.weight.cmp(&a.weight));
+    mv_stack.sort_by_key(|e| cmp::Reverse(e.weight));
 
     if mv_stack.len() < 2 {
       // 7.10.2.12 Extra search process

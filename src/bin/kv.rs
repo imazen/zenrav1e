@@ -102,11 +102,9 @@ impl Serializer for &mut KVString {
     self.output += "None";
     Ok(())
   }
-  fn serialize_some<T: ?Sized>(
-    self, value: &T,
-  ) -> Result<Self::Ok, Self::Error>
+  fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
   where
-    T: Serialize,
+    T: ?Sized + Serialize,
   {
     value.serialize(self)
   }
@@ -126,21 +124,21 @@ impl Serializer for &mut KVString {
     self.serialize_str(variant)
   }
 
-  fn serialize_newtype_struct<T: ?Sized>(
+  fn serialize_newtype_struct<T>(
     self, name: &'static str, value: &T,
   ) -> Result<Self::Ok, Self::Error>
   where
-    T: Serialize,
+    T: ?Sized + Serialize,
   {
     unimplemented!()
   }
 
-  fn serialize_newtype_variant<T: ?Sized>(
+  fn serialize_newtype_variant<T>(
     self, name: &'static str, variant_index: u32, variant: &'static str,
     value: &T,
   ) -> Result<Self::Ok, Self::Error>
   where
-    T: Serialize,
+    T: ?Sized + Serialize,
   {
     unimplemented!()
   }
@@ -184,7 +182,7 @@ impl Serializer for &mut KVString {
   }
 }
 
-impl<'a> ser::SerializeStruct for &mut KVString {
+impl ser::SerializeStruct for &mut KVString {
   type Ok = ();
   type Error = Error;
 

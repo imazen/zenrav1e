@@ -230,7 +230,7 @@ fn do_encode<T: Pixel, D: Decoder>(
     let receive_packets = s.spawn(move |_| -> Result<(), CliError> {
       for pkt in receive_packet.iter() {
         output.write_frame(
-          pkt.input_frameno as u64,
+          pkt.input_frameno,
           pkt.data.as_ref(),
           pkt.frame_type,
         );
