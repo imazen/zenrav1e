@@ -134,8 +134,7 @@ mod channel {
     let mut count = 0;
 
     for _ in 0..limit {
-      rp
-        .recv()
+      rp.recv()
         .map(|_| {
           eprintln!("Packet Received {}/{}", count, limit);
           count += 1;
