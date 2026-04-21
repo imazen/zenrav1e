@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-04-27
+
+### Fixed
+- QM level mapping: extend `qm_level_for_qindex` to libavif's still-image range `[4, 15]` instead of the old all-intra-video range `[4, 10]`. With the old upper bound, level 15 (= identity / no QM applied) was unreachable, so even at near-lossless qindex the encoder applied substantial QM shaping. On ac_quant 1–4 with QM weights around 80 the integer rounding `(quant * weight + 16) >> 5` multiplied the effective quantizer step 2-3× on high-frequency coefficients, collapsing zensim from ~76 at qindex 18 to ~49 at qindex 0 in zenavif's encode sweep, and degrading the entire q≥60 range by 11–22 zensim points. Fix: linear interpolation across `[4, 15]` so qindex 0 maps to level 15 (no QM applied) and shaping ramps in smoothly. After the fix the q→zensim curve is monotonic across all 5 CID22 test images, and QM-on tracks QM-off within ±0.4 zensim from q=70 onward. Fixes imazen/zenrav1e#7.
+- AV1 spec 6.8.11 conformance: `set_quantizers` now clears `using_qmatrix` when the frame is coded-lossless (`base_q_idx == 0` and all delta_q == 0) and also when the selected `qm_level` is 15 for every plane (signaling QM with all-identity levels was rejected by rav1d / libaom in degenerate cases). Without this, decoding zenavif quality=100 with QM=on failed primary-frame decode.
+
 ## [0.1.3] - 2026-04-17
 
 ### Fixed

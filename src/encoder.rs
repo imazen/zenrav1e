@@ -120,18 +120,55 @@ const FRAME_ID_LENGTH: u32 = 15;
 const DELTA_FRAME_ID_LENGTH: u32 = 14;
 
 /// Select QM level from quantizer index for still images.
-/// Lower qindex (higher quality) → higher QM level (flatter matrix).
+/// Lower qindex (higher quality) → higher QM level (flatter matrix; level
+/// 15 = identity / no QM applied).
 /// Higher qindex (lower quality) → lower QM level (steeper weighting).
-/// Based on libaom's all-intra heuristic (min=4, max=10).
+///
+/// Range matches libavif/libaom for still images: `[4, 15]`. Crucially,
+/// the upper bound is 15 (not 10 as the old all-intra-video heuristic),
+/// so at near-lossless qindex the encoder bypasses QM entirely. With the
+/// previous `[4, 10]` range, at qindex 0 the unweighted ac_quant is ~1-4
+/// while QM weights for high-frequency coefficients are ~70-100, so
+/// `(quant * weight + 16) >> 5` rounds the effective quantizer step up
+/// 2-3×, severely distorting near-lossless output (zensim collapsed from
+/// ~76 at qindex 18 to ~49 at qindex 0 in zenavif's encode sweep).
 fn qm_level_for_qindex(qindex: u8) -> u8 {
-  match qindex {
-    0..=40 => 10,
-    41..=100 => 9,
-    101..=160 => 8,
-    161..=200 => 7,
-    201..=220 => 6,
-    221..=240 => 5,
-    241.. => 4,
+  const QM_MIN: u8 = 4;
+  const QM_MAX: u8 = 15;
+  // Linear interpolation: qindex 0 → QM_MAX, qindex 255 → QM_MIN.
+  // Round to nearest to keep level transitions roughly evenly spaced.
+  let span = (QM_MAX - QM_MIN) as u32;
+  let level = QM_MAX as u32 - (span * qindex as u32 + 127) / 255;
+  level.min(QM_MAX as u32) as u8
+}
+
+#[cfg(test)]
+mod qm_level_tests {
+  use super::qm_level_for_qindex;
+
+  #[test]
+  fn lossless_returns_identity() {
+    // qindex 0 must map to level 15 (identity) so QM is bypassed at
+    // near-lossless quality. Anything else reintroduces the cliff.
+    assert_eq!(qm_level_for_qindex(0), 15);
+  }
+
+  #[test]
+  fn highest_qindex_returns_min() {
+    assert_eq!(qm_level_for_qindex(255), 4);
+  }
+
+  #[test]
+  fn monotone_non_increasing_in_qindex() {
+    let mut prev = qm_level_for_qindex(0);
+    for qi in 1u8..=255 {
+      let cur = qm_level_for_qindex(qi);
+      assert!(
+        cur <= prev,
+        "qm_level must be non-increasing in qindex: qi={qi} cur={cur} prev={prev}"
+      );
+      prev = cur;
+    }
   }
 }
 
@@ -1427,13 +1464,29 @@ impl<T: Pixel> FrameInvariants<T> {
     self.me_lambda = self.lambda.sqrt();
     self.dist_scale = qps.dist_scale.map(DistortionScale::from);
 
-    // Select QM levels based on quantizer index (all-intra heuristic from libaom)
+    // Select QM levels based on quantizer index (all-intra heuristic from libaom).
+    // AV1 spec 6.8.11: if CodedLossless == 1, using_qmatrix MUST be 0. Signaling
+    // QM with a coded-lossless frame produces a non-conformant bitstream.
     if self.using_qmatrix {
-      let qi = self.base_q_idx;
-      let luma_level = qm_level_for_qindex(qi);
-      // Chroma uses one level flatter (higher) than luma
-      let chroma_level = (luma_level + 1).min(15);
-      self.qm_level = [luma_level, chroma_level, chroma_level];
+      if self.is_lossless() {
+        // Lossless cannot signal QM per spec.
+        self.using_qmatrix = false;
+        self.qm_level = [15; 3];
+      } else {
+        let qi = self.base_q_idx;
+        let luma_level = qm_level_for_qindex(qi);
+        // Chroma uses one level flatter (higher) than luma
+        let chroma_level = (luma_level + 1).min(15);
+        self.qm_level = [luma_level, chroma_level, chroma_level];
+        // If every plane ended up at level 15 (identity), the frame would
+        // signal `using_qmatrix=1` while applying no QM. Some decoders refuse
+        // this configuration even though AV1 5.9.12 permits the levels in
+        // the abstract; the spec also makes the flag pure overhead in this
+        // case. Drop it so the bitstream matches a plain QM-off frame.
+        if self.qm_level.iter().all(|&l| l >= 15) {
+          self.using_qmatrix = false;
+        }
+      }
     }
 
     match self.cdef_search_method {
