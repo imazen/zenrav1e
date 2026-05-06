@@ -136,6 +136,10 @@ pub enum InvalidConfig {
     /// The configured maximum pixel count.
     max: u64,
   },
+
+  /// The bit depth is not one of the supported AV1 values.
+  #[error("invalid bit depth {0} (expected 8, 10, or 12)")]
+  InvalidBitDepth(usize),
 }
 
 /// Contains the encoder configuration.
@@ -316,6 +320,15 @@ impl Config {
 
     let config = &self.enc;
 
+    // AV1 only supports 8/10/12 bit profiles. Many internal call sites compute
+    // `bit_depth - 8`; rejecting other values here prevents usize underflow in
+    // release builds and panics in debug builds. The C API enforces the same
+    // constraint in `rav1e_config_set_pixel_format`; this mirrors it for the
+    // pure-Rust API.
+    if !matches!(config.bit_depth, 8 | 10 | 12) {
+      return Err(InvalidBitDepth(config.bit_depth));
+    }
+
     if (config.still_picture && config.width < 1)
       || (!config.still_picture && config.width < 16)
       || config.width > u16::MAX as usize
@@ -468,5 +481,45 @@ impl Config {
     let seq = crate::encoder::Sequence::new(&self.enc);
 
     Ok(seq.tiling)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn base_config() -> Config {
+    let enc = EncoderConfig {
+      width: 64,
+      height: 64,
+      bit_depth: 8,
+      ..EncoderConfig::default()
+    };
+    Config::new().with_encoder_config(enc)
+  }
+
+  #[test]
+  fn rejects_invalid_bit_depth() {
+    for bd in [0usize, 4, 6, 7, 9, 11, 13, 16, 32] {
+      let mut cfg = base_config();
+      cfg.enc.bit_depth = bd;
+      match cfg.validate() {
+        Err(InvalidConfig::InvalidBitDepth(got)) => assert_eq!(got, bd),
+        other => panic!("bit_depth {bd} should be rejected, got {other:?}"),
+      }
+    }
+  }
+
+  #[test]
+  fn accepts_supported_bit_depths() {
+    for bd in [8usize, 10, 12] {
+      let mut cfg = base_config();
+      cfg.enc.bit_depth = bd;
+      assert!(
+        cfg.validate().is_ok(),
+        "bit_depth {bd} should be accepted: {:?}",
+        cfg.validate()
+      );
+    }
   }
 }
