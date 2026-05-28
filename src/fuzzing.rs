@@ -44,14 +44,16 @@ pub struct ArbitraryConfig {
 
 #[inline]
 fn arbitrary_rational(u: &mut Unstructured<'_>) -> Result<Rational, Error> {
-  // Constrain to ranges that survive the `as i64` cast some downstream code
-  // (notably av-scenechange's `num_rational::Ratio<i64>`) applies. Without the
-  // bound, u64::MAX casts to -1 and 2^63 to i64::MIN, which then overflows in
-  // `Ratio::reduce`'s `0 - x` step. Also require den >= 1 so no path divides
-  // by zero. Real frame-rate ratios sit well below i32::MAX, so capping at
-  // i64::MAX keeps the input space generous while keeping it valid.
-  let num: u64 = u.int_in_range(0..=i64::MAX as u64)?;
-  let den: u64 = u.int_in_range(1..=i64::MAX as u64)?;
+  // Constrain to ranges that survive every downstream signed-integer cast:
+  // - av-scenechange's SceneChangeDetector takes `Rational32`, and the
+  //   encoder casts time_base via `enc.time_base.den as i32`. Values
+  //   >= 2^31 wrap to negative i32 (2^31 -> i32::MIN), and
+  //   `num_rational::Ratio<i32>::reduce` then overflows on `0 - i32::MIN`.
+  // - Other paths cast to `i64`; the i32 bound is a strict subset.
+  // Also require den >= 1 so no path divides by zero. Real frame rates and
+  // SARs sit far below i32::MAX — typical (1, 30), (1001, 24000), (16, 9).
+  let num: u64 = u.int_in_range(0..=i32::MAX as u64)?;
+  let den: u64 = u.int_in_range(1..=i32::MAX as u64)?;
   Ok(Rational::new(num, den))
 }
 
