@@ -31,6 +31,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
+
+      # Native deps for transitive sys crates:
+      #   * `nasm` — av-scenechange (and libdav1d-sys "asm" feature) need
+      #     it to assemble x86 SIMD kernels.
+      #   * `meson` + `ninja-build` — libdav1d-sys configures dav1d's
+      #     C build via meson and drives it with ninja. Without them
+      #     the libdav1d-sys build.rs panics with "this crate requires
+      #     meson (and ninja) to be installed".
+      # Placed BEFORE the rust-cache step so cargo-cache lookups fire
+      # after these are available (the cache key is unaffected).
+      - name: Install native build deps (nasm, meson, ninja)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm meson ninja-build
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: fuzz-${{ matrix.target }}
@@ -79,6 +94,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      # Same native deps as the fuzz job — av-scenechange wants nasm,
+      # libdav1d-sys wants meson + ninja (when the crate ends up on
+      # the regression-test compile path).
+      - name: Install native build deps (nasm, meson, ninja)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm meson ninja-build
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build
