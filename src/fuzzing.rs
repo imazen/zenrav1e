@@ -44,7 +44,15 @@ pub struct ArbitraryConfig {
 
 #[inline]
 fn arbitrary_rational(u: &mut Unstructured<'_>) -> Result<Rational, Error> {
-  Ok(Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?))
+  // Constrain to ranges that survive the `as i64` cast some downstream code
+  // (notably av-scenechange's `num_rational::Ratio<i64>`) applies. Without the
+  // bound, u64::MAX casts to -1 and 2^63 to i64::MIN, which then overflows in
+  // `Ratio::reduce`'s `0 - x` step. Also require den >= 1 so no path divides
+  // by zero. Real frame-rate ratios sit well below i32::MAX, so capping at
+  // i64::MAX keeps the input space generous while keeping it valid.
+  let num: u64 = u.int_in_range(0..=i64::MAX as u64)?;
+  let den: u64 = u.int_in_range(1..=i64::MAX as u64)?;
+  Ok(Rational::new(num, den))
 }
 
 #[inline]
