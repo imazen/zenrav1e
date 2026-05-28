@@ -122,8 +122,14 @@ impl TilingInfo {
     assert!(tile_cols_log2 >= min_tile_cols_log2);
 
     let min_tile_rows_log2 = min_tiles_log2.saturating_sub(tile_cols_log2);
-    let min_tile_rows_ratelimit_log2 =
-      min_tiles_ratelimit_log2.saturating_sub(tile_cols_log2);
+    // The rate-limit-derived minimum can exceed `max_tile_rows_log2` for
+    // pathological inputs (e.g. tiny frame + huge frame rate) — in that case
+    // the spec's Annex A rate restriction is physically unsatisfiable given
+    // the available sb_rows, so cap at the max to avoid a `clamp` panic on
+    // `min > max`. For valid inputs this is a no-op.
+    let min_tile_rows_ratelimit_log2 = min_tiles_ratelimit_log2
+      .saturating_sub(tile_cols_log2)
+      .min(max_tile_rows_log2);
     let tile_rows_log2 = tile_rows_log2
       .max(min_tile_rows_log2)
       .clamp(min_tile_rows_ratelimit_log2, max_tile_rows_log2);
@@ -272,6 +278,20 @@ pub mod test {
   use crate::mc::MotionVector;
   use crate::predict::PredictionMode;
   use std::sync::Arc;
+
+  #[test]
+  fn from_target_tiles_pathological_rate_does_not_panic() {
+    // Tiny frame (sb_rows=1, so max_tile_rows_log2=0) combined with an
+    // extreme frame rate makes the spec's rate-limit-derived minimum
+    // exceed the physical max. Before the fix, `clamp(min, max)` panicked
+    // with `min > max`. After the fix, the rate-limit min is capped at the
+    // max and the constructor returns a valid TilingInfo.
+    let ti = TilingInfo::from_target_tiles(6, 8, 8, 1e30, 0, 0, false);
+    assert!(ti.cols >= 1);
+    assert!(ti.rows >= 1);
+    assert!(ti.tile_cols_log2 <= ti.max_tile_cols_log2);
+    assert!(ti.tile_rows_log2 <= ti.max_tile_rows_log2);
+  }
 
   #[test]
   fn test_tiling_info_from_tile_count() {

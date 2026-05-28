@@ -14,6 +14,11 @@ target/
 fuzz/target/
 fuzz/artifacts/
 
+# Track regression seeds even when their extensions match the broad
+# wildcards above (e.g. `*.bin`).
+!fuzz/regression/
+!fuzz/regression/**
+
 # Profiling
 perf.data
 perf.data.old
