@@ -20,6 +20,19 @@ lint:
     cargo fmt
     cargo clippy --no-default-features --features threading
 
+# Format + regenerate the public-API surface snapshots (docs/public-api/)
+fmt:
+    cargo fmt --all
+    cargo test -p zenrav1e --test public_api_doc
+
+# Regenerate the public-API surface snapshots only
+api-doc:
+    cargo test -p zenrav1e --test public_api_doc
+
+# Verify the committed snapshots are current (what CI runs)
+api-doc-check:
+    ZEN_API_DOC=check cargo test -p zenrav1e --test public_api_doc
+
 # Test feature permutations
 feature-check:
     cargo test --workspace --no-default-features --features "threading,serialize"
