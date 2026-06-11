@@ -158,7 +158,6 @@ quickcheck = "1.0"
 rand = "0.9"
 rand_chacha = "0.9"
 semver = "1.0"
-serde_json = "1.0.150" # tests/public_api_doc.rs (cargo metadata parsing)
 
 # Exclude dependencies and features that don't work on wasm32:
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
@@ -225,6 +224,9 @@ incremental = true
 
 [workspace]
 members = [".", "ivf"]
+# `apidoc/` is the CI-free public-API snapshot runner package (depends on
+# zenutils-apidoc); excluded so plain `cargo test` and CI never build it.
+exclude = ["apidoc"]
 
 [package.metadata.docs.rs]
 no-default-features = true

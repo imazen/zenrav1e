@@ -1,0 +1,949 @@
+# zenrav1e public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)        75
+#   pub consts/statics                        161
+#   free functions                              8
+#   inherent methods                          317
+#   struct fields                             207
+#   enum variants                              21
+#   re-exports                                  1
+#   trait roster entries (type × trait)       192
+#   auto-trait-complete types                  31
+#   auto-trait exceptions                      29
+#
+# per-module pub lines:
+#   (root)                           68
+#   config                            1
+#   context                         390
+#   data                              1
+#   prelude                          53
+#   tiling                          279
+
+## items (790 lines)
+
+#[repr(C)] pub struct context::CDFContext
+#[repr(C)] pub struct context::NMVComponent
+#[repr(C)] pub struct context::NMVContext
+pub const fn context::CFLParams::from_alpha(i16, i16) -> context::CFLParams
+pub const fn context::CFLSign::from_alpha(i16) -> context::CFLSign
+pub const fn context::ContextWriter<'_>::get_txb_bhl(transform::TxSize) -> usize
+pub const fn context::ContextWriter<'_>::get_txsize_entropy_ctx(transform::TxSize) -> usize
+pub const fn context::ContextWriter<'_>::ref_count_ctx(u8, u8) -> usize
+pub const fn context::ContextWriter<'a>::cdf_element_prob(&[u16], usize) -> u16
+pub const fn context::PlaneBlockOffset::plane_offset(self, &v_frame::plane::PlaneConfig) -> v_frame::plane::PlaneOffset
+pub const fn context::PlaneBlockOffset::sb_offset(self) -> context::PlaneSuperBlockOffset
+pub const fn context::PlaneBlockOffset::to_luma_plane_offset(self) -> v_frame::plane::PlaneOffset
+pub const fn context::PlaneBlockOffset::y_in_sb(self) -> usize
+pub const fn context::PlaneSuperBlockOffset::block_offset(self, usize, usize) -> context::PlaneBlockOffset
+pub const fn context::PlaneSuperBlockOffset::plane_offset(self, &v_frame::plane::PlaneConfig) -> v_frame::plane::PlaneOffset
+pub const fn context::TileBlockOffset::plane_offset(self, &v_frame::plane::PlaneConfig) -> v_frame::plane::PlaneOffset
+pub const fn context::TileBlockOffset::sb_offset(self) -> context::TileSuperBlockOffset
+pub const fn context::TileBlockOffset::to_luma_plane_offset(self) -> v_frame::plane::PlaneOffset
+pub const fn context::TileBlockOffset::y_in_sb(self) -> usize
+pub const fn context::TileSuperBlockOffset::block_offset(self, usize, usize) -> context::TileBlockOffset
+pub const fn context::TileSuperBlockOffset::plane_offset(self, &v_frame::plane::PlaneConfig) -> v_frame::plane::PlaneOffset
+pub const fn context::av1_get_coded_tx_size(transform::TxSize) -> transform::TxSize
+pub const fn context::av1_get_mv_joint(mc::MotionVector) -> partition::MvJointType
+pub const fn context::mv_class_base(usize) -> u32
+pub const fn tiling::Area::to_rect(&self, usize, usize, usize, usize) -> tiling::Rect
+pub const fn tiling::Rect::decimated(&self, usize, usize) -> Self
+pub const fn tiling::Rect::to_area(&self) -> tiling::Area
+pub const fn tiling::TileBlocks<'a>::cols(&self) -> usize
+pub const fn tiling::TileBlocks<'a>::frame_cols(&self) -> usize
+pub const fn tiling::TileBlocks<'a>::frame_rows(&self) -> usize
+pub const fn tiling::TileBlocks<'a>::rows(&self) -> usize
+pub const fn tiling::TileBlocks<'a>::x(&self) -> usize
+pub const fn tiling::TileBlocks<'a>::y(&self) -> usize
+pub const fn tiling::TileBlocksMut<'_>::as_const(&self) -> tiling::TileBlocks<'_>
+pub const fn tiling::TileBlocksMut<'a>::cols(&self) -> usize
+pub const fn tiling::TileBlocksMut<'a>::frame_cols(&self) -> usize
+pub const fn tiling::TileBlocksMut<'a>::frame_rows(&self) -> usize
+pub const fn tiling::TileBlocksMut<'a>::rows(&self) -> usize
+pub const fn tiling::TileBlocksMut<'a>::x(&self) -> usize
+pub const fn tiling::TileBlocksMut<'a>::y(&self) -> usize
+pub const fn tiling::TileMEStats<'a>::cols(&self) -> usize
+pub const fn tiling::TileMEStats<'a>::rows(&self) -> usize
+pub const fn tiling::TileMEStats<'a>::x(&self) -> usize
+pub const fn tiling::TileMEStats<'a>::y(&self) -> usize
+pub const fn tiling::TileMEStatsMut<'_>::as_const(&self) -> tiling::TileMEStats<'_>
+pub const fn tiling::TileMEStatsMut<'a>::cols(&self) -> usize
+pub const fn tiling::TileMEStatsMut<'a>::rows(&self) -> usize
+pub const fn tiling::TileMEStatsMut<'a>::x(&self) -> usize
+pub const fn tiling::TileMEStatsMut<'a>::y(&self) -> usize
+pub const fn tiling::TileRect::decimated(&self, usize, usize) -> Self
+pub const fn tiling::TileRect::to_frame_plane_offset(&self, v_frame::plane::PlaneOffset) -> v_frame::plane::PlaneOffset
+pub const fn tiling::TileRestorationPlane<'a>::restoration_unit_countable(&self, usize, usize) -> usize
+pub const fn tiling::TileRestorationPlane<'a>::restoration_unit_index(&self, context::TileSuperBlockOffset, bool) -> core::option::Option<(usize, usize)>
+pub const fn tiling::TileRestorationPlaneMut<'_>::as_const(&self) -> tiling::TileRestorationPlane<'_>
+pub const fn tiling::TileRestorationPlaneMut<'a>::restoration_unit_countable(&self, usize, usize) -> usize
+pub const fn tiling::TileRestorationPlaneMut<'a>::restoration_unit_index(&self, context::TileSuperBlockOffset, bool) -> core::option::Option<(usize, usize)>
+pub const fn tiling::TileRestorationStateMut<'_>::as_const(&self) -> tiling::TileRestorationState<'_>
+pub const fn tiling::TileRestorationUnits<'a>::cols(&self) -> usize
+pub const fn tiling::TileRestorationUnits<'a>::rows(&self) -> usize
+pub const fn tiling::TileRestorationUnits<'a>::x(&self) -> usize
+pub const fn tiling::TileRestorationUnits<'a>::y(&self) -> usize
+pub const fn tiling::TileRestorationUnitsMut<'_>::as_const(&self) -> tiling::TileRestorationUnits<'_>
+pub const fn tiling::TileRestorationUnitsMut<'a>::cols(&self) -> usize
+pub const fn tiling::TileRestorationUnitsMut<'a>::rows(&self) -> usize
+pub const fn tiling::TileRestorationUnitsMut<'a>::x(&self) -> usize
+pub const fn tiling::TileRestorationUnitsMut<'a>::y(&self) -> usize
+pub const fn tiling::TilingInfo::tile_count(&self) -> usize
+pub const context::BLOCK_SIZE_GROUPS: usize
+pub const context::BLOCK_TO_PLANE_SHIFT: usize
+pub const context::BR_CDF_SIZE: usize
+pub const context::CDF_LEN_MAX: usize
+pub const context::CFL_ALPHABET_SIZE: usize
+pub const context::CFL_ALPHA_CONTEXTS: usize
+pub const context::CFL_JOINT_SIGNS: usize
+pub const context::COEFF_BASE_RANGE: usize
+pub const context::COEFF_CONTEXT_BITS: usize
+pub const context::COEFF_CONTEXT_MASK: usize
+pub const context::COEFF_CONTEXT_MAX_WIDTH: usize
+pub const context::COMP_GROUP_IDX_CONTEXTS: usize
+pub const context::COMP_INDEX_CONTEXTS: usize
+pub const context::COMP_INTER_CONTEXTS: usize
+pub const context::COMP_REF_TYPE_CONTEXTS: usize
+pub const context::DC_SIGN_CONTEXTS: usize
+pub const context::DELTA_LF_PROBS: usize
+pub const context::DELTA_Q_PROBS: usize
+pub const context::DIRECTIONAL_MODES: usize
+pub const context::DRL_MODE_CONTEXTS: usize
+pub const context::EOB_COEF_CONTEXTS: usize
+pub const context::EXT_PARTITION_TYPES: usize
+pub const context::FRAME_LF_COUNT: usize
+pub const context::IMPORTANCE_BLOCK_TO_BLOCK_SHIFT: usize
+pub const context::INTER_MODE_CONTEXTS: usize
+pub const context::INTRA_INTER_CONTEXTS: usize
+pub const context::INTRA_MODES: usize
+pub const context::KF_MODE_CONTEXTS: usize
+pub const context::LEVEL_CONTEXTS: usize
+pub const context::LOCAL_BLOCK_MASK: usize
+pub const context::MAX_ANGLE_DELTA: usize
+pub const context::MAX_CODED_TX_SIZE: usize
+pub const context::MAX_CODED_TX_SQUARE: usize
+pub const context::MAX_LOOP_FILTER: usize
+pub const context::MAX_MIB_SIZE_LOG2: usize
+pub const context::MAX_PLANES: usize
+pub const context::MAX_SB_IN_IMP_B: usize
+pub const context::MAX_SB_SIZE_LOG2: usize
+pub const context::MAX_TX_SIZE: usize
+pub const context::MIB_MASK: usize
+pub const context::MIB_SIZE: usize
+pub const context::MIB_SIZE_LOG2: usize
+pub const context::MI_SIZE: usize
+pub const context::MI_SIZE_LOG2: usize
+pub const context::MV_LOW: i32
+pub const context::MV_UPP: i32
+pub const context::NUM_BASE_LEVELS: usize
+pub const context::PARTITION_BLOCK_SIZES: usize
+pub const context::PARTITION_CONTEXTS: usize
+pub const context::PARTITION_CONTEXT_GRANULARITY: usize
+pub const context::PARTITION_CONTEXT_MAX_WIDTH: usize
+pub const context::PARTITION_PLOFFSET: usize
+pub const context::PARTITION_TYPES: usize
+pub const context::PLANE_TYPES: usize
+pub const context::REF_CAT_LEVEL: u32
+pub const context::SB_SIZE: usize
+pub const context::SIG_COEF_CONTEXTS: usize
+pub const context::SIG_COEF_CONTEXTS_EOB: usize
+pub const context::SKIP_CONTEXTS: usize
+pub const context::SKIP_MODE_CONTEXTS: usize
+pub const context::SUPERBLOCK_TO_BLOCK_SHIFT: usize
+pub const context::SUPERBLOCK_TO_PLANE_SHIFT: usize
+pub const context::TXB_SKIP_CONTEXTS: usize
+pub const context::TXFM_PARTITION_CONTEXTS: usize
+pub const context::TX_PAD_2D: usize
+pub const context::TX_PAD_BOTTOM: usize
+pub const context::TX_PAD_HOR: usize
+pub const context::TX_PAD_HOR_LOG2: usize
+pub const context::TX_PAD_TOP: usize
+pub const context::TX_PAD_VER: usize
+pub const context::TX_SETS: usize
+pub const context::TX_SETS_INTER: usize
+pub const context::TX_SETS_INTRA: usize
+pub const context::TX_SIZE_SQR_CONTEXTS: usize
+pub const context::UNI_COMP_REF_CONTEXTS: usize
+pub const context::UV_INTRA_MODES: usize
+pub const context::seg_feature_bits: [u32; 8]
+pub const context::seg_feature_is_signed: [bool; 8]
+pub const tiling::MAX_TILE_AREA: usize
+pub const tiling::MAX_TILE_COLS: usize
+pub const tiling::MAX_TILE_RATE: f64
+pub const tiling::MAX_TILE_ROWS: usize
+pub const tiling::MAX_TILE_WIDTH: usize
+pub enum context::CFLSign
+pub enum context::SegLvl
+pub enum context::TxClass
+pub enum tiling::Area
+pub fn config::CpuFeatureLevel::assert_fields_are_eq(&self)
+pub fn context::Block::clone(&self) -> context::Block
+pub fn context::Block::default() -> context::Block
+pub fn context::Block::has_second_ref(&self) -> bool
+pub fn context::Block::is_inter(&self) -> bool
+pub fn context::BlockContext<'_>::partition_plane_context(&self, context::TileBlockOffset, prelude::BlockSize) -> usize
+pub fn context::BlockContext<'_>::reset_skip_context(&mut self, context::TileBlockOffset, prelude::BlockSize, usize, usize, v_frame::pixel::ChromaSampling)
+pub fn context::BlockContext<'_>::skip_context(&self, context::TileBlockOffset) -> usize
+pub fn context::BlockContext<'_>::update_partition_context(&mut self, context::TileBlockOffset, prelude::BlockSize, prelude::BlockSize)
+pub fn context::BlockContext<'a>::checkpoint(&self, &context::TileBlockOffset, v_frame::pixel::ChromaSampling) -> context::BlockContextCheckpoint
+pub fn context::BlockContext<'a>::get_txb_ctx(&self, prelude::BlockSize, transform::TxSize, usize, context::TileBlockOffset, usize, usize, usize, usize) -> context::TXB_CTX
+pub fn context::BlockContext<'a>::intra_inter_context(&self, context::TileBlockOffset) -> usize
+pub fn context::BlockContext<'a>::new(&'a mut tiling::TileBlocksMut<'a>) -> Self
+pub fn context::BlockContext<'a>::reset_left_contexts(&mut self, usize)
+pub fn context::BlockContext<'a>::rollback(&mut self, &context::BlockContextCheckpoint)
+pub fn context::BlockContext<'a>::set_coeff_context(&mut self, usize, context::TileBlockOffset, transform::TxSize, usize, usize, u8)
+pub fn context::BlockContext<'a>::set_dc_sign(&mut u32, i32)
+pub fn context::BlockContext<'a>::update_tx_size_context(&mut self, context::TileBlockOffset, prelude::BlockSize, transform::TxSize, bool)
+pub fn context::BlockContextCheckpoint::clone(&self) -> context::BlockContextCheckpoint
+pub fn context::BlockOffset::assert_fields_are_eq(&self)
+pub fn context::BlockOffset::clone(&self) -> context::BlockOffset
+pub fn context::BlockOffset::default() -> context::BlockOffset
+pub fn context::BlockOffset::eq(&self, &context::BlockOffset) -> bool
+pub fn context::BlockOffset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::CDFContext::build_map(&self) -> alloc::vec::Vec<(&'static str, usize, usize)>
+pub fn context::CDFContext::clone(&self) -> context::CDFContext
+pub fn context::CDFContext::count_lrf_switchable<W: ec::Writer>(&self, &W, &tiling::TileRestorationState<'_>, lrf::RestorationFilter, usize) -> u32
+pub fn context::CDFContext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::CDFContext::new(u8) -> context::CDFContext
+pub fn context::CDFContext::offset<const CDF_LEN: usize>(&self, *const [u16; CDF_LEN]) -> context::CDFOffset<CDF_LEN>
+pub fn context::CDFContext::reset_counts(&mut self)
+pub fn context::CDFContextCheckpoint::clone(&self) -> context::CDFContextCheckpoint
+pub fn context::CDFContextLog::clear(&mut self)
+pub fn context::CDFContextLog::default() -> Self
+pub fn context::CDFContextLog::push<const CDF_LEN: usize>(&mut self, &mut context::CDFContext, context::CDFOffset<CDF_LEN>) -> &mut [u16; CDF_LEN]
+pub fn context::CDFContextLog::rollback(&mut self, &mut context::CDFContext, &context::CDFContextCheckpoint)
+pub fn context::CFLParams::alpha(self, usize) -> i16
+pub fn context::CFLParams::clone(&self) -> context::CFLParams
+pub fn context::CFLParams::context(self, usize) -> usize
+pub fn context::CFLParams::default() -> Self
+pub fn context::CFLParams::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::CFLParams::index(self, usize) -> u32
+pub fn context::CFLParams::joint_sign(self) -> u32
+pub fn context::CFLSign::assert_fields_are_eq(&self)
+pub fn context::CFLSign::clone(&self) -> context::CFLSign
+pub fn context::CFLSign::eq(&self, &context::CFLSign) -> bool
+pub fn context::CFLSign::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::CandidateMV::clone(&self) -> context::CandidateMV
+pub fn context::ContextWriter<'_>::count_lrf_switchable<W: ec::Writer>(&self, &W, &tiling::TileRestorationState<'_>, lrf::RestorationFilter, usize) -> u32
+pub fn context::ContextWriter<'_>::encode_mv_component<W: ec::Writer>(&mut self, &mut W, i32, usize, partition::MvSubpelPrecision)
+pub fn context::ContextWriter<'_>::fill_neighbours_ref_counts(&mut self, context::TileBlockOffset)
+pub fn context::ContextWriter<'_>::find_mvrefs<T: v_frame::pixel::Pixel>(&self, context::TileBlockOffset, [partition::RefType; 2], &mut arrayvec::arrayvec::ArrayVec<context::CandidateMV, 9>, prelude::BlockSize, &encoder::FrameInvariants<T>, bool) -> usize
+pub fn context::ContextWriter<'_>::get_br_ctx(&[u8], usize, usize, context::TxClass) -> usize
+pub fn context::ContextWriter<'_>::get_cdf_intra_mode(&self, prelude::BlockSize) -> &[u16; 13]
+pub fn context::ContextWriter<'_>::get_cdf_intra_mode_kf(&self, context::TileBlockOffset) -> &[u16; 13]
+pub fn context::ContextWriter<'_>::get_comp_mode_ctx(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_comp_ref_type_ctx(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_eob_pos_token(u16) -> (u32, u32)
+pub fn context::ContextWriter<'_>::get_nz_mag(&[u8], usize, context::TxClass) -> usize
+pub fn context::ContextWriter<'_>::get_nz_map_contexts<'c>(&self, &mut [u8], &[u16], u16, transform::TxSize, context::TxClass, &'c mut [core::mem::maybe_uninit::MaybeUninit<i8>]) -> &'c mut [i8]
+pub fn context::ContextWriter<'_>::get_pred_ctx_brf_or_arf2(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_pred_ctx_brfarf2_or_arf(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_pred_ctx_last3_or_gold(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_pred_ctx_last_or_last2(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_pred_ctx_ll2_or_l3gld(&self, context::TileBlockOffset) -> usize
+pub fn context::ContextWriter<'_>::get_segment_pred(&self, context::TileBlockOffset, u8) -> (u8, u8)
+pub fn context::ContextWriter<'_>::txb_init_levels<T: v_frame::pixel::Coefficient>(&self, &[T], usize, &mut [u8], usize)
+pub fn context::ContextWriter<'_>::write_angle_delta<W: ec::Writer>(&mut self, &mut W, i8, prelude::PredictionMode)
+pub fn context::ContextWriter<'_>::write_block_deblock_deltas<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, bool, usize)
+pub fn context::ContextWriter<'_>::write_cdef<W: ec::Writer>(&mut self, &mut W, u8, u8)
+pub fn context::ContextWriter<'_>::write_cfl_alphas<W: ec::Writer>(&mut self, &mut W, context::CFLParams)
+pub fn context::ContextWriter<'_>::write_coeffs_lv_map<T: v_frame::pixel::Coefficient, W: ec::Writer>(&mut self, &mut W, usize, context::TileBlockOffset, &[T], u16, prelude::PredictionMode, transform::TxSize, prelude::TxType, prelude::BlockSize, usize, usize, bool, usize, usize, bool, predict::FilterIntraMode) -> bool
+pub fn context::ContextWriter<'_>::write_compound_mode<W: ec::Writer>(&mut self, &mut W, prelude::PredictionMode, usize)
+pub fn context::ContextWriter<'_>::write_drl_mode<W: ec::Writer>(&mut self, &mut W, bool, usize)
+pub fn context::ContextWriter<'_>::write_filter_intra_mode<W: ec::Writer>(&mut self, &mut W, predict::FilterIntraMode)
+pub fn context::ContextWriter<'_>::write_inter_mode<W: ec::Writer>(&mut self, &mut W, prelude::PredictionMode, usize)
+pub fn context::ContextWriter<'_>::write_intra_mode<W: ec::Writer>(&mut self, &mut W, prelude::BlockSize, prelude::PredictionMode)
+pub fn context::ContextWriter<'_>::write_intra_mode_kf<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, prelude::PredictionMode)
+pub fn context::ContextWriter<'_>::write_intra_uv_mode<W: ec::Writer>(&mut self, &mut W, prelude::PredictionMode, prelude::PredictionMode, bool)
+pub fn context::ContextWriter<'_>::write_is_inter<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, bool)
+pub fn context::ContextWriter<'_>::write_lrf<W: ec::Writer>(&mut self, &mut W, &mut tiling::TileRestorationStateMut<'_>, context::TileSuperBlockOffset, usize)
+pub fn context::ContextWriter<'_>::write_mv<W: ec::Writer>(&mut self, &mut W, mc::MotionVector, mc::MotionVector, partition::MvSubpelPrecision)
+pub fn context::ContextWriter<'_>::write_partition(&mut self, &mut impl ec::Writer, context::TileBlockOffset, partition::PartitionType, prelude::BlockSize)
+pub fn context::ContextWriter<'_>::write_ref_frames<T: v_frame::pixel::Pixel, W: ec::Writer>(&mut self, &mut W, &encoder::FrameInvariants<T>, context::TileBlockOffset)
+pub fn context::ContextWriter<'_>::write_segmentation<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, prelude::BlockSize, bool, u8)
+pub fn context::ContextWriter<'_>::write_skip<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, bool)
+pub fn context::ContextWriter<'_>::write_tx_size_inter<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, prelude::BlockSize, transform::TxSize, bool, usize, usize, usize)
+pub fn context::ContextWriter<'_>::write_tx_size_intra<W: ec::Writer>(&mut self, &mut W, context::TileBlockOffset, prelude::BlockSize, transform::TxSize)
+pub fn context::ContextWriter<'_>::write_tx_type<W: ec::Writer>(&mut self, &mut W, transform::TxSize, prelude::TxType, prelude::PredictionMode, bool, bool, bool, predict::FilterIntraMode)
+pub fn context::ContextWriter<'_>::write_use_filter_intra<W: ec::Writer>(&mut self, &mut W, bool, prelude::BlockSize)
+pub fn context::ContextWriter<'_>::write_use_palette_mode<W: ec::Writer>(&mut self, &mut W, bool, prelude::BlockSize, context::TileBlockOffset, prelude::PredictionMode, prelude::PredictionMode, usize, usize, v_frame::pixel::ChromaSampling)
+pub fn context::ContextWriter<'a>::checkpoint(&self, &context::TileBlockOffset, v_frame::pixel::ChromaSampling) -> context::ContextWriterCheckpoint
+pub fn context::ContextWriter<'a>::new(&'a mut context::CDFContext, context::BlockContext<'a>) -> Self
+pub fn context::ContextWriter<'a>::rollback(&mut self, &context::ContextWriterCheckpoint)
+pub fn context::ContextWriterCheckpoint::clone(&self) -> context::ContextWriterCheckpoint
+pub fn context::FieldMap::default() -> context::FieldMap
+pub fn context::FieldMap::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::FrameBlocks::as_tile_blocks(&self) -> tiling::TileBlocks<'_>
+pub fn context::FrameBlocks::as_tile_blocks_mut(&mut self) -> tiling::TileBlocksMut<'_>
+pub fn context::FrameBlocks::clone(&self) -> context::FrameBlocks
+pub fn context::FrameBlocks::index(&self, usize) -> &Self::Output
+pub fn context::FrameBlocks::index(&self, context::PlaneBlockOffset) -> &Self::Output
+pub fn context::FrameBlocks::index_mut(&mut self, usize) -> &mut Self::Output
+pub fn context::FrameBlocks::index_mut(&mut self, context::PlaneBlockOffset) -> &mut Self::Output
+pub fn context::FrameBlocks::new(usize, usize) -> Self
+pub fn context::NMVComponent::clone(&self) -> context::NMVComponent
+pub fn context::NMVContext::clone(&self) -> context::NMVContext
+pub fn context::PlaneBlockOffset::assert_fields_are_eq(&self)
+pub fn context::PlaneBlockOffset::clone(&self) -> context::PlaneBlockOffset
+pub fn context::PlaneBlockOffset::eq(&self, &context::PlaneBlockOffset) -> bool
+pub fn context::PlaneBlockOffset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::PlaneBlockOffset::with_offset(self, isize, isize) -> context::PlaneBlockOffset
+pub fn context::PlaneSuperBlockOffset::add(self, Self) -> Self::Output
+pub fn context::PlaneSuperBlockOffset::assert_fields_are_eq(&self)
+pub fn context::PlaneSuperBlockOffset::clone(&self) -> context::PlaneSuperBlockOffset
+pub fn context::PlaneSuperBlockOffset::eq(&self, &context::PlaneSuperBlockOffset) -> bool
+pub fn context::PlaneSuperBlockOffset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::SegLvl::assert_fields_are_eq(&self)
+pub fn context::SegLvl::clone(&self) -> context::SegLvl
+pub fn context::SegLvl::eq(&self, &context::SegLvl) -> bool
+pub fn context::SuperBlockOffset::add(self, Self) -> Self::Output
+pub fn context::SuperBlockOffset::assert_fields_are_eq(&self)
+pub fn context::SuperBlockOffset::clone(&self) -> context::SuperBlockOffset
+pub fn context::SuperBlockOffset::eq(&self, &context::SuperBlockOffset) -> bool
+pub fn context::SuperBlockOffset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::TileBlockOffset::assert_fields_are_eq(&self)
+pub fn context::TileBlockOffset::clone(&self) -> context::TileBlockOffset
+pub fn context::TileBlockOffset::default() -> context::TileBlockOffset
+pub fn context::TileBlockOffset::eq(&self, &context::TileBlockOffset) -> bool
+pub fn context::TileBlockOffset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::TileBlockOffset::with_offset(self, isize, isize) -> context::TileBlockOffset
+pub fn context::TileSuperBlockOffset::add(self, Self) -> Self::Output
+pub fn context::TileSuperBlockOffset::assert_fields_are_eq(&self)
+pub fn context::TileSuperBlockOffset::clone(&self) -> context::TileSuperBlockOffset
+pub fn context::TileSuperBlockOffset::eq(&self, &context::TileSuperBlockOffset) -> bool
+pub fn context::TileSuperBlockOffset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn context::TxClass::assert_fields_are_eq(&self)
+pub fn context::TxClass::clone(&self) -> context::TxClass
+pub fn context::TxClass::eq(&self, &context::TxClass) -> bool
+pub fn context::get_mv_class(u32) -> (usize, u32)
+pub fn context::get_tx_set(transform::TxSize, bool, bool) -> transform::TxSet
+pub fn context::get_tx_set_index(transform::TxSize, bool, bool) -> i8
+pub fn context::has_chroma(context::TileBlockOffset, prelude::BlockSize, usize, usize, v_frame::pixel::ChromaSampling) -> bool
+pub fn context::log_in_base_2(u32) -> u8
+pub fn context::mv_joint_horizontal(partition::MvJointType) -> bool
+pub fn context::mv_joint_vertical(partition::MvJointType) -> bool
+pub fn context::uv_intra_mode_to_tx_type_context(prelude::PredictionMode) -> prelude::TxType
+pub fn data::EncoderStats::assert_fields_are_eq(&self)
+pub fn prelude::BlockSize::assert_fields_are_eq(&self)
+pub fn prelude::ChromaSamplePosition::assert_fields_are_eq(&self)
+pub fn prelude::ColorPrimaries::assert_fields_are_eq(&self)
+pub fn prelude::Config::tiling_info(&self) -> core::result::Result<tiling::TilingInfo, prelude::InvalidConfig>
+pub fn prelude::EncoderStatus::assert_fields_are_eq(&self)
+pub fn prelude::FrameType::assert_fields_are_eq(&self)
+pub fn prelude::FrameTypeOverride::assert_fields_are_eq(&self)
+pub fn prelude::InvalidConfig::assert_fields_are_eq(&self)
+pub fn prelude::MatrixCoefficients::assert_fields_are_eq(&self)
+pub fn prelude::PixelRange::assert_fields_are_eq(&self)
+pub fn prelude::PredictionMode::assert_fields_are_eq(&self)
+pub fn prelude::PredictionMode::predict_inter<T: v_frame::pixel::Pixel>(self, &encoder::FrameInvariants<T>, tiling::TileRect, usize, v_frame::plane::PlaneOffset, &mut tiling::PlaneRegionMut<'_, T>, usize, usize, [partition::RefType; 2], [mc::MotionVector; 2], &mut predict::InterCompoundBuffers)
+pub fn prelude::PredictionMode::predict_inter_compound<T: v_frame::pixel::Pixel>(self, &encoder::FrameInvariants<T>, tiling::TileRect, usize, v_frame::plane::PlaneOffset, &mut tiling::PlaneRegionMut<'_, T>, usize, usize, [partition::RefType; 2], [mc::MotionVector; 2], &mut predict::InterCompoundBuffers)
+pub fn prelude::PredictionMode::predict_inter_single<T: v_frame::pixel::Pixel>(self, &encoder::FrameInvariants<T>, tiling::TileRect, usize, v_frame::plane::PlaneOffset, &mut tiling::PlaneRegionMut<'_, T>, usize, usize, partition::RefType, mc::MotionVector)
+pub fn prelude::PredictionMode::predict_intra<T: v_frame::pixel::Pixel>(self, tiling::TileRect, &mut tiling::PlaneRegionMut<'_, T>, transform::TxSize, usize, &[i16], predict::IntraParam, core::option::Option<predict::IntraEdgeFilterParameters>, &partition::IntraEdge<'_, T>, config::CpuFeatureLevel)
+pub fn prelude::PredictionModesSetting::assert_fields_are_eq(&self)
+pub fn prelude::SGRComplexityLevel::assert_fields_are_eq(&self)
+pub fn prelude::SceneDetectionSpeed::assert_fields_are_eq(&self)
+pub fn prelude::SegmentationLevel::assert_fields_are_eq(&self)
+pub fn prelude::TransferCharacteristics::assert_fields_are_eq(&self)
+pub fn prelude::Tune::assert_fields_are_eq(&self)
+pub fn prelude::TxType::assert_fields_are_eq(&self)
+pub fn tiling::Area::clone(&self) -> tiling::Area
+pub fn tiling::Area::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::CodedBlockInfo::clone(&self) -> tiling::CodedBlockInfo
+pub fn tiling::CodedBlockInfo::default() -> Self
+pub fn tiling::CodedBlockInfo::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::HorzWindows<'a, T>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn tiling::HorzWindows<'a, T>::nth(&mut self, usize) -> core::option::Option<Self::Item>
+pub fn tiling::HorzWindows<'a, T>::size_hint(&self) -> (usize, core::option::Option<usize>)
+pub fn tiling::MiTileState::clone(&self) -> tiling::MiTileState
+pub fn tiling::MiTileState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::MiTileState::index(&self, usize) -> &Self::Output
+pub fn tiling::MiTileState::index_mut(&mut self, usize) -> &mut Self::Output
+pub fn tiling::MiTileState::new(usize, usize) -> Self
+pub fn tiling::PlaneRegion<'_, T>::index(&self, usize) -> &Self::Output
+pub fn tiling::PlaneRegion<'a, T>::data_ptr(&self) -> *const T
+pub fn tiling::PlaneRegion<'a, T>::empty(&'a v_frame::plane::PlaneConfig) -> Self
+pub fn tiling::PlaneRegion<'a, T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::PlaneRegion<'a, T>::frame_block_offset(&self) -> context::PlaneBlockOffset
+pub fn tiling::PlaneRegion<'a, T>::from_slice(&'a [T], &'a v_frame::plane::PlaneConfig, tiling::Rect) -> Self
+pub fn tiling::PlaneRegion<'a, T>::home(&self) -> Self
+pub fn tiling::PlaneRegion<'a, T>::horz_windows(&self, usize) -> tiling::HorzWindows<'_, T>
+pub fn tiling::PlaneRegion<'a, T>::is_null(&self) -> bool
+pub fn tiling::PlaneRegion<'a, T>::new(&'a v_frame::plane::Plane<T>, tiling::Rect) -> Self
+pub fn tiling::PlaneRegion<'a, T>::new_from_plane(&'a v_frame::plane::Plane<T>) -> Self
+pub fn tiling::PlaneRegion<'a, T>::rect(&self) -> &tiling::Rect
+pub fn tiling::PlaneRegion<'a, T>::rows_iter(&self) -> tiling::RowsIter<'_, T>
+pub fn tiling::PlaneRegion<'a, T>::subregion(&self, tiling::Area) -> tiling::PlaneRegion<'_, T>
+pub fn tiling::PlaneRegion<'a, T>::to_frame_block_offset(&self, context::TileBlockOffset) -> context::PlaneBlockOffset
+pub fn tiling::PlaneRegion<'a, T>::to_frame_plane_offset(&self, v_frame::plane::PlaneOffset) -> v_frame::plane::PlaneOffset
+pub fn tiling::PlaneRegion<'a, T>::to_frame_super_block_offset(&self, context::TileSuperBlockOffset, usize) -> context::PlaneSuperBlockOffset
+pub fn tiling::PlaneRegion<'a, T>::vert_windows(&self, usize) -> tiling::VertWindows<'_, T>
+pub fn tiling::PlaneRegionMut<'_, T>::as_const(&self) -> tiling::PlaneRegion<'_, T>
+pub fn tiling::PlaneRegionMut<'_, T>::data_ptr_mut(&mut self) -> *mut T
+pub fn tiling::PlaneRegionMut<'_, T>::index(&self, usize) -> &Self::Output
+pub fn tiling::PlaneRegionMut<'_, T>::index_mut(&mut self, usize) -> &mut Self::Output
+pub fn tiling::PlaneRegionMut<'_, T>::rows_iter_mut(&mut self) -> tiling::RowsIterMut<'_, T>
+pub fn tiling::PlaneRegionMut<'_, T>::subregion_mut(&mut self, tiling::Area) -> tiling::PlaneRegionMut<'_, T>
+pub fn tiling::PlaneRegionMut<'a, T>::data_ptr(&self) -> *const T
+pub fn tiling::PlaneRegionMut<'a, T>::empty(&'a v_frame::plane::PlaneConfig) -> Self
+pub fn tiling::PlaneRegionMut<'a, T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::PlaneRegionMut<'a, T>::frame_block_offset(&self) -> context::PlaneBlockOffset
+pub fn tiling::PlaneRegionMut<'a, T>::from_slice(&'a mut [T], &'a v_frame::plane::PlaneConfig, tiling::Rect) -> Self
+pub fn tiling::PlaneRegionMut<'a, T>::home(&self) -> Self
+pub fn tiling::PlaneRegionMut<'a, T>::horz_windows(&self, usize) -> tiling::HorzWindows<'_, T>
+pub fn tiling::PlaneRegionMut<'a, T>::is_null(&self) -> bool
+pub fn tiling::PlaneRegionMut<'a, T>::new(&'a mut v_frame::plane::Plane<T>, tiling::Rect) -> Self
+pub fn tiling::PlaneRegionMut<'a, T>::new_from_plane(&'a mut v_frame::plane::Plane<T>) -> Self
+pub fn tiling::PlaneRegionMut<'a, T>::rect(&self) -> &tiling::Rect
+pub fn tiling::PlaneRegionMut<'a, T>::rows_iter(&self) -> tiling::RowsIter<'_, T>
+pub fn tiling::PlaneRegionMut<'a, T>::subregion(&self, tiling::Area) -> tiling::PlaneRegion<'_, T>
+pub fn tiling::PlaneRegionMut<'a, T>::to_frame_block_offset(&self, context::TileBlockOffset) -> context::PlaneBlockOffset
+pub fn tiling::PlaneRegionMut<'a, T>::to_frame_plane_offset(&self, v_frame::plane::PlaneOffset) -> v_frame::plane::PlaneOffset
+pub fn tiling::PlaneRegionMut<'a, T>::to_frame_super_block_offset(&self, context::TileSuperBlockOffset, usize) -> context::PlaneSuperBlockOffset
+pub fn tiling::PlaneRegionMut<'a, T>::vert_windows(&self, usize) -> tiling::VertWindows<'_, T>
+pub fn tiling::Rect::assert_fields_are_eq(&self)
+pub fn tiling::Rect::clone(&self) -> tiling::Rect
+pub fn tiling::Rect::default() -> tiling::Rect
+pub fn tiling::Rect::eq(&self, &tiling::Rect) -> bool
+pub fn tiling::Rect::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::Rect::from(tiling::TileRect) -> tiling::Rect
+pub fn tiling::RowsIter<'a, T>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn tiling::RowsIter<'a, T>::size_hint(&self) -> (usize, core::option::Option<usize>)
+pub fn tiling::RowsIterMut<'a, T>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn tiling::RowsIterMut<'a, T>::size_hint(&self) -> (usize, core::option::Option<usize>)
+pub fn tiling::Tile<'a, T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::Tile<'a, T>::home(&self) -> Self
+pub fn tiling::Tile<'a, T>::new(&'a v_frame::frame::Frame<T>, tiling::TileRect) -> Self
+pub fn tiling::Tile<'a, T>::subregion(&self, tiling::Area) -> tiling::Tile<'_, T>
+pub fn tiling::TileBlocks<'_>::index(&self, usize) -> &Self::Output
+pub fn tiling::TileBlocks<'_>::index(&self, context::TileBlockOffset) -> &Self::Output
+pub fn tiling::TileBlocks<'a>::above_left_of(&self, context::TileBlockOffset) -> &context::Block
+pub fn tiling::TileBlocks<'a>::above_of(&self, context::TileBlockOffset) -> &context::Block
+pub fn tiling::TileBlocks<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileBlocks<'a>::get_cdef(&self, context::TileSuperBlockOffset) -> u8
+pub fn tiling::TileBlocks<'a>::left_of(&self, context::TileBlockOffset) -> &context::Block
+pub fn tiling::TileBlocks<'a>::new(&'a context::FrameBlocks, usize, usize, usize, usize) -> Self
+pub fn tiling::TileBlocks<'a>::subregion(&mut self, usize, usize, usize, usize) -> tiling::TileBlocks<'_>
+pub fn tiling::TileBlocksMut<'_>::for_each<F>(&mut self, context::TileBlockOffset, prelude::BlockSize, F) where F: core::ops::function::Fn(&mut context::Block)
+pub fn tiling::TileBlocksMut<'_>::index(&self, usize) -> &Self::Output
+pub fn tiling::TileBlocksMut<'_>::index(&self, context::TileBlockOffset) -> &Self::Output
+pub fn tiling::TileBlocksMut<'_>::index_mut(&mut self, usize) -> &mut Self::Output
+pub fn tiling::TileBlocksMut<'_>::index_mut(&mut self, context::TileBlockOffset) -> &mut Self::Output
+pub fn tiling::TileBlocksMut<'_>::set_block_size(&mut self, context::TileBlockOffset, prelude::BlockSize)
+pub fn tiling::TileBlocksMut<'_>::set_cdef(&mut self, context::TileSuperBlockOffset, u8)
+pub fn tiling::TileBlocksMut<'_>::set_mode(&mut self, context::TileBlockOffset, prelude::BlockSize, prelude::PredictionMode)
+pub fn tiling::TileBlocksMut<'_>::set_motion_vectors(&mut self, context::TileBlockOffset, prelude::BlockSize, [mc::MotionVector; 2])
+pub fn tiling::TileBlocksMut<'_>::set_ref_frames(&mut self, context::TileBlockOffset, prelude::BlockSize, [partition::RefType; 2])
+pub fn tiling::TileBlocksMut<'_>::set_segmentation_idx(&mut self, context::TileBlockOffset, prelude::BlockSize, u8)
+pub fn tiling::TileBlocksMut<'_>::set_skip(&mut self, context::TileBlockOffset, prelude::BlockSize, bool)
+pub fn tiling::TileBlocksMut<'_>::set_tx_size(&mut self, context::TileBlockOffset, prelude::BlockSize, transform::TxSize)
+pub fn tiling::TileBlocksMut<'_>::subregion_mut(&mut self, usize, usize, usize, usize) -> tiling::TileBlocksMut<'_>
+pub fn tiling::TileBlocksMut<'a>::above_left_of(&self, context::TileBlockOffset) -> &context::Block
+pub fn tiling::TileBlocksMut<'a>::above_of(&self, context::TileBlockOffset) -> &context::Block
+pub fn tiling::TileBlocksMut<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileBlocksMut<'a>::get_cdef(&self, context::TileSuperBlockOffset) -> u8
+pub fn tiling::TileBlocksMut<'a>::left_of(&self, context::TileBlockOffset) -> &context::Block
+pub fn tiling::TileBlocksMut<'a>::new(&'a mut context::FrameBlocks, usize, usize, usize, usize) -> Self
+pub fn tiling::TileBlocksMut<'a>::subregion(&mut self, usize, usize, usize, usize) -> tiling::TileBlocks<'_>
+pub fn tiling::TileContextIterMut<'a, T>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn tiling::TileContextIterMut<'a, T>::size_hint(&self) -> (usize, core::option::Option<usize>)
+pub fn tiling::TileMEStats<'_>::index(&self, usize) -> &Self::Output
+pub fn tiling::TileMEStats<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileMEStats<'a>::new(&'a me::FrameMEStats, usize, usize, usize, usize) -> Self
+pub fn tiling::TileMEStatsMut<'_>::index(&self, usize) -> &Self::Output
+pub fn tiling::TileMEStatsMut<'_>::index_mut(&mut self, usize) -> &mut Self::Output
+pub fn tiling::TileMEStatsMut<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileMEStatsMut<'a>::new(&'a mut me::FrameMEStats, usize, usize, usize, usize) -> Self
+pub fn tiling::TileMut<'_, T>::as_const(&self) -> tiling::Tile<'_, T>
+pub fn tiling::TileMut<'a, T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileMut<'a, T>::home(&self) -> Self
+pub fn tiling::TileMut<'a, T>::new(&'a mut v_frame::frame::Frame<T>, tiling::TileRect) -> Self
+pub fn tiling::TileMut<'a, T>::subregion(&self, tiling::Area) -> tiling::Tile<'_, T>
+pub fn tiling::TileRect::clone(&self) -> tiling::TileRect
+pub fn tiling::TileRect::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRect::to_frame_block_offset(&self, context::TileBlockOffset, usize, usize) -> context::PlaneBlockOffset
+pub fn tiling::TileRect::to_frame_super_block_offset(&self, context::TileSuperBlockOffset, usize, usize, usize) -> context::PlaneSuperBlockOffset
+pub fn tiling::TileRestorationPlane<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRestorationPlane<'a>::new(&'a lrf::RestorationPlane, usize, usize, usize, usize) -> Self
+pub fn tiling::TileRestorationPlane<'a>::restoration_unit(&self, context::TileSuperBlockOffset, bool) -> core::option::Option<&lrf::RestorationUnit>
+pub fn tiling::TileRestorationPlane<'a>::restoration_unit_last_sb_for_rdo<T: v_frame::pixel::Pixel>(&self, &encoder::FrameInvariants<T>, context::PlaneSuperBlockOffset, context::TileSuperBlockOffset) -> bool
+pub fn tiling::TileRestorationPlane<'a>::restoration_unit_offset(&self, context::TileSuperBlockOffset, context::TileSuperBlockOffset, bool) -> core::option::Option<(usize, usize)>
+pub fn tiling::TileRestorationPlaneMut<'_>::restoration_unit_mut(&mut self, context::TileSuperBlockOffset) -> core::option::Option<&mut lrf::RestorationUnit>
+pub fn tiling::TileRestorationPlaneMut<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRestorationPlaneMut<'a>::new(&'a mut lrf::RestorationPlane, usize, usize, usize, usize) -> Self
+pub fn tiling::TileRestorationPlaneMut<'a>::restoration_unit(&self, context::TileSuperBlockOffset, bool) -> core::option::Option<&lrf::RestorationUnit>
+pub fn tiling::TileRestorationPlaneMut<'a>::restoration_unit_last_sb_for_rdo<T: v_frame::pixel::Pixel>(&self, &encoder::FrameInvariants<T>, context::PlaneSuperBlockOffset, context::TileSuperBlockOffset) -> bool
+pub fn tiling::TileRestorationPlaneMut<'a>::restoration_unit_offset(&self, context::TileSuperBlockOffset, context::TileSuperBlockOffset, bool) -> core::option::Option<(usize, usize)>
+pub fn tiling::TileRestorationState<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRestorationState<'a>::has_restoration_unit(&self, context::TileSuperBlockOffset, usize, bool) -> bool
+pub fn tiling::TileRestorationState<'a>::new(&'a lrf::RestorationState, context::PlaneSuperBlockOffset, usize, usize) -> Self
+pub fn tiling::TileRestorationStateMut<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRestorationStateMut<'a>::has_restoration_unit(&self, context::TileSuperBlockOffset, usize, bool) -> bool
+pub fn tiling::TileRestorationStateMut<'a>::new(&'a mut lrf::RestorationState, context::PlaneSuperBlockOffset, usize, usize) -> Self
+pub fn tiling::TileRestorationUnits<'_>::index(&self, usize) -> &Self::Output
+pub fn tiling::TileRestorationUnits<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRestorationUnits<'a>::new(&'a lrf::FrameRestorationUnits, usize, usize, usize, usize) -> Self
+pub fn tiling::TileRestorationUnitsMut<'_>::index(&self, usize) -> &Self::Output
+pub fn tiling::TileRestorationUnitsMut<'_>::index_mut(&mut self, usize) -> &mut Self::Output
+pub fn tiling::TileRestorationUnitsMut<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileRestorationUnitsMut<'a>::new(&'a mut lrf::FrameRestorationUnits, usize, usize, usize, usize) -> Self
+pub fn tiling::TileStateMut<'a, T>::above_block_info(&self, context::TileBlockOffset, usize, usize) -> core::option::Option<tiling::CodedBlockInfo>
+pub fn tiling::TileStateMut<'a, T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TileStateMut<'a, T>::left_block_info(&self, context::TileBlockOffset, usize, usize) -> core::option::Option<tiling::CodedBlockInfo>
+pub fn tiling::TileStateMut<'a, T>::new(&'a mut encoder::FrameState<T>, context::PlaneSuperBlockOffset, usize, usize, usize, &'a mut [me::FrameMEStats]) -> Self
+pub fn tiling::TileStateMut<'a, T>::tile_rect(&self) -> tiling::TileRect
+pub fn tiling::TileStateMut<'a, T>::to_frame_block_offset(&self, context::TileBlockOffset) -> context::PlaneBlockOffset
+pub fn tiling::TileStateMut<'a, T>::to_frame_super_block_offset(&self, context::TileSuperBlockOffset) -> context::PlaneSuperBlockOffset
+pub fn tiling::TilingInfo::clone(&self) -> tiling::TilingInfo
+pub fn tiling::TilingInfo::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn tiling::TilingInfo::from_target_tiles(usize, usize, usize, f64, usize, usize, bool) -> Self
+pub fn tiling::TilingInfo::tile_iter_mut<'a, T: v_frame::pixel::Pixel>(&self, &'a mut encoder::FrameState<T>, &'a mut context::FrameBlocks) -> tiling::TileContextIterMut<'a, T>
+pub fn tiling::TilingInfo::tile_log2(usize, usize) -> core::option::Option<usize>
+pub fn tiling::VertWindows<'a, T>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn tiling::VertWindows<'a, T>::nth(&mut self, usize) -> core::option::Option<Self::Item>
+pub fn tiling::VertWindows<'a, T>::size_hint(&self) -> (usize, core::option::Option<usize>)
+pub mod context
+pub mod tiling
+pub static context::av1_nz_map_ctx_offset: [[[i8; 5]; 5]; 19]
+pub static context::av1_tx_ind: [[usize; 16]; 6]
+pub static context::av1_tx_used: [[usize; 16]; 6]
+pub static context::default_nmv_context: context::NMVContext
+pub static context::eob_to_pos_large: [u8; 17]
+pub static context::eob_to_pos_small: [u8; 33]
+pub static context::k_eob_group_start: [u16; 12]
+pub static context::k_eob_offset_bits: [u16; 12]
+pub static context::max_txsize_rect_lookup: [transform::TxSize; 22]
+pub static context::num_tx_set: [usize; 6]
+pub static context::nz_map_ctx_offset_1d: [usize; 32]
+pub static context::partition_context_lookup: [[u8; 2]; 22]
+pub static context::sub_tx_size_map: [transform::TxSize; 19]
+pub static context::tx_type_to_class: [context::TxClass; 16]
+pub struct context::Block
+pub struct context::BlockContext<'a>
+pub struct context::BlockContextCheckpoint
+pub struct context::BlockOffset
+pub struct context::CDFContextCheckpoint
+pub struct context::CDFContextLog
+pub struct context::CDFOffset<const CDF_LEN: usize>
+pub struct context::CFLParams
+pub struct context::CandidateMV
+pub struct context::ContextWriter<'a>
+pub struct context::ContextWriterCheckpoint
+pub struct context::FieldMap
+pub struct context::FrameBlocks
+pub struct context::PlaneBlockOffset(pub context::BlockOffset)
+pub struct context::PlaneSuperBlockOffset(pub context::SuperBlockOffset)
+pub struct context::SuperBlockOffset
+pub struct context::TXB_CTX
+pub struct context::TileBlockOffset(pub context::BlockOffset)
+pub struct context::TileSuperBlockOffset(pub context::SuperBlockOffset)
+pub struct tiling::CodedBlockInfo
+pub struct tiling::HorzWindows<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::MiTileState
+pub struct tiling::PlaneRegion<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::PlaneRegionMut<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::Rect
+pub struct tiling::RowsIter<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::RowsIterMut<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::Tile<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::TileBlocks<'a>
+pub struct tiling::TileBlocksMut<'a>
+pub struct tiling::TileContextIterMut<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::TileContextMut<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::TileMEStats<'a>
+pub struct tiling::TileMEStatsMut<'a>
+pub struct tiling::TileMut<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::TileRect
+pub struct tiling::TileRestorationPlane<'a>
+pub struct tiling::TileRestorationPlaneMut<'a>
+pub struct tiling::TileRestorationState<'a>
+pub struct tiling::TileRestorationStateMut<'a>
+pub struct tiling::TileRestorationUnits<'a>
+pub struct tiling::TileRestorationUnitsMut<'a>
+pub struct tiling::TileStateMut<'a, T: v_frame::pixel::Pixel>
+pub struct tiling::TilingInfo [also: prelude, prelude::config]
+pub struct tiling::VertWindows<'a, T: v_frame::pixel::Pixel>
+pub type context::FrameBlocks::Output = [context::Block]
+pub type context::FrameBlocks::Output = context::Block
+pub type context::PlaneSuperBlockOffset::Output = context::PlaneSuperBlockOffset
+pub type context::SuperBlockOffset::Output = context::SuperBlockOffset
+pub type context::TileSuperBlockOffset::Output = context::TileSuperBlockOffset
+pub type tiling::HorzWindows<'a, T>::Item = tiling::PlaneRegion<'a, T>
+pub type tiling::MiTileState::Output = [tiling::CodedBlockInfo]
+pub type tiling::PlaneRegion<'_, T>::Output = [T]
+pub type tiling::PlaneRegionMut<'_, T>::Output = [T]
+pub type tiling::RowsIter<'a, T>::Item = &'a [T]
+pub type tiling::RowsIterMut<'a, T>::Item = &'a mut [T]
+pub type tiling::TileBlocks<'_>::Output = [context::Block]
+pub type tiling::TileBlocks<'_>::Output = context::Block
+pub type tiling::TileBlocksMut<'_>::Output = [context::Block]
+pub type tiling::TileBlocksMut<'_>::Output = context::Block
+pub type tiling::TileContextIterMut<'a, T>::Item = tiling::TileContextMut<'a, T>
+pub type tiling::TileMEStats<'_>::Output = [me::MEStats]
+pub type tiling::TileMEStatsMut<'_>::Output = [me::MEStats]
+pub type tiling::TileRestorationUnits<'_>::Output = [lrf::RestorationUnit]
+pub type tiling::TileRestorationUnitsMut<'_>::Output = [lrf::RestorationUnit]
+pub type tiling::VertWindows<'a, T>::Item = tiling::PlaneRegion<'a, T>
+pub unsafe fn tiling::PlaneRegion<'a, T>::from_slice_unsafe(&'a [T], &'a v_frame::plane::PlaneConfig, tiling::Rect) -> Self
+pub unsafe fn tiling::PlaneRegionMut<'a, T>::from_slice_unsafe(&'a mut [T], &'a v_frame::plane::PlaneConfig, tiling::Rect) -> Self
+pub use context::<<transform_unit::TxClass::*>>
+pub context::Block::bsize: prelude::BlockSize
+pub context::Block::cdef_index: u8
+pub context::Block::deblock_deltas: [i8; 4]
+pub context::Block::mode: prelude::PredictionMode
+pub context::Block::mv: [mc::MotionVector; 2]
+pub context::Block::n4_h: u8
+pub context::Block::n4_w: u8
+pub context::Block::neighbors_ref_counts: [u8; 7]
+pub context::Block::partition: partition::PartitionType
+pub context::Block::ref_frames: [partition::RefType; 2]
+pub context::Block::segmentation_idx: u8
+pub context::Block::skip: bool
+pub context::Block::txsize: transform::TxSize
+pub context::BlockContext::above_coeff_context: [[u8; 1024]; 3]
+pub context::BlockContext::above_partition_context: [u8; 512]
+pub context::BlockContext::above_tx_context: [u8; 1024]
+pub context::BlockContext::blocks: &'a mut tiling::TileBlocksMut<'a>
+pub context::BlockContext::cdef_coded: bool
+pub context::BlockContext::code_deltas: bool
+pub context::BlockContext::left_coeff_context: [[u8; 16]; 3]
+pub context::BlockContext::left_partition_context: [u8; 8]
+pub context::BlockContext::left_tx_context: [u8; 16]
+pub context::BlockContext::preskip_segid: bool
+pub context::BlockContext::update_seg: bool
+pub context::BlockOffset::x: usize
+pub context::BlockOffset::y: usize
+pub context::CDFContext::angle_delta_cdf: [[u16; 7]; 8]
+pub context::CDFContext::cfl_alpha_cdf: [[u16; 16]; 6]
+pub context::CDFContext::cfl_sign_cdf: [u16; 8]
+pub context::CDFContext::coeff_base_cdf: [[[[u16; 4]; 42]; 2]; 5]
+pub context::CDFContext::coeff_base_eob_cdf: [[[[u16; 3]; 4]; 2]; 5]
+pub context::CDFContext::coeff_br_cdf: [[[[u16; 4]; 21]; 2]; 5]
+pub context::CDFContext::comp_bwd_ref_cdf: [[[u16; 2]; 2]; 3]
+pub context::CDFContext::comp_mode_cdf: [[u16; 2]; 5]
+pub context::CDFContext::comp_ref_cdf: [[[u16; 2]; 3]; 3]
+pub context::CDFContext::comp_ref_type_cdf: [[u16; 2]; 5]
+pub context::CDFContext::compound_mode_cdf: [[u16; 8]; 8]
+pub context::CDFContext::dc_sign_cdf: [[[u16; 2]; 3]; 2]
+pub context::CDFContext::deblock_delta_cdf: [u16; 4]
+pub context::CDFContext::deblock_delta_multi_cdf: [[u16; 4]; 4]
+pub context::CDFContext::drl_cdfs: [[u16; 2]; 3]
+pub context::CDFContext::eob_extra_cdf: [[[[u16; 2]; 9]; 2]; 5]
+pub context::CDFContext::eob_flag_cdf1024: [[[u16; 11]; 2]; 2]
+pub context::CDFContext::eob_flag_cdf128: [[[u16; 8]; 2]; 2]
+pub context::CDFContext::eob_flag_cdf16: [[[u16; 5]; 2]; 2]
+pub context::CDFContext::eob_flag_cdf256: [[[u16; 9]; 2]; 2]
+pub context::CDFContext::eob_flag_cdf32: [[[u16; 6]; 2]; 2]
+pub context::CDFContext::eob_flag_cdf512: [[[u16; 10]; 2]; 2]
+pub context::CDFContext::eob_flag_cdf64: [[[u16; 7]; 2]; 2]
+pub context::CDFContext::filter_intra_cdfs: [[u16; 2]; 22]
+pub context::CDFContext::filter_intra_mode_cdf: [u16; 5]
+pub context::CDFContext::inter_tx_1_cdf: [[u16; 16]; 4]
+pub context::CDFContext::inter_tx_2_cdf: [[u16; 12]; 4]
+pub context::CDFContext::inter_tx_3_cdf: [[u16; 2]; 4]
+pub context::CDFContext::intra_inter_cdfs: [[u16; 2]; 4]
+pub context::CDFContext::intra_tx_1_cdf: [[[u16; 7]; 13]; 4]
+pub context::CDFContext::intra_tx_2_cdf: [[[u16; 5]; 13]; 4]
+pub context::CDFContext::kf_y_cdf: [[[u16; 13]; 5]; 5]
+pub context::CDFContext::lrf_sgrproj_cdf: [u16; 2]
+pub context::CDFContext::lrf_switchable_cdf: [u16; 3]
+pub context::CDFContext::lrf_wiener_cdf: [u16; 2]
+pub context::CDFContext::newmv_cdf: [[u16; 2]; 7]
+pub context::CDFContext::nmv_context: context::NMVContext
+pub context::CDFContext::palette_uv_mode_cdfs: [[u16; 2]; 2]
+pub context::CDFContext::palette_y_mode_cdfs: [[[u16; 2]; 3]; 7]
+pub context::CDFContext::partition_cdf: [[u16; 10]; 12]
+pub context::CDFContext::partition_w128_cdf: [[u16; 8]; 4]
+pub context::CDFContext::partition_w8_cdf: [[u16; 4]; 4]
+pub context::CDFContext::refmv_cdf: [[u16; 2]; 6]
+pub context::CDFContext::single_ref_cdfs: [[[u16; 2]; 6]; 3]
+pub context::CDFContext::skip_cdfs: [[u16; 2]; 3]
+pub context::CDFContext::spatial_segmentation_cdfs: [[u16; 8]; 3]
+pub context::CDFContext::tx_size_8x8_cdf: [[u16; 2]; 3]
+pub context::CDFContext::tx_size_cdf: [[[u16; 3]; 3]; 3]
+pub context::CDFContext::txb_skip_cdf: [[[u16; 2]; 13]; 5]
+pub context::CDFContext::txfm_partition_cdf: [[u16; 2]; 21]
+pub context::CDFContext::uv_mode_cdf: [[u16; 13]; 13]
+pub context::CDFContext::uv_mode_cfl_cdf: [[u16; 14]; 13]
+pub context::CDFContext::y_mode_cdf: [[u16; 13]; 4]
+pub context::CDFContext::zeromv_cdf: [[u16; 2]; 2]
+pub context::CFLParams::scale: [u8; 2]
+pub context::CFLParams::sign: [context::CFLSign; 2]
+pub context::CFLSign::CFL_SIGN_NEG = 1
+pub context::CFLSign::CFL_SIGN_POS = 2
+pub context::CFLSign::CFL_SIGN_ZERO = 0
+pub context::CandidateMV::comp_mv: mc::MotionVector
+pub context::CandidateMV::this_mv: mc::MotionVector
+pub context::CandidateMV::weight: u32
+pub context::ContextWriter::bc: context::BlockContext<'a>
+pub context::ContextWriter::fc: &'a mut context::CDFContext
+pub context::ContextWriter::fc_log: context::CDFContextLog
+pub context::ContextWriterCheckpoint::bc: context::BlockContextCheckpoint
+pub context::ContextWriterCheckpoint::fc: context::CDFContextCheckpoint
+pub context::FrameBlocks::cols: usize
+pub context::FrameBlocks::rows: usize
+pub context::NMVComponent::bits_cdf: [[u16; 2]; 10]
+pub context::NMVComponent::class0_cdf: [u16; 2]
+pub context::NMVComponent::class0_fp_cdf: [[u16; 4]; 2]
+pub context::NMVComponent::class0_hp_cdf: [u16; 2]
+pub context::NMVComponent::classes_cdf: [u16; 11]
+pub context::NMVComponent::fp_cdf: [u16; 4]
+pub context::NMVComponent::hp_cdf: [u16; 2]
+pub context::NMVComponent::sign_cdf: [u16; 2]
+pub context::NMVContext::comps: [context::NMVComponent; 2]
+pub context::NMVContext::joints_cdf: [u16; 4]
+pub context::SegLvl::SEG_LVL_ALT_LF_U = 3
+pub context::SegLvl::SEG_LVL_ALT_LF_V = 4
+pub context::SegLvl::SEG_LVL_ALT_LF_Y_H = 2
+pub context::SegLvl::SEG_LVL_ALT_LF_Y_V = 1
+pub context::SegLvl::SEG_LVL_ALT_Q = 0
+pub context::SegLvl::SEG_LVL_GLOBALMV = 7
+pub context::SegLvl::SEG_LVL_MAX = 8
+pub context::SegLvl::SEG_LVL_REF_FRAME = 5
+pub context::SegLvl::SEG_LVL_SKIP = 6
+pub context::SuperBlockOffset::x: usize
+pub context::SuperBlockOffset::y: usize
+pub context::TXB_CTX::dc_sign_ctx: usize
+pub context::TXB_CTX::txb_skip_ctx: usize
+pub context::TxClass::TX_CLASS_2D = 0
+pub context::TxClass::TX_CLASS_HORIZ = 1
+pub context::TxClass::TX_CLASS_VERT = 2
+pub prelude::Sequence::tiling: tiling::TilingInfo
+pub prelude::TilingInfo::cols: usize
+pub prelude::TilingInfo::frame_height: usize
+pub prelude::TilingInfo::frame_width: usize
+pub prelude::TilingInfo::max_tile_cols_log2: usize
+pub prelude::TilingInfo::max_tile_rows_log2: usize
+pub prelude::TilingInfo::min_tile_cols_log2: usize
+pub prelude::TilingInfo::min_tile_rows_log2: usize
+pub prelude::TilingInfo::min_tiles_log2: usize
+pub prelude::TilingInfo::rows: usize
+pub prelude::TilingInfo::sb_size_log2: usize
+pub prelude::TilingInfo::tile_cols_log2: usize
+pub prelude::TilingInfo::tile_height_sb: usize
+pub prelude::TilingInfo::tile_rows_log2: usize
+pub prelude::TilingInfo::tile_width_sb: usize
+pub prelude::config::TilingInfo::cols: usize
+pub prelude::config::TilingInfo::frame_height: usize
+pub prelude::config::TilingInfo::frame_width: usize
+pub prelude::config::TilingInfo::max_tile_cols_log2: usize
+pub prelude::config::TilingInfo::max_tile_rows_log2: usize
+pub prelude::config::TilingInfo::min_tile_cols_log2: usize
+pub prelude::config::TilingInfo::min_tile_rows_log2: usize
+pub prelude::config::TilingInfo::min_tiles_log2: usize
+pub prelude::config::TilingInfo::rows: usize
+pub prelude::config::TilingInfo::sb_size_log2: usize
+pub prelude::config::TilingInfo::tile_cols_log2: usize
+pub prelude::config::TilingInfo::tile_height_sb: usize
+pub prelude::config::TilingInfo::tile_rows_log2: usize
+pub prelude::config::TilingInfo::tile_width_sb: usize
+pub tiling::Area::BlockRect
+pub tiling::Area::BlockRect::bo: context::BlockOffset
+pub tiling::Area::BlockRect::height: usize
+pub tiling::Area::BlockRect::width: usize
+pub tiling::Area::BlockStartingAt
+pub tiling::Area::BlockStartingAt::bo: context::BlockOffset
+pub tiling::Area::Rect
+pub tiling::Area::Rect::height: usize
+pub tiling::Area::Rect::width: usize
+pub tiling::Area::Rect::x: isize
+pub tiling::Area::Rect::y: isize
+pub tiling::Area::StartingAt
+pub tiling::Area::StartingAt::x: isize
+pub tiling::Area::StartingAt::y: isize
+pub tiling::CodedBlockInfo::chroma_mode: prelude::PredictionMode
+pub tiling::CodedBlockInfo::luma_mode: prelude::PredictionMode
+pub tiling::CodedBlockInfo::reference_types: [partition::RefType; 2]
+pub tiling::PlaneRegion::plane_cfg: &'a v_frame::plane::PlaneConfig
+pub tiling::PlaneRegionMut::plane_cfg: &'a v_frame::plane::PlaneConfig
+pub tiling::Rect::height: usize
+pub tiling::Rect::width: usize
+pub tiling::Rect::x: isize
+pub tiling::Rect::y: isize
+pub tiling::Tile::planes: [tiling::PlaneRegion<'a, T>; 3]
+pub tiling::TileContextMut::tb: tiling::TileBlocksMut<'a>
+pub tiling::TileContextMut::ts: tiling::TileStateMut<'a, T>
+pub tiling::TileMut::planes: [tiling::PlaneRegionMut<'a, T>; 3]
+pub tiling::TileRect::height: usize
+pub tiling::TileRect::width: usize
+pub tiling::TileRect::x: usize
+pub tiling::TileRect::y: usize
+pub tiling::TileRestorationPlane::rp_cfg: &'a lrf::RestorationPlaneConfig
+pub tiling::TileRestorationPlane::sgrproj_ref: [i8; 2]
+pub tiling::TileRestorationPlane::units: tiling::TileRestorationUnits<'a>
+pub tiling::TileRestorationPlane::wiener_ref: [[i8; 3]; 2]
+pub tiling::TileRestorationPlaneMut::rp_cfg: &'a lrf::RestorationPlaneConfig
+pub tiling::TileRestorationPlaneMut::sgrproj_ref: [i8; 2]
+pub tiling::TileRestorationPlaneMut::units: tiling::TileRestorationUnitsMut<'a>
+pub tiling::TileRestorationPlaneMut::wiener_ref: [[i8; 3]; 2]
+pub tiling::TileRestorationState::planes: [tiling::TileRestorationPlane<'a>; 3]
+pub tiling::TileRestorationStateMut::planes: [tiling::TileRestorationPlaneMut<'a>; 3]
+pub tiling::TileStateMut::coded_block_info: tiling::MiTileState
+pub tiling::TileStateMut::deblock: &'a encoder::DeblockState
+pub tiling::TileStateMut::height: usize
+pub tiling::TileStateMut::input: &'a v_frame::frame::Frame<T>
+pub tiling::TileStateMut::input_hres: &'a v_frame::plane::Plane<T>
+pub tiling::TileStateMut::input_qres: &'a v_frame::plane::Plane<T>
+pub tiling::TileStateMut::input_tile: tiling::Tile<'a, T>
+pub tiling::TileStateMut::integral_buffer: lrf::IntegralImageBuffer
+pub tiling::TileStateMut::inter_compound_buffers: predict::InterCompoundBuffers
+pub tiling::TileStateMut::me_stats: alloc::vec::Vec<tiling::TileMEStatsMut<'a>>
+pub tiling::TileStateMut::mi_height: usize
+pub tiling::TileStateMut::mi_width: usize
+pub tiling::TileStateMut::qc: quantize::QuantizationContext
+pub tiling::TileStateMut::rec: tiling::TileMut<'a, T>
+pub tiling::TileStateMut::restoration: tiling::TileRestorationStateMut<'a>
+pub tiling::TileStateMut::sb_height: usize
+pub tiling::TileStateMut::sb_size_log2: usize
+pub tiling::TileStateMut::sb_width: usize
+pub tiling::TileStateMut::sbo: context::PlaneSuperBlockOffset
+pub tiling::TileStateMut::segmentation: &'a encoder::SegmentationState
+pub tiling::TileStateMut::width: usize
+pub tiling::TilingInfo::cols: usize
+pub tiling::TilingInfo::frame_height: usize
+pub tiling::TilingInfo::frame_width: usize
+pub tiling::TilingInfo::max_tile_cols_log2: usize
+pub tiling::TilingInfo::max_tile_rows_log2: usize
+pub tiling::TilingInfo::min_tile_cols_log2: usize
+pub tiling::TilingInfo::min_tile_rows_log2: usize
+pub tiling::TilingInfo::min_tiles_log2: usize
+pub tiling::TilingInfo::rows: usize
+pub tiling::TilingInfo::sb_size_log2: usize
+pub tiling::TilingInfo::tile_cols_log2: usize
+pub tiling::TilingInfo::tile_height_sb: usize
+pub tiling::TilingInfo::tile_rows_log2: usize
+pub tiling::TilingInfo::tile_width_sb: usize
+
+## trait impls (90 types)
+
+config::CpuFeatureLevel: TrivialClone
+context::Block: Clone, Copy, Default, TrivialClone
+context::BlockContextCheckpoint: Clone
+context::BlockOffset: Clone, Copy, Debug, Default, Eq, PartialEq, TrivialClone
+context::CDFContext: Clone, Copy, Debug, TrivialClone
+context::CDFContextCheckpoint: Clone
+context::CDFContextLog: Default
+context::CFLParams: Clone, Copy, Debug, Default, TrivialClone
+context::CFLSign: Clone, Copy, Debug, Eq, PartialEq, TrivialClone
+context::CandidateMV: Clone
+context::ContextWriterCheckpoint: Clone
+context::FieldMap: Debug, Default
+context::FrameBlocks: Clone, Index<context::PlaneBlockOffset>, Index<usize>, IndexMut<context::PlaneBlockOffset>, IndexMut<usize>
+context::NMVComponent: Clone, Copy, TrivialClone
+context::NMVContext: Clone, Copy, TrivialClone
+context::PlaneBlockOffset: Clone, Copy, Debug, Eq, PartialEq, TrivialClone
+context::PlaneSuperBlockOffset: Add, Clone, Copy, Debug, Eq, PartialEq, TrivialClone
+context::SegLvl: Clone, Copy, Eq, PartialEq, TrivialClone
+context::SuperBlockOffset: Add, Clone, Copy, Debug, Eq, PartialEq, TrivialClone
+context::TileBlockOffset: Clone, Copy, Debug, Default, Eq, PartialEq, TrivialClone
+context::TileSuperBlockOffset: Add, Clone, Copy, Debug, Eq, PartialEq, TrivialClone
+context::TxClass: Clone, Copy, Eq, PartialEq, TrivialClone
+prelude::BlockSize: TrivialClone
+prelude::ChromaSamplePosition: TrivialClone
+prelude::ChromaticityPoint: TrivialClone
+prelude::ColorDescription: TrivialClone
+prelude::ColorPrimaries: TrivialClone
+prelude::ContentLight: TrivialClone
+prelude::EncoderStatus: TrivialClone
+prelude::FrameType: TrivialClone
+prelude::FrameTypeOverride: TrivialClone
+prelude::InvalidConfig: TrivialClone
+prelude::MasteringDisplay: TrivialClone
+prelude::MatrixCoefficients: TrivialClone
+prelude::MotionSpeedSettings: TrivialClone
+prelude::PartitionRange: TrivialClone
+prelude::PartitionSpeedSettings: TrivialClone
+prelude::PixelRange: TrivialClone
+prelude::PredictionMode: TrivialClone
+prelude::PredictionModesSetting: TrivialClone
+prelude::PredictionSpeedSettings: TrivialClone
+prelude::Rational: TrivialClone
+prelude::SGRComplexityLevel: TrivialClone
+prelude::SceneDetectionSpeed: TrivialClone
+prelude::SegmentationLevel: TrivialClone
+prelude::Sequence: TrivialClone
+prelude::SpeedSettings: TrivialClone
+prelude::TransferCharacteristics: TrivialClone
+prelude::TransformSpeedSettings: TrivialClone
+prelude::Tune: TrivialClone
+prelude::TxType: TrivialClone
+tiling::Area: Clone, Copy, Debug, TrivialClone
+tiling::CodedBlockInfo: Clone, Copy, Debug, Default, TrivialClone
+tiling::HorzWindows<'_, T>: ExactSizeIterator, FusedIterator
+tiling::HorzWindows<'a, T>: Iterator
+tiling::MiTileState: Clone, Debug, Index<usize>, IndexMut<usize>
+tiling::PlaneRegion<'_, T>: Index<usize>
+tiling::PlaneRegion<'a, T>: Debug
+tiling::PlaneRegionMut<'_, T>: Index<usize>, IndexMut<usize>
+tiling::PlaneRegionMut<'a, T>: Debug
+tiling::Rect: Clone, Copy, Debug, Default, Eq, From<tiling::TileRect>, PartialEq, TrivialClone
+tiling::RowsIter<'_, T>: ExactSizeIterator, FusedIterator
+tiling::RowsIter<'a, T>: Iterator
+tiling::RowsIterMut<'_, T>: ExactSizeIterator, FusedIterator
+tiling::RowsIterMut<'a, T>: Iterator
+tiling::Tile<'a, T>: Debug
+tiling::TileBlocks<'_>: Index<context::TileBlockOffset>, Index<usize>
+tiling::TileBlocks<'a>: Debug
+tiling::TileBlocksMut<'_>: Index<context::TileBlockOffset>, Index<usize>, IndexMut<context::TileBlockOffset>, IndexMut<usize>
+tiling::TileBlocksMut<'a>: Debug
+tiling::TileContextIterMut<'_, T>: ExactSizeIterator, FusedIterator
+tiling::TileContextIterMut<'a, T>: Iterator
+tiling::TileMEStats<'_>: Index<usize>
+tiling::TileMEStats<'a>: Debug
+tiling::TileMEStatsMut<'_>: Index<usize>, IndexMut<usize>
+tiling::TileMEStatsMut<'a>: Debug
+tiling::TileMut<'a, T>: Debug
+tiling::TileRect: Clone, Copy, Debug, TrivialClone
+tiling::TileRestorationPlane<'a>: Debug
+tiling::TileRestorationPlaneMut<'a>: Debug
+tiling::TileRestorationState<'a>: Debug
+tiling::TileRestorationStateMut<'a>: Debug
+tiling::TileRestorationUnits<'_>: Index<usize>
+tiling::TileRestorationUnits<'a>: Debug
+tiling::TileRestorationUnitsMut<'_>: Index<usize>, IndexMut<usize>
+tiling::TileRestorationUnitsMut<'a>: Debug
+tiling::TileStateMut<'a, T>: Debug
+tiling::TilingInfo: Clone, Copy, Debug, TrivialClone
+tiling::VertWindows<'_, T>: ExactSizeIterator, FusedIterator
+tiling::VertWindows<'a, T>: Iterator
+
+## auto traits
+
+31 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+context::BlockContext<'a>: !UnwindSafe
+context::ContextWriter<'a>: !UnwindSafe
+tiling::HorzWindows<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
+tiling::PlaneRegion<'_, T>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::PlaneRegion<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
+tiling::PlaneRegionMut<'_, T>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::PlaneRegionMut<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
+tiling::RowsIter<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
+tiling::RowsIterMut<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
+tiling::Tile<'a, T>: !RefUnwindSafe !UnwindSafe
+tiling::TileBlocks<'_>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::TileBlocks<'a>: !Send !Sync
+tiling::TileBlocksMut<'_>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::TileBlocksMut<'a>: !Send !Sync !UnwindSafe
+tiling::TileContextIterMut<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
+tiling::TileContextMut<'a, T>: !RefUnwindSafe !UnwindSafe
+tiling::TileMEStats<'_>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::TileMEStats<'a>: !Send !Sync
+tiling::TileMEStatsMut<'_>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::TileMEStatsMut<'a>: !Send !Sync !UnwindSafe
+tiling::TileMut<'a, T>: !RefUnwindSafe !UnwindSafe
+tiling::TileRestorationPlaneMut<'a>: !UnwindSafe
+tiling::TileRestorationStateMut<'a>: !UnwindSafe
+tiling::TileRestorationUnits<'_>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::TileRestorationUnits<'a>: !Send !Sync
+tiling::TileRestorationUnitsMut<'_>: !Freeze !RefUnwindSafe !Unpin !UnwindSafe
+tiling::TileRestorationUnitsMut<'a>: !Send !Sync !UnwindSafe
+tiling::TileStateMut<'a, T>: !RefUnwindSafe !UnwindSafe
+tiling::VertWindows<'a, T>: !RefUnwindSafe !Send !Sync !UnwindSafe
