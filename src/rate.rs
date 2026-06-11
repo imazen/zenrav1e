@@ -522,6 +522,35 @@ fn chroma_offset(
 }
 
 impl QuantizerParameters {
+  /// Parameters for true lossless coding: qindex 0 on every plane, no
+  /// delta-q, so `FrameInvariants::is_lossless()` holds and the encoder
+  /// takes the spec lossless path (WHT 4x4, loop filters disabled, no
+  /// QM, exact qi-0 quantization). Entered only via an explicit
+  /// `quantizer = 0` in constant-quality mode — the normal path below
+  /// floors the index at 1 (see `new_from_log_q`), which silently coded
+  /// "lossless" requests as qi=1 lossy (±2 reconstruction error;
+  /// imazen/zenrav1e#9, imazen/zenavif#8).
+  fn new_lossless(
+    bit_depth: usize, log_isqrt_mean_scale: i64,
+  ) -> QuantizerParameters {
+    // Lambda from the qi-0 quantizer scale (ac_q(0) = 4 << (bd - 8)).
+    // Fully-coded lossless blocks measure zero distortion, so RDO is
+    // rate-dominated regardless of the exact value; this keeps
+    // estimate-based paths (ME) on the same scale as qi 0.
+    let quantizer = ac_q(0, 0, bit_depth).get() as i64;
+    let log_q = blog64(quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    let lambda = (::std::f64::consts::LN_2 / 6.0)
+      * (((log_q + log_isqrt_mean_scale) as f64) * Q57_SQUARE_EXP_SCALE).exp();
+    QuantizerParameters {
+      log_base_q: log_q,
+      log_target_q: log_q,
+      dc_qi: [0; 3],
+      ac_qi: [0; 3],
+      lambda,
+      dist_scale: [1.0; 3],
+    }
+  }
+
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
     chroma_sampling: ChromaSampling, is_intra: bool,
@@ -733,6 +762,16 @@ impl RCState {
       // Derive quantizer directly from frame type.
       let bit_depth = ctx.config.bit_depth;
       let chroma_sampling = ctx.config.chroma_sampling;
+      // Explicit lossless request: quantizer 0 must reach qindex 0
+      // intact (AV1 CodedLossless). The flat-quantizer roundtrip below
+      // floors the index at 1 and would silently turn lossless into
+      // qi=1 lossy coding.
+      if ctx.config.quantizer == 0 {
+        return QuantizerParameters::new_lossless(
+          bit_depth,
+          log_isqrt_mean_scale,
+        );
+      }
       let (log_base_q, log_q) =
         Self::calc_flat_quantizer(ctx.config.quantizer as u8, bit_depth, fti);
       QuantizerParameters::new_from_log_q(

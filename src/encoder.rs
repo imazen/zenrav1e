@@ -2369,9 +2369,14 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       cw.write_angle_delta(w, angle_delta.y, luma_mode);
     }
     if has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling) {
-      cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
+      // CFL availability must match the decoder's derivation (lossless
+      // segments restrict CFL to 4x4 chroma blocks) or the uv_mode CDF
+      // alphabets differ and the bitstream desyncs.
+      let cfl_allowed =
+        bsize.cfl_allowed_lossless_aware(fi.is_lossless(), xdec, ydec);
+      cw.write_intra_uv_mode(w, chroma_mode, luma_mode, cfl_allowed);
       if chroma_mode.is_cfl() {
-        assert!(bsize.cfl_allowed());
+        assert!(cfl_allowed);
         cw.write_cfl_alphas(w, cfl);
       }
       if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
@@ -2612,7 +2617,13 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
     fi.sequence.chroma_sampling
   ));
 
-  let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
+  let uv_tx_size = if fi.is_lossless() {
+    // Lossless forces 4x4 transforms on every plane (AV1 spec); the
+    // decoder parses chroma as a grid of 4x4 WHTs.
+    TxSize::TX_4X4
+  } else {
+    bsize.largest_chroma_tx_size(xdec, ydec)
+  };
 
   let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
   let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
@@ -2631,7 +2642,11 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
     [].as_slice()
   };
 
-  let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
+  let uv_tx_type = if fi.is_lossless() {
+    // Lossless chroma uses WHT 4x4 exactly like luma — the decoder
+    // derives this and never reads a chroma tx type.
+    TxType::WHT_WHT
+  } else if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
     TxType::DCT_DCT
   } else {
     uv_intra_mode_to_tx_type_context(chroma_mode)
@@ -2784,7 +2799,13 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
 
   let max_tx_size = max_txsize_rect_lookup[bsize as usize];
   debug_assert!(max_tx_size.block_size() <= BlockSize::BLOCK_64X64);
-  let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
+  let uv_tx_size = if fi.is_lossless() {
+    // Lossless forces 4x4 transforms on every plane (AV1 spec); the
+    // decoder parses chroma as a grid of 4x4 WHTs.
+    TxSize::TX_4X4
+  } else {
+    bsize.largest_chroma_tx_size(xdec, ydec)
+  };
 
   let mut bw_uv = max_tx_size.width_mi() >> xdec;
   let mut bh_uv = max_tx_size.height_mi() >> ydec;
@@ -2797,7 +2818,10 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  let uv_tx_type = if partition_has_coeff {
+  let uv_tx_type = if fi.is_lossless() {
+    // Lossless chroma is WHT 4x4 (decoder-derived, never signaled).
+    TxType::WHT_WHT
+  } else if partition_has_coeff {
     tx_type.uv_inter(uv_tx_size)
   } else {
     TxType::DCT_DCT
@@ -3901,7 +3925,22 @@ fn encode_tile<'a, T: Pixel>(
     }
   }
 
-  if fi.sequence.enable_delayed_loopfilter_rdo && !fi.is_lossless() {
+  if fi.sequence.enable_delayed_loopfilter_rdo && fi.is_lossless() {
+    // Lossless skips deblock RDO entirely, but with delayed-loopfilter
+    // RDO the queue still owns the superblock writes — drain it or the
+    // tile ends with unwritten SBs.
+    check_lf_queue(
+      fi,
+      ts,
+      &mut cw,
+      &mut w,
+      &mut sbs_q,
+      &mut last_lru_ready,
+      &mut last_lru_rdoed,
+      &mut last_lru_coded,
+      false,
+    );
+  } else if fi.sequence.enable_delayed_loopfilter_rdo {
     // Solve deblocking for just this tile
     let deblock_levels = deblock_filter_optimize(
       fi,

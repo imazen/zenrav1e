@@ -295,8 +295,12 @@ impl QuantizationContext {
     &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
     qm: Option<&[u8]>,
   ) -> u16 {
-    let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
-    let iscan = av1_scan_orders[tx_size as usize][tx_type as usize].iscan;
+    // WHT_WHT is the internal lossless pseudo-type (TX_TYPES_PLUS_LL);
+    // its coefficients use the default 4x4 scan, same as DCT_DCT.
+    let scan_tx_type =
+      if tx_type == TxType::WHT_WHT { TxType::DCT_DCT } else { tx_type };
+    let scan = av1_scan_orders[tx_size as usize][scan_tx_type as usize].scan;
+    let iscan = av1_scan_orders[tx_size as usize][scan_tx_type as usize].iscan;
 
     // DC coefficient
     qcoeffs[0] = {

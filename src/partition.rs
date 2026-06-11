@@ -230,6 +230,22 @@ impl BlockSize {
     self <= BlockSize::BLOCK_32X32
   }
 
+  /// CFL availability the way the DECODER derives it (AV1 read_uv_mode):
+  /// in a lossless segment, CFL is allowed only when the chroma block is
+  /// 4x4 — i.e. `(bw4 >> xdec) <= 1 && (bh4 >> ydec) <= 1`. Using the
+  /// lossy `cfl_allowed` rule for a lossless block selects a different
+  /// uv_mode CDF alphabet than the decoder and desyncs the bitstream.
+  #[inline]
+  pub fn cfl_allowed_lossless_aware(
+    self, lossless: bool, xdec: usize, ydec: usize,
+  ) -> bool {
+    if lossless {
+      (self.width_mi() >> xdec) <= 1 && (self.height_mi() >> ydec) <= 1
+    } else {
+      self.cfl_allowed()
+    }
+  }
+
   #[inline]
   pub const fn width(self) -> usize {
     1 << self.width_log2()

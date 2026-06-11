@@ -758,8 +758,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // segmentation
     self.write_segment_data(fi, &fs.segmentation)?;
 
-    // delta_q
-    self.write_bit(false)?; // delta_q_present_flag: no delta q
+    // delta_q (spec 5.9.17): delta_q_present is only coded when
+    // base_q_idx > 0 — a lossless frame codes nothing here.
+    if fi.base_q_idx > 0 {
+      self.write_bit(false)?; // delta_q_present_flag: no delta q
+    }
 
     // delta_lf_params in the spec
     self.write_deblock_filter_a(fi, &fs.deblock)?;
@@ -775,7 +778,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // loop restoration
     self.write_frame_lrf(fi, &fs.restoration)?;
 
-    self.write_bit(fi.tx_mode_select)?; // tx mode
+    // tx mode (spec 5.9.21): inferred ONLY_4X4 for lossless, no bit.
+    if !fi.is_lossless() {
+      self.write_bit(fi.tx_mode_select)?; // tx mode
+    }
 
     let mut reference_select = false;
     if !fi.intra_only {
@@ -1048,6 +1054,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_deblock_filter_b<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState,
   ) -> io::Result<()> {
+    // loop_filter_params (spec 5.9.11): a CodedLossless (or intrabc)
+    // frame codes nothing — the decoder sets levels 0 implicitly.
+    if fi.is_lossless() || fi.allow_intrabc {
+      return Ok(());
+    }
     let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
       1
     } else {

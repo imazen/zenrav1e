@@ -733,9 +733,9 @@ impl ContextWriter<'_> {
   #[inline]
   pub fn write_intra_uv_mode<W: Writer>(
     &mut self, w: &mut W, uv_mode: PredictionMode, y_mode: PredictionMode,
-    bs: BlockSize,
+    cfl_allowed: bool,
   ) {
-    if bs.cfl_allowed() {
+    if cfl_allowed {
       let cdf = &self.fc.uv_mode_cfl_cdf[y_mode as usize];
       symbol_with_update!(self, w, uv_mode as u32, cdf);
     } else {
@@ -1786,8 +1786,15 @@ impl ContextWriter<'_> {
 
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
 
+    // WHT_WHT is the internal lossless pseudo-type: coefficients are
+    // coded exactly like DCT_DCT (default 4x4 scan, 2D class), and the
+    // transform type itself is never signaled — the decoder infers WHT
+    // for a lossless 4x4 (AV1 5.11.47).
+    let coding_tx_type =
+      if tx_type == TxType::WHT_WHT { TxType::DCT_DCT } else { tx_type };
     // Note: Both intra and inter mode uses inter scan order. Surprised?
-    let scan: &[u16] = &av1_scan_orders[tx_size as usize][tx_type as usize]
+    let scan: &[u16] = &av1_scan_orders[tx_size as usize]
+      [coding_tx_type as usize]
       .scan[..usize::from(eob)];
     let height = av1_get_coded_tx_size(tx_size).height();
 
@@ -1827,11 +1834,12 @@ impl ContextWriter<'_> {
 
     self.txb_init_levels(coeffs_in, height, levels, height + TX_PAD_HOR);
 
-    let tx_class = tx_type_to_class[tx_type as usize];
+    let tx_class = tx_type_to_class[coding_tx_type as usize];
     let plane_type = usize::from(plane != 0);
 
-    // Signal tx_type for luma plane only
-    if plane == 0 {
+    // Signal tx_type for luma plane only. Lossless (WHT_WHT) blocks
+    // never signal: the decoder's tx set is DCT-only and reads nothing.
+    if plane == 0 && tx_type != TxType::WHT_WHT {
       self.write_tx_type(
         w,
         tx_size,

@@ -6,7 +6,7 @@
 # package, and `bench` is internal-only (see tests/public_api_doc.rs).
 # DO NOT EDIT BY HAND — commit regenerated changes together with the code.
 
-## default features (2771 items)
+## default features (2772 items)
 
 pub mod zenrav1e
 pub use zenrav1e::CastFromPrimitive
@@ -634,7 +634,7 @@ pub zenrav1e::data::EncoderStats::block_size_counts: [usize; 22]
 pub zenrav1e::data::EncoderStats::chroma_pred_mode_counts: [usize; 34]
 pub zenrav1e::data::EncoderStats::luma_pred_mode_counts: [usize; 34]
 pub zenrav1e::data::EncoderStats::skip_block_count: usize
-pub zenrav1e::data::EncoderStats::tx_type_counts: [usize; 16]
+pub zenrav1e::data::EncoderStats::tx_type_counts: [usize; 17]
 impl core::clone::Clone for zenrav1e::data::EncoderStats
 pub fn zenrav1e::data::EncoderStats::clone(&self) -> zenrav1e::data::EncoderStats
 impl core::cmp::Eq for zenrav1e::data::EncoderStats
@@ -1446,6 +1446,7 @@ pub const zenrav1e::prelude::BlockSize::BLOCK_SIZES: usize
 pub const zenrav1e::prelude::BlockSize::BLOCK_SIZES_ALL: usize
 pub const fn zenrav1e::prelude::BlockSize::area(self) -> usize
 pub fn zenrav1e::prelude::BlockSize::cfl_allowed(self) -> bool
+pub fn zenrav1e::prelude::BlockSize::cfl_allowed_lossless_aware(self, bool, usize, usize) -> bool
 pub fn zenrav1e::prelude::BlockSize::from_width_and_height(usize, usize) -> zenrav1e::prelude::BlockSize
 pub fn zenrav1e::prelude::BlockSize::from_width_and_height_opt(usize, usize) -> core::result::Result<zenrav1e::prelude::BlockSize, zenrav1e::partition::InvalidBlockSize>
 pub const fn zenrav1e::prelude::BlockSize::height(self) -> usize

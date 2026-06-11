@@ -103,7 +103,10 @@ pub mod test {
     let mut eob = 0u16;
     let mut exit = 0;
 
-    let scan = av1_scan_orders[tx_size][tx_type].scan;
+    // WHT_WHT (internal lossless pseudo-type) shares DCT_DCT's 4x4 scan.
+    let scan_tx_type =
+      if tx_type == TxType::WHT_WHT { TxType::DCT_DCT } else { tx_type };
+    let scan = av1_scan_orders[tx_size][scan_tx_type].scan;
 
     for (i, &pos) in scan.iter().enumerate() {
       exit = i as u16;

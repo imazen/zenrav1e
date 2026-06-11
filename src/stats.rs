@@ -10,7 +10,7 @@
 use crate::partition::BlockSize;
 use crate::predict::PREDICTION_MODES;
 use crate::serialize::{Deserialize, Serialize};
-use crate::transform::TX_TYPES;
+use crate::transform::TX_TYPES_PLUS_LL;
 
 #[cfg(feature = "serialize")]
 use serde_big_array::BigArray;
@@ -24,7 +24,8 @@ pub struct EncoderStats {
   /// Stores count of pixels belonging to skip blocks in this frame
   pub skip_block_count: usize,
   /// Stores count of pixels belonging to each transform type in this frame
-  pub tx_type_counts: [usize; TX_TYPES],
+  // Sized PLUS_LL so lossless (WHT_WHT) blocks are countable.
+  pub tx_type_counts: [usize; TX_TYPES_PLUS_LL],
   /// Stores count of pixels belonging to each luma prediction mode in this frame
   #[serde(with = "BigArray")]
   pub luma_pred_mode_counts: [usize; PREDICTION_MODES],
@@ -40,7 +41,7 @@ impl Default for EncoderStats {
     EncoderStats {
       block_size_counts: [0; BlockSize::BLOCK_SIZES_ALL],
       skip_block_count: 0,
-      tx_type_counts: [0; TX_TYPES],
+      tx_type_counts: [0; TX_TYPES_PLUS_LL],
       luma_pred_mode_counts,
       chroma_pred_mode_counts,
     }
