@@ -49,6 +49,20 @@ cargo check --features threading
 - [ ] Phase 4: SSIMULACRA2 Target-Quality Convergence (ravif layer)
 - [ ] Phase 5: Integration (ravif/zenavif/zencodecs)
 
+## Known Bugs
+
+### CDEF dir-search debug_assert fires on HBD fuzz input (OPEN, Fuzz CI red)
+`encode_decode_hbd` fuzz target crashes at `src/cdef.rs:95:9`:
+`assertion failed: p >> coeff_shift <= 255` in the `cdef_find_dir` partial-sum
+loop — HBD pixel values exceed `255 << coeff_shift` for the bit-depth/shift
+combination the fuzzer constructs. Pre-existing: identical crash on scheduled
+Fuzz runs 2026-06-05, 06-08, 06-11 (run 27324004025, before the api-doc
+migration 290497e7) and 06-12 (run 27394679803, after it). Artifacts uploaded
+by CI: `crash-e6a1688398ba0edff812245431a01bef85eebf00` (06-11),
+`crash-ae26e38693eea89fa148a4e405f60f07ec940c0e` (06-12), plus two
+slow-units. Debug-assert-only (release unaffected), but the assert documents
+a real range invariant — diagnose the coeff_shift derivation, don't delete it.
+
 ## Known Bugs (Fixed)
 
 ### QM eob calculation (fixed: 358d4f51)
