@@ -47,7 +47,15 @@ pub fn inverse_transform_add<T: Pixel>(
         );
       }
     }
-    PixelType::U16 => {
+    // The high-bitdepth itx kernels (both the 10bpc and the 12bpc variants)
+    // are only bit-accurate for their native bit depths. dav1d never feeds
+    // them 8-bit content — 8-bit always uses the dedicated 8bpc (u8) kernels —
+    // so there is no asm path valid for 8-bit stored in u16. Calling the 12bpc
+    // kernels with bitdepth_max=255 emits out-of-range samples (e.g. 256),
+    // which then trips the `p >> coeff_shift <= 255` range assertion in CDEF
+    // direction search (issue #10). Restrict the 12bpc asm to bd==12 and let
+    // 8-bit-in-u16 fall through to the (correctly clamped) Rust implementation.
+    PixelType::U16 if bd == 12 => {
       if let Some(func) = INV_TXFM_HBD_FNS_12[cpu.as_index()][tx_size][tx_type]
       {
         return call_inverse_hbd_func(
@@ -61,6 +69,7 @@ pub fn inverse_transform_add<T: Pixel>(
         );
       }
     }
+    PixelType::U16 => {}
   };
 
   rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);

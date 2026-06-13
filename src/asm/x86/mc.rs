@@ -138,7 +138,13 @@ pub fn put_8tap<T: Pixel>(
           None => call_rust(dst),
         }
       }
-      PixelType::U16 => {
+      // The 16bpc subpel kernels are not bit-accurate for 8-bit content (no
+      // asm path exists for 8-bit stored in u16), so guard on `bit_depth > 8`
+      // and fall back to Rust for bd==8 — matching `prep_8tap` and `mc_avg`
+      // below, which were already guarded. Without this, 8-bit-in-u16 inter
+      // prediction can emit out-of-range samples that trip the CDEF
+      // direction-search range assertion (issue #10).
+      PixelType::U16 if bit_depth > 8 => {
         match PUT_HBD_FNS[cpu.as_index()][get_2d_mode_idx(mode_x, mode_y)] {
           Some(func) => (func)(
             dst.data_ptr_mut() as *mut _,
@@ -154,6 +160,7 @@ pub fn put_8tap<T: Pixel>(
           None => call_rust(dst),
         }
       }
+      _ => call_rust(dst),
     }
   }
   #[cfg(feature = "check_asm")]

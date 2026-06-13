@@ -551,6 +551,17 @@ pub fn dispatch_predict_intra<T: Pixel>(
         }
       }
       PixelType::U16 => {
+        // The high-bitdepth (16bpc) intra-prediction kernels are not
+        // bit-accurate for 8-bit content: dav1d always routes 8-bit through
+        // the dedicated 8bpc (u8) kernels, so there is no asm path valid for
+        // 8-bit stored in u16. The 16bpc kernels can leave out-of-range
+        // samples (e.g. 512) for bd==8, which then trips the CDEF
+        // direction-search range assertion (issue #10). Fall back to the
+        // (correctly clamped) Rust predictors. This matches the aarch64
+        // dispatch, whose U16 arm is already guarded by `bit_depth > 8`.
+        if bit_depth == 8 {
+          return call_rust(dst);
+        }
         let dst_ptr = dst.data_ptr_mut() as *mut _;
         let edge_ptr = edge_buf.top_left_ptr() as *const _;
         let bd_max = (1 << bit_depth) - 1;
