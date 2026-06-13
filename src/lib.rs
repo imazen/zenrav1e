@@ -274,6 +274,9 @@ pub mod version {
 ))]
 mod test_encode_decode;
 
+#[cfg(test)]
+mod test_8bit_u16;
+
 #[cfg(feature = "bench")]
 pub mod bench {
   pub mod api {
