@@ -51,19 +51,29 @@ cargo check --features threading
 
 ## Known Bugs
 
-### CDEF dir-search debug_assert fires on HBD fuzz input (OPEN, Fuzz CI red)
-`encode_decode_hbd` fuzz target crashes at `src/cdef.rs:95:9`:
-`assertion failed: p >> coeff_shift <= 255` in the `cdef_find_dir` partial-sum
-loop — HBD pixel values exceed `255 << coeff_shift` for the bit-depth/shift
-combination the fuzzer constructs. Pre-existing: identical crash on scheduled
-Fuzz runs 2026-06-05, 06-08, 06-11 (run 27324004025, before the api-doc
-migration 290497e7) and 06-12 (run 27394679803, after it). Artifacts uploaded
-by CI: `crash-e6a1688398ba0edff812245431a01bef85eebf00` (06-11),
-`crash-ae26e38693eea89fa148a4e405f60f07ec940c0e` (06-12), plus two
-slow-units. Debug-assert-only (release unaffected), but the assert documents
-a real range invariant — diagnose the coeff_shift derivation, don't delete it.
+(none currently open)
 
 ## Known Bugs (Fixed)
+
+### CDEF dir-search debug_assert on 8-bit-in-u16 (issue #10, fixed: see master)
+`encode_decode_hbd` fuzz target crashed at `src/cdef.rs:95:9`
+(`assertion failed: p >> coeff_shift <= 255`) in `cdef_find_dir`. Root cause:
+**8-bit content stored in `u16`** (`Context<u16>` with `bit_depth == 8`) was
+routed to the high-bitdepth (HBD) x86 SIMD kernels. dav1d's HBD inverse
+transform (10bpc *and* 12bpc), 16bpc intra predictor, and 16bpc subpel
+(`put_8tap`) kernels are only bit-accurate at their native depths (>= 10) —
+8-bit always uses the dedicated 8bpc (u8) kernels — so there is no asm path
+valid for 8-bit-in-u16. Fed `bitdepth_max=255` they emit out-of-range
+reconstructed samples (256 from the itx, 512 from the DC predictor), which the
+CDEF direction search then reads. Three x86 dispatches lacked the `bd==8 ->
+Rust` guard the rest of the codebase already had (aarch64 predict/itx/mc, x86
+`prep_8tap`/`mc_avg`, x86 `quantize`): `transform/inverse.rs` (12bpc was the
+catch-all), `predict.rs`, and `mc.rs` `put_8tap`. Fix routes bd==8 to the
+correctly-clamped Rust kernels. Diagnosed by confirming both itx variants and
+the DC predictor emit OOR for bd=8 and that forcing the Rust path eliminates
+it; the dav1d roundtrip then matches. Regression guard:
+`src/test_8bit_u16.rs` (encode-only, runs in the default + no-asm CI test
+jobs). Crash seed: `fuzz/regression/cdef-range-8bit-in-u16-encode_decode_hbd.bin`.
 
 ### QM eob calculation (fixed: 358d4f51)
 Deadzone-based eob prediction used global base quantizer, but QM gives each
