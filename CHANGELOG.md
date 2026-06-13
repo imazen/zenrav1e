@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Investigated
+- **#6 bottom-up partition × QM regression** — measured negative result, no fix
+  landed. The proving sweep (speeds {1,2,4,6} × q5..=100:5 × QM{off,on} × photo
+  + sci-figure, profile-A) shows bottom-up never beats top-down; on synthetic
+  content it loses 30–56 zensim *with and without* QM. The issue's `ts.rec`-
+  rollback hypothesis is falsified three ways; the cause is bottom-up's
+  cost-evaluation path (`rdo_mode_decision` + recursive child-cost summation),
+  not the partition set or neighbour-pixel state. The ravif
+  `encode_bottomup=false` workaround stays. Evidence + analysis:
+  `benchmarks/issue6-bottomup-qm-2026-06-13.md`.
+
 ### Fixed
 - **Lossless (`quantizer = 0`) was never actually lossless** — it silently
   coded qi=1 lossy output with ±2 reconstruction error on 7-28% of pixels
