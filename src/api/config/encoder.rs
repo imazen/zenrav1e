@@ -146,7 +146,7 @@ pub struct EncoderConfig {
   /// dependencies between coefficients. Encoder-only, bitstream compatible.
   pub enable_trellis: bool,
 
-  /// Maximum pixel count (width * height). Default 67_108_864 (64 megapixels).
+  /// Maximum pixel count (width * height). Default 120_000_000 (120 megapixels).
   /// Set to 0 to disable the limit. Validated in `Config::validate()`.
   pub max_pixel_count: u64,
 
@@ -213,7 +213,7 @@ impl EncoderConfig {
       vaq_strength: 1.0,
       seg_boost: 1.0,
       enable_trellis: false,
-      max_pixel_count: 67_108_864, // 64 megapixels
+      max_pixel_count: 120_000_000, // 120 megapixels (admits 108 MP phone photos)
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
