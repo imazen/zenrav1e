@@ -232,8 +232,12 @@ impl Arbitrary<'_> for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let enc = EncoderConfig {
       speed_settings: SpeedSettings::from_preset(u.int_in_range(0..=10)?),
-      width: u.int_in_range(1..=256)?,
-      height: u.int_in_range(1..=256)?,
+      // Bounded so even the slowest preset (speed 0, the most exhaustive RDO)
+      // stays within the fuzzer's per-input time budget. At 256×256 a speed-0
+      // 3-frame encode took ~44 s (fuzz timeout / DoS); 128×128 is ~4× cheaper
+      // and still exercises tiling and the full partition search.
+      width: u.int_in_range(1..=128)?,
+      height: u.int_in_range(1..=128)?,
       still_picture: Arbitrary::arbitrary(u)?,
       time_base: arbitrary_rational(u)?,
       min_key_frame_interval: u.int_in_range(0..=3)?,
@@ -275,7 +279,7 @@ impl Arbitrary<'_> for ArbitraryEncoder {
     };
 
     let frame_count =
-      if enc.still_picture { 1 } else { u.int_in_range(1..=3)? };
+      if enc.still_picture { 1 } else { u.int_in_range(1..=2)? };
     if u.is_empty() {
       return Err(Error::NotEnoughData);
     }

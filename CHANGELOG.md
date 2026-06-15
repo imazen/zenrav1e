@@ -14,6 +14,12 @@
   `benchmarks/issue6-bottomup-qm-2026-06-13.md`.
 
 ### Fixed
+- **Fuzz `encode` harness time bound** — `ArbitraryEncoder` allowed a 256×256,
+  3-frame encode at speed preset 0 (most exhaustive RDO), ~44 s for a 58-byte
+  input (fuzz timeout / DoS). Tightened to 128×128 and ≤2 frames so even the
+  slowest preset stays within the per-input budget (~9 s worst case; a 60 s fuzz
+  run finds no slow unit). Harness-only — the encoder is unaffected. Seed:
+  `fuzz/regression/timeout-encode-speed0-large.bin`.
 - **Lossless (`quantizer = 0`) was never actually lossless** — it silently
   coded qi=1 lossy output with ±2 reconstruction error on 7-28% of pixels
   (imazen/zenrav1e#9), which also inverted the size/speed curve
