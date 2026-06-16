@@ -637,9 +637,9 @@ mod tests {
     // `u32::MAX` fps is the maximum the pre-fix `validate()` admitted and the
     // value the issue cites as reaching the av-scenechange panic.
     for (num, den) in [
-      (1u64, u32::MAX as u64),     // ~4.29e9 fps — old upper bound
-      (1, 1_000_000),              // 1 Mfps — well past the panic onset
-      (1, 144_000),                // just above the 64x64 panic threshold
+      (1u64, u32::MAX as u64), // ~4.29e9 fps — old upper bound
+      (1, 1_000_000),          // 1 Mfps — well past the panic onset
+      (1, 144_000),            // just above the 64x64 panic threshold
       (2, MAX_FRAME_RATE * 2 + 1), // den/num just over the fps ceiling
     ] {
       let mut cfg = base_config();
@@ -658,12 +658,12 @@ mod tests {
     // exact ceiling must still validate — the fix is purely additive rejection
     // of pathological rates, not a regression for real content.
     for (num, den) in [
-      (1u64, 24),                  // film
-      (1001, 30000),               // 29.97 fps NTSC (large num/den, low fps)
-      (1, 30),                     // default
-      (1, 60),                     // 60 fps
-      (1, 240),                    // 240 fps high-speed
-      (1, MAX_FRAME_RATE),         // exactly the ceiling — still allowed
+      (1u64, 24),          // film
+      (1001, 30000),       // 29.97 fps NTSC (large num/den, low fps)
+      (1, 30),             // default
+      (1, 60),             // 60 fps
+      (1, 240),            // 240 fps high-speed
+      (1, MAX_FRAME_RATE), // exactly the ceiling — still allowed
     ] {
       let mut cfg = base_config();
       cfg.enc.time_base = crate::api::Rational { num, den };
