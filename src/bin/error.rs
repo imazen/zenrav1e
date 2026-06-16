@@ -37,7 +37,9 @@ impl ToError for std::num::ParseIntError {
 }
 
 impl ToError for std::io::Error {}
-impl ToError for zenrav1e::InvalidConfig {}
+// Config validation now returns `At<InvalidConfig>` (the trace points at the
+// failing validation site); `Display` renders the full trace into the message.
+impl ToError for zenrav1e::At<zenrav1e::InvalidConfig> {}
 impl ToError for zenrav1e::EncoderStatus {}
 impl ToError for zenrav1e::config::RateControlError {}
 

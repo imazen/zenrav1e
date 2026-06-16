@@ -151,6 +151,18 @@ pub struct T35 {
 /// Status that can be returned by [`Context`] functions.
 ///
 /// [`Context`]: struct.Context.html
+//
+// INTENTIONALLY BARE — do not wrap in `whereat::At<>`.
+//
+// `EncoderStatus` is emitted per-frame from `Context::receive_packet` /
+// `Context::send_frame` (and the internal pump), i.e. on the encode hot path
+// and frequently as ordinary control flow (`NeedMoreData`, `EnoughData`,
+// `Encoded`). Attaching an `At<>` trace here would put trace allocation and
+// extra register pressure on the hottest path for a status that is usually not
+// even an error. The cold config-validation API (`Config::validate`,
+// `new_context`, the channel constructors) uses `At<InvalidConfig>` instead —
+// see `ConfigResult` in `src/api/config/mod.rs`. The C API mirrors this enum as
+// a bare `extern "C"` status and cannot carry `At<>` regardless.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
 pub enum EncoderStatus {
   /// The encoder needs more data to produce an output packet.

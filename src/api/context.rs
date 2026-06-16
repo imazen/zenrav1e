@@ -39,8 +39,9 @@ impl<T: Pixel> Context<T> {
   ///
   /// ```
   /// use zenrav1e::prelude::*;
+  /// use zenrav1e::At;
   ///
-  /// # fn main() -> Result<(), InvalidConfig> {
+  /// # fn main() -> Result<(), At<InvalidConfig>> {
   /// let cfg = Config::default();
   /// let ctx: Context<u8> = cfg.new_context()?;
   /// let frame = ctx.new_frame();

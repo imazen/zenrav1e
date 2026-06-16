@@ -2148,6 +2148,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "whereat"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
+
+[[package]]
 name = "which"
 version = "4.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2401,7 +2407,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zenrav1e"
-version = "0.1.4"
+version = "0.2.0"
 dependencies = [
  "aligned-vec",
  "aom-sys",
@@ -2460,6 +2466,7 @@ dependencies = [
  "tracing-subscriber",
  "v_frame",
  "wasm-bindgen",
+ "whereat",
  "y4m",
 ]
 

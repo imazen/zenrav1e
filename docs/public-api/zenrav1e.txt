@@ -6,33 +6,34 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenrav1e.txt 1087 lines (supported surface) | zenrav1e.features.txt 0 added (features: none) | zenrav1e.internal.txt 910 lines (1399 hidden + 0 excluded-feature)
+# files: zenrav1e.txt 1089 lines (supported surface) | zenrav1e.features.txt 0 added (features: none) | zenrav1e.internal.txt 910 lines (1399 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 9
-#   pub types (struct/enum/trait/alias)       101
+#   pub types (struct/enum/trait/alias)       104
 #   pub consts/statics                         44
 #   free functions                             13
 #   inherent methods                          145
 #   struct fields                             371
 #   enum variants                             391
-#   re-exports                                 28
+#   re-exports                                 29
 #   trait roster entries (type × trait)       220
 #   auto-trait-complete types                  37
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          151
+#   (root)                          153
 #   color                            69
 #   config                          113
 #   data                             42
-#   prelude                         720
+#   prelude                         722
 #   version                           7
 
-## items (1031 lines)
+## items (1033 lines)
 
 pub mod zenrav1e
+pub use At
 pub use CastFromPrimitive
 pub use Frame
 pub use Pixel
@@ -180,9 +181,9 @@ pub fn prelude::Config::new() -> Self
 pub fn prelude::Config::with_encoder_config(self, prelude::EncoderConfig) -> Self
 pub const fn prelude::Config::with_rate_control(self, prelude::RateControlConfig) -> Self [also: (root)]
 pub const fn prelude::Config::with_threads(self, usize) -> Self [also: (root)]
-pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> core::result::Result<prelude::Context<T>, prelude::InvalidConfig>
-pub fn prelude::Config::tiling_info(&self) -> core::result::Result<TilingInfo, prelude::InvalidConfig>
-pub fn prelude::Config::validate(&self) -> core::result::Result<(), prelude::InvalidConfig>
+pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> prelude::ConfigResult<prelude::Context<T>>
+pub fn prelude::Config::tiling_info(&self) -> prelude::ConfigResult<TilingInfo>
+pub fn prelude::Config::validate(&self) -> prelude::ConfigResult<()>
 pub config::EncoderConfig::bit_depth: usize
 pub config::EncoderConfig::bitrate: i32
 pub config::EncoderConfig::chroma_sample_position: prelude::ChromaSamplePosition
@@ -424,9 +425,9 @@ pub prelude::config::SegmentationLevel::Full
 pub prelude::config::SegmentationLevel::Simple
 pub fn prelude::Config::new() -> Self
 pub fn prelude::Config::with_encoder_config(self, prelude::EncoderConfig) -> Self
-pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> core::result::Result<prelude::Context<T>, prelude::InvalidConfig>
-pub fn prelude::Config::tiling_info(&self) -> core::result::Result<TilingInfo, prelude::InvalidConfig>
-pub fn prelude::Config::validate(&self) -> core::result::Result<(), prelude::InvalidConfig>
+pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> prelude::ConfigResult<prelude::Context<T>>
+pub fn prelude::Config::tiling_info(&self) -> prelude::ConfigResult<TilingInfo>
+pub fn prelude::Config::validate(&self) -> prelude::ConfigResult<()>
 pub prelude::config::EncoderConfig::bit_depth: usize
 pub prelude::config::EncoderConfig::bitrate: i32
 pub prelude::config::EncoderConfig::chroma_sample_position: prelude::ChromaSamplePosition
@@ -770,9 +771,9 @@ pub prelude::ColorDescription::matrix_coefficients: prelude::MatrixCoefficients
 pub prelude::ColorDescription::transfer_characteristics: prelude::TransferCharacteristics
 pub fn prelude::Config::new() -> Self
 pub fn prelude::Config::with_encoder_config(self, prelude::EncoderConfig) -> Self
-pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> core::result::Result<prelude::Context<T>, prelude::InvalidConfig>
-pub fn prelude::Config::tiling_info(&self) -> core::result::Result<TilingInfo, prelude::InvalidConfig>
-pub fn prelude::Config::validate(&self) -> core::result::Result<(), prelude::InvalidConfig>
+pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> prelude::ConfigResult<prelude::Context<T>>
+pub fn prelude::Config::tiling_info(&self) -> prelude::ConfigResult<TilingInfo>
+pub fn prelude::Config::validate(&self) -> prelude::ConfigResult<()>
 pub prelude::ContentLight::max_content_light_level: u16
 pub prelude::ContentLight::max_frame_average_light_level: u16
 pub fn prelude::Context<T>::container_sequence_header(&self) -> alloc::vec::Vec<u8>
@@ -997,9 +998,9 @@ pub InvalidConfig::TargetBitrateNeeded
 pub struct Config [also: config, prelude, prelude::config]
 pub fn prelude::Config::new() -> Self
 pub fn prelude::Config::with_encoder_config(self, prelude::EncoderConfig) -> Self
-pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> core::result::Result<prelude::Context<T>, prelude::InvalidConfig>
-pub fn prelude::Config::tiling_info(&self) -> core::result::Result<TilingInfo, prelude::InvalidConfig>
-pub fn prelude::Config::validate(&self) -> core::result::Result<(), prelude::InvalidConfig>
+pub fn prelude::Config::new_context<T: v_frame::pixel::Pixel>(&self) -> prelude::ConfigResult<prelude::Context<T>>
+pub fn prelude::Config::tiling_info(&self) -> prelude::ConfigResult<TilingInfo>
+pub fn prelude::Config::validate(&self) -> prelude::ConfigResult<()>
 pub struct Context<T: v_frame::pixel::Pixel> [also: prelude, prelude::context]
 pub fn prelude::Context<T>::container_sequence_header(&self) -> alloc::vec::Vec<u8>
 pub fn prelude::Context<T>::flush(&mut self)
@@ -1063,6 +1064,7 @@ pub Packet::opaque: core::option::Option<prelude::Opaque>
 pub Packet::qp: u8
 pub Packet::rec: core::option::Option<alloc::sync::Arc<v_frame::frame::Frame<T>>>
 pub Packet::source: core::option::Option<alloc::sync::Arc<v_frame::frame::Frame<T>>>
+pub type ConfigResult<T> = core::result::Result<T, whereat::at::At<prelude::InvalidConfig>> [also: prelude, prelude::config]
 
 ## trait impls (50 types)
 

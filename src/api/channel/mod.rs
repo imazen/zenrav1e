@@ -14,6 +14,7 @@ use crate::api::internal::ContextInner;
 use crate::api::util::*;
 
 use crossbeam::channel::*;
+use whereat::at;
 
 use crate::rate::RCState;
 use crate::util::Pixel;
@@ -33,7 +34,7 @@ mod by_gop;
 impl Config {
   pub(crate) fn setup<T: Pixel>(
     &self,
-  ) -> Result<(ContextInner<T>, Option<Arc<ThreadPool>>), InvalidConfig> {
+  ) -> ConfigResult<(ContextInner<T>, Option<Arc<ThreadPool>>)> {
     self.validate()?;
     let inner = self.new_inner()?;
 
@@ -50,14 +51,12 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns `InvalidConfig` if the configuration is invalid.
-  pub fn new_channel<T: Pixel>(
-    &self,
-  ) -> Result<VideoDataChannel<T>, InvalidConfig> {
+  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
+  pub fn new_channel<T: Pixel>(&self) -> ConfigResult<VideoDataChannel<T>> {
     let rc = &self.rate_control;
 
     if rc.emit_pass_data || rc.summary.is_some() {
-      return Err(InvalidConfig::RateControlConfigurationMismatch);
+      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
     }
     let v = if self.slots > 1 {
       self.new_by_gop_channel(self.slots)?
@@ -78,7 +77,7 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns `InvalidConfig` if the configuration is invalid.
+  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
   ///
   /// # Panics
   ///
@@ -86,11 +85,11 @@ impl Config {
   ///   so a panic indicates a development error.
   pub fn new_firstpass_channel<T: Pixel>(
     &self,
-  ) -> Result<(VideoDataChannel<T>, RcDataReceiver), InvalidConfig> {
+  ) -> ConfigResult<(VideoDataChannel<T>, RcDataReceiver)> {
     let rc = &self.rate_control;
 
     if !rc.emit_pass_data {
-      return Err(InvalidConfig::RateControlConfigurationMismatch);
+      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
     }
 
     if self.slots > 1 {
@@ -112,7 +111,7 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns `InvalidConfig` if the configuration is invalid.
+  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
   ///
   /// # Panics
   ///
@@ -120,10 +119,10 @@ impl Config {
   ///   so a panic indicates a development error.
   pub fn new_secondpass_channel<T: Pixel>(
     &self,
-  ) -> Result<(VideoDataChannel<T>, RcDataSender), InvalidConfig> {
+  ) -> ConfigResult<(VideoDataChannel<T>, RcDataSender)> {
     let rc = &self.rate_control;
     if rc.emit_pass_data || rc.summary.is_none() {
-      return Err(InvalidConfig::RateControlConfigurationMismatch);
+      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
     }
 
     if self.slots > 1 {
@@ -148,7 +147,7 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns `InvalidConfig` if the configuration is invalid.
+  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
   ///
   /// # Panics
   ///
@@ -156,10 +155,10 @@ impl Config {
   ///   so a panic indicates a development error.
   pub fn new_multipass_channel<T: Pixel>(
     &self,
-  ) -> Result<(VideoDataChannel<T>, PassDataChannel), InvalidConfig> {
+  ) -> ConfigResult<(VideoDataChannel<T>, PassDataChannel)> {
     let rc = &self.rate_control;
     if rc.summary.is_none() || !rc.emit_pass_data {
-      return Err(InvalidConfig::RateControlConfigurationMismatch);
+      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
     }
 
     if self.slots > 1 {
@@ -253,10 +252,10 @@ impl Config {
   #[allow(clippy::type_complexity)]
   fn new_channel_internal<T: Pixel>(
     &self,
-  ) -> Result<
-    (VideoDataChannel<T>, (Option<RcDataSender>, Option<RcDataReceiver>)),
-    InvalidConfig,
-  > {
+  ) -> ConfigResult<(
+    VideoDataChannel<T>,
+    (Option<RcDataSender>, Option<RcDataReceiver>),
+  )> {
     // The inner context is already configured to use the summary at this point.
     let (mut inner, pool) = self.setup()?;
 
