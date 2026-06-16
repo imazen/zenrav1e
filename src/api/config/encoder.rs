@@ -23,6 +23,21 @@ use std::fmt;
 pub(crate) const MAX_RDO_LOOKAHEAD_FRAMES: usize = 256;
 // Due to the math in RCState::new() regarding the reservoir frame delay.
 pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::MAX as u64 / 3;
+// Maximum supported frame rate (fps), where the effective rate is
+// `time_base.den / time_base.num`. The scene-change detector (`scenechange`
+// feature, on by default) forwards this rate into `av-scenechange`'s
+// `TilingInfo::from_target_tiles`, which derives `min_tile_rows_ratelimit_log2`
+// from `(w * h) * fps / MAX_TILE_RATE`. A pathological fps pushes that minimum
+// above `max_tile_rows_log2`, so the subsequent `clamp(min, max)` runs with
+// `min > max` and panics (av-scenechange-0.14.1 `data/tile.rs:314`). For the
+// smallest encodable frame the panic begins at fps ~= MAX_TILE_RATE / 4096
+// (~143616 fps); this ceiling sits well below that and far above any real
+// rate (broadcast/web <= 240, high-speed capture <= a few thousand). Mirrors
+// the sane-fps bound the fuzz harness applies in `src/fuzzing.rs` (`time_base`
+// num/den each constrained to 1..=120, i.e. fps <= 120) so the library rejects
+// the same pathological rates the harness avoids, rather than letting them
+// reach the dependency's panic at encode time.
+pub(crate) const MAX_FRAME_RATE: u64 = 65536;
 
 /// Encoder settings which impact the produced bitstream.
 #[derive(Clone, Debug, Serialize, Deserialize)]

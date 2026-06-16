@@ -423,6 +423,20 @@ impl Config {
         max: u32::MAX as u64,
       });
     }
+    // Reject a pathological frame rate before it can reach av-scenechange.
+    // The effective rate is `den / num` (see `EncoderConfig::frame_rate`); an
+    // extreme value drives the scene-change detector's tiling math into a
+    // `clamp(min, max)` with `min > max`, which panics at encode time. Compare
+    // as `den > MAX_FRAME_RATE * num` (saturating, so a near-`u32::MAX` `num`
+    // can't overflow) to avoid a division and stay exact. See `MAX_FRAME_RATE`
+    // for the bound's derivation.
+    let max_den = MAX_FRAME_RATE.saturating_mul(config.time_base.num);
+    if config.time_base.den > max_den {
+      return Err(InvalidFrameRateDen {
+        actual: config.time_base.den,
+        max: max_den,
+      });
+    }
 
     if let Some(delay) = config.reservoir_frame_delay
       && !(12..=131_072).contains(&delay)
@@ -609,5 +623,52 @@ mod tests {
   fn accepts_default_float_knobs() {
     let cfg = base_config();
     assert!(cfg.validate().is_ok());
+  }
+
+  // Regression for #20: a pathological frame rate (`time_base.den / num`) used
+  // to pass `validate()` all the way up to `u32::MAX` fps, then panicked at
+  // encode time inside `av-scenechange`'s `TilingInfo::from_target_tiles`
+  // (`clamp(min, max)` with `min > max`). `validate()` must now reject it as
+  // `InvalidFrameRateDen` instead. `base_config()` is a 64x64 frame, for which
+  // the dependency's panic begins at fps ~= MAX_TILE_RATE / 4096 (~143616);
+  // `u32::MAX` is the exact ceiling the old check admitted.
+  #[test]
+  fn rejects_pathological_frame_rate() {
+    // `u32::MAX` fps is the maximum the pre-fix `validate()` admitted and the
+    // value the issue cites as reaching the av-scenechange panic.
+    for (num, den) in [
+      (1u64, u32::MAX as u64),     // ~4.29e9 fps — old upper bound
+      (1, 1_000_000),              // 1 Mfps — well past the panic onset
+      (1, 144_000),                // just above the 64x64 panic threshold
+      (2, MAX_FRAME_RATE * 2 + 1), // den/num just over the fps ceiling
+    ] {
+      let mut cfg = base_config();
+      cfg.enc.time_base = crate::api::Rational { num, den };
+      let got = cfg.validate();
+      assert!(
+        matches!(got, Err(InvalidConfig::InvalidFrameRateDen { .. })),
+        "fps {den}/{num} must be rejected as InvalidFrameRateDen, got {got:?}"
+      );
+    }
+  }
+
+  #[test]
+  fn accepts_realistic_frame_rates() {
+    // Common, legitimate frame rates (expressed as `1/fps` time bases) and the
+    // exact ceiling must still validate — the fix is purely additive rejection
+    // of pathological rates, not a regression for real content.
+    for (num, den) in [
+      (1u64, 24),                  // film
+      (1001, 30000),               // 29.97 fps NTSC (large num/den, low fps)
+      (1, 30),                     // default
+      (1, 60),                     // 60 fps
+      (1, 240),                    // 240 fps high-speed
+      (1, MAX_FRAME_RATE),         // exactly the ceiling — still allowed
+    ] {
+      let mut cfg = base_config();
+      cfg.enc.time_base = crate::api::Rational { num, den };
+      let got = cfg.validate();
+      assert!(got.is_ok(), "fps {den}/{num} should validate: {got:?}");
+    }
   }
 }
