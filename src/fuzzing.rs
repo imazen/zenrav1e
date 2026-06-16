@@ -230,16 +230,26 @@ pub struct ArbitraryEncoder {
 
 impl Arbitrary<'_> for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
+    let speed = u.int_in_range(0..=10)?;
+    // The most exhaustive RDO presets (0–3) cost several× more per pixel; a
+    // 256×256 speed-0 3-frame encode took ~44 s (fuzz timeout / DoS). Cap the
+    // slow presets to a small frame so every preset stays within the per-input
+    // time budget while still exercising the full partition/RDO search; faster
+    // presets get the full 128×128 (tiling + larger partitions).
+    let max_dim = if speed <= 3 { 48 } else { 128 };
     let enc = EncoderConfig {
-      speed_settings: SpeedSettings::from_preset(u.int_in_range(0..=10)?),
-      // Bounded so even the slowest preset (speed 0, the most exhaustive RDO)
-      // stays within the fuzzer's per-input time budget. At 256×256 a speed-0
-      // 3-frame encode took ~44 s (fuzz timeout / DoS); 128×128 is ~4× cheaper
-      // and still exercises tiling and the full partition search.
-      width: u.int_in_range(1..=128)?,
-      height: u.int_in_range(1..=128)?,
+      speed_settings: SpeedSettings::from_preset(speed),
+      width: u.int_in_range(1..=max_dim)?,
+      height: u.int_in_range(1..=max_dim)?,
       still_picture: Arbitrary::arbitrary(u)?,
-      time_base: arbitrary_rational(u)?,
+      // Bounded to a sane frame-rate range (1–120 both ways): a pathological
+      // fps drives av-scenechange's TilingInfo::from_target_tiles into a
+      // `clamp(min, max)` with min > max → panic (third-party; tracked
+      // separately). Real encoders never see such rates.
+      time_base: Rational::new(
+        u.int_in_range(1u64..=120)?,
+        u.int_in_range(1u64..=120)?,
+      ),
       min_key_frame_interval: u.int_in_range(0..=3)?,
       max_key_frame_interval: u.int_in_range(1..=4)?,
       low_latency: Arbitrary::arbitrary(u)?,
@@ -337,12 +347,19 @@ pub struct DecodeTestParameters<T: Pixel> {
 
 impl<T: Pixel> Arbitrary<'_> for DecodeTestParameters<T> {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
+    let speed = u.int_in_range(0..=10)?;
+    // Encode + full dav1d decode roundtrip per frame (and 10/12-bit transforms
+    // when U16), so bound tighter than a bare encode: cap the slow RDO presets
+    // (0–3) to 64² and the rest to 128², ≤2 frames, to stay within the per-input
+    // time budget (was 271²/speed-0/3-frame → slow-unit timeouts in
+    // encode_decode / encode_decode_hbd).
+    let max_dim = if speed <= 3 { 64 } else { 128 };
     let mut p = Self {
-      w: u.int_in_range(16..=16 + 255)?,
-      h: u.int_in_range(16..=16 + 255)?,
-      speed: u.int_in_range(0..=10)?,
+      w: u.int_in_range(16..=max_dim)?,
+      h: u.int_in_range(16..=max_dim)?,
+      speed,
       q: u8::arbitrary(u)?.into(),
-      limit: u.int_in_range(1..=3)?,
+      limit: u.int_in_range(1..=2)?,
       bit_depth: 8,
       chroma_sampling: *u.choose(&[
         ChromaSampling::Cs420,

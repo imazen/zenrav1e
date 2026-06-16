@@ -14,6 +14,22 @@
   `benchmarks/issue6-bottomup-qm-2026-06-13.md`.
 
 ### Fixed
+- **Fuzz harness slow-unit timeouts + av-scenechange panic (#13, #15, #16, #17)** —
+  the `encode` / `encode_decode` / `encode_decode_hbd` targets could pick the most
+  exhaustive RDO presets (speed 0–3) on up to 271²×3-frame inputs, producing
+  multi-second encodes that tripped the fuzzer's per-input timeout. Bounded the
+  arbitrary configs in `src/fuzzing.rs`: frame size now scales with the chosen
+  speed preset (slow presets 0–3 capped to 48²/64², faster presets to 128²) and
+  the decode-roundtrip targets are capped to ≤2 frames — keeping full
+  partition/RDO-search coverage on small frames without slow-units. Separately,
+  `ArbitraryEncoder::time_base` is now bounded to a sane 1–120 fps range: a
+  pathological frame rate drove the third-party `av-scenechange`
+  `TilingInfo::from_target_tiles` into a `clamp(min, max)` with `min > max` →
+  panic (`av-scenechange-0.14.1/src/data/tile.rs:314`, #16). Verified: 60 s
+  `encode` + 45 s each decode target with a 10 s per-input timeout find no
+  slow-unit or crash. The underlying av-scenechange clamp is a third-party bug
+  (tracked) — harness-bounding stops the fuzz noise; production callers passing
+  an extreme fps remain at risk until upstream clamps `min` before `clamp`.
 - **`docs(readme)`: complete the truncated encode example** — the README's
   direct-use snippet ended at `// send frames, receive packets...`, so the
   entire encode loop was undocumented and the program could not be written
