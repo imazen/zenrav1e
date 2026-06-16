@@ -38,11 +38,21 @@ extern crate pretty_assertions;
 
 pub use crate::api::color;
 pub use crate::api::{
-  Config, Context, EncoderConfig, EncoderStatus, InvalidConfig, Packet,
+  Config, ConfigResult, Context, EncoderConfig, EncoderStatus, InvalidConfig,
+  Packet,
 };
 use crate::encoder::*;
 pub use crate::frame::Frame;
 pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
+
+// `whereat` error-location tracking for the cold config-validation path.
+// See `Config::validate` / `Config::new_context`: those return
+// `At<InvalidConfig>` so server-side callers get a stack trace pointing at the
+// exact validation failure. The hot per-frame status `EncoderStatus`
+// (`receive_packet` / `send_frame`) is deliberately left bare — see the note
+// at its definition in `src/api/util.rs`.
+pub use whereat::At;
+whereat::define_at_crate_info!();
 
 #[cfg(feature = "stop")]
 pub use enough::{Stop, StopReason, Unstoppable};

@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+- **Config validation now returns `At<InvalidConfig>` for server-side stack
+  traces.** `Config::validate`, `Config::new_context`, `Config::tiling_info`,
+  and the `new_channel` / `new_firstpass_channel` / `new_secondpass_channel` /
+  `new_multipass_channel` / `new_by_gop_channel` constructors now return
+  `Result<_, whereat::At<InvalidConfig>>` (aliased `ConfigResult<T>`) instead of
+  bare `InvalidConfig`. The trace points at the exact validation site that
+  rejected the configuration. `At` is re-exported at the crate root and
+  `InvalidConfig` itself is unchanged. These paths are cold (run once per encode
+  session). `EncoderStatus` — the hot per-frame status from
+  `Context::receive_packet` / `Context::send_frame` — **intentionally stays
+  bare**: `whereat` is deliberately kept off the encode hot path (trace
+  allocation / register-spill avoidance, and it is frequently ordinary control
+  flow such as `NeedMoreData`, not an error). The C API (`src/capi.rs`) is
+  unchanged — it stores only `EncoderStatus` and discards the construction
+  error to a null pointer. Migration: a caller that matched
+  `Err(InvalidConfig::X)` now matches `Err(e)` then inspects `e.error()`
+  (borrow) or `e.decompose().0` (owned); propagating with `?` into a
+  `Box<dyn Error>` / `anyhow` context still works unchanged. Version bumped
+  `0.1.4` → `0.2.0`.
+
 ### Investigated
 - **#6 bottom-up partition × QM regression** — measured negative result, no fix
   landed. The proving sweep (speeds {1,2,4,6} × q5..=100:5 × QM{off,on} × photo

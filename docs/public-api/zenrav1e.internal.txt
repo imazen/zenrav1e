@@ -336,7 +336,7 @@ pub fn data::EncoderStats::assert_fields_are_eq(&self)
 pub fn prelude::BlockSize::assert_fields_are_eq(&self)
 pub fn prelude::ChromaSamplePosition::assert_fields_are_eq(&self)
 pub fn prelude::ColorPrimaries::assert_fields_are_eq(&self)
-pub fn prelude::Config::tiling_info(&self) -> core::result::Result<tiling::TilingInfo, prelude::InvalidConfig>
+pub fn prelude::Config::tiling_info(&self) -> prelude::ConfigResult<tiling::TilingInfo>
 pub fn prelude::EncoderStatus::assert_fields_are_eq(&self)
 pub fn prelude::FrameType::assert_fields_are_eq(&self)
 pub fn prelude::FrameTypeOverride::assert_fields_are_eq(&self)

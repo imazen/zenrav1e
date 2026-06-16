@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use thiserror::Error;
+use whereat::{At, at};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::sync::Arc;
@@ -30,6 +31,19 @@ mod speedsettings;
 pub use speedsettings::*;
 
 pub use crate::tiling::TilingInfo;
+
+/// Result of the cold configuration-validation API.
+///
+/// The error carries a [`whereat`] stack trace ([`At`]) pointing at the exact
+/// validation site that rejected the configuration, so server-side callers can
+/// see where an [`InvalidConfig`] originated without enabling debuginfo.
+///
+/// This is returned only by the once-per-encode-session construction/validation
+/// methods ([`Config::validate`], [`Config::new_context`], the channel
+/// constructors, [`Config::tiling_info`]). The hot per-frame status
+/// [`EncoderStatus`](crate::EncoderStatus) is deliberately kept bare — `At<>`
+/// trace allocation is never placed on the encode hot path.
+pub type ConfigResult<T> = Result<T, At<InvalidConfig>>;
 
 /// Enumeration of possible invalid configuration errors.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
@@ -243,9 +257,7 @@ fn check_tile_log2(n: usize) -> bool {
 }
 
 impl Config {
-  pub(crate) fn new_inner<T: Pixel>(
-    &self,
-  ) -> Result<ContextInner<T>, InvalidConfig> {
+  pub(crate) fn new_inner<T: Pixel>(&self) -> ConfigResult<ContextInner<T>> {
     assert!(
       8 * std::mem::size_of::<T>() >= self.enc.bit_depth,
       "The Pixel u{} does not match the Config bit_depth {}",
@@ -305,14 +317,16 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// Returns `InvalidConfig` if the config is invalid.
+  /// Returns [`At<InvalidConfig>`](At) if the config is invalid. The trace
+  /// points at the validation site that rejected the configuration.
   ///
   /// # Examples
   ///
   /// ```
   /// use zenrav1e::prelude::*;
+  /// use zenrav1e::At;
   ///
-  /// # fn main() -> Result<(), InvalidConfig> {
+  /// # fn main() -> Result<(), At<InvalidConfig>> {
   /// let cfg = Config::default();
   /// let ctx: Context<u8> = cfg.new_context()?;
   /// # Ok(())
@@ -320,7 +334,7 @@ impl Config {
   /// ```
   ///
   /// [`Context`]: struct.Context.html
-  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
+  pub fn new_context<T: Pixel>(&self) -> ConfigResult<Context<T>> {
     let inner = self.new_inner()?;
     let config = (*inner.config).clone();
     let pool = self.new_thread_pool();
@@ -332,8 +346,9 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns `InvalidConfig` if the tiling config is invalid.
-  pub fn validate(&self) -> Result<(), InvalidConfig> {
+  /// Returns [`At<InvalidConfig>`](At) if any setting is out of range. The
+  /// trace points at the exact validation check that failed.
+  pub fn validate(&self) -> ConfigResult<()> {
     use InvalidConfig::*;
 
     let config = &self.enc;
@@ -344,84 +359,84 @@ impl Config {
     // constraint in `rav1e_config_set_pixel_format`; this mirrors it for the
     // pure-Rust API.
     if !matches!(config.bit_depth, 8 | 10 | 12) {
-      return Err(InvalidBitDepth(config.bit_depth));
+      return Err(at!(InvalidBitDepth(config.bit_depth)));
     }
 
     if (config.still_picture && config.width < 1)
       || (!config.still_picture && config.width < 16)
       || config.width > u16::MAX as usize
     {
-      return Err(InvalidWidth(config.width));
+      return Err(at!(InvalidWidth(config.width)));
     }
     if (config.still_picture && config.height < 1)
       || (!config.still_picture && config.height < 16)
       || config.height > u16::MAX as usize
     {
-      return Err(InvalidHeight(config.height));
+      return Err(at!(InvalidHeight(config.height)));
     }
 
     if config.sample_aspect_ratio.num == 0 {
-      return Err(InvalidAspectRatioNum(
+      return Err(at!(InvalidAspectRatioNum(
         config.sample_aspect_ratio.num as usize,
-      ));
+      )));
     }
     if config.sample_aspect_ratio.den == 0 {
-      return Err(InvalidAspectRatioDen(
+      return Err(at!(InvalidAspectRatioDen(
         config.sample_aspect_ratio.den as usize,
-      ));
+      )));
     }
 
     let (render_width, render_height) = config.render_size();
     if render_width == 0 || render_width > u16::MAX as usize {
-      return Err(InvalidRenderWidth(render_width));
+      return Err(at!(InvalidRenderWidth(render_width)));
     }
     if render_height == 0 || render_height > u16::MAX as usize {
-      return Err(InvalidRenderHeight(render_height));
+      return Err(at!(InvalidRenderHeight(render_height)));
     }
 
     // Use u64 arithmetic for pixel count to avoid overflow on 32-bit platforms
     let pixel_count = (config.width as u64) * (config.height as u64);
     if config.max_pixel_count > 0 && pixel_count > config.max_pixel_count {
-      return Err(PixelCountExceeded {
+      return Err(at!(PixelCountExceeded {
         actual: pixel_count,
         max: config.max_pixel_count,
-      });
+      }));
     }
 
     if config.speed_settings.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
       || config.speed_settings.rdo_lookahead_frames < 1
     {
-      return Err(InvalidRdoLookaheadFrames {
+      return Err(at!(InvalidRdoLookaheadFrames {
         actual: config.speed_settings.rdo_lookahead_frames,
         max: MAX_RDO_LOOKAHEAD_FRAMES,
         min: 1,
-      });
+      }));
     }
     if config.max_key_frame_interval > MAX_MAX_KEY_FRAME_INTERVAL {
-      return Err(InvalidMaxKeyFrameInterval {
+      return Err(at!(InvalidMaxKeyFrameInterval {
         actual: config.max_key_frame_interval,
         max: MAX_MAX_KEY_FRAME_INTERVAL,
-      });
+      }));
     }
 
     if !check_tile_log2(config.tile_cols) {
-      return Err(InvalidTileCols(config.tile_cols));
+      return Err(at!(InvalidTileCols(config.tile_cols)));
     }
     if !check_tile_log2(config.tile_rows) {
-      return Err(InvalidTileRows(config.tile_rows));
+      return Err(at!(InvalidTileRows(config.tile_rows)));
     }
 
     if config.time_base.num == 0 || config.time_base.num > u32::MAX as u64 {
-      return Err(InvalidFrameRateNum {
+      return Err(at!(InvalidFrameRateNum {
         actual: config.time_base.num,
         max: u32::MAX as u64,
-      });
+      }));
     }
     if config.time_base.den == 0 || config.time_base.den > u32::MAX as u64 {
-      return Err(InvalidFrameRateDen {
+      return Err(at!(InvalidFrameRateDen {
         actual: config.time_base.den,
         max: u32::MAX as u64,
-      });
+      }));
     }
     // Reject a pathological frame rate before it can reach av-scenechange.
     // The effective rate is `den / num` (see `EncoderConfig::frame_rate`); an
@@ -432,24 +447,26 @@ impl Config {
     // for the bound's derivation.
     let max_den = MAX_FRAME_RATE.saturating_mul(config.time_base.num);
     if config.time_base.den > max_den {
-      return Err(InvalidFrameRateDen {
+      return Err(at!(InvalidFrameRateDen {
         actual: config.time_base.den,
         max: max_den,
-      });
+      }));
     }
 
     if let Some(delay) = config.reservoir_frame_delay
       && !(12..=131_072).contains(&delay)
     {
-      return Err(InvalidReservoirFrameDelay(delay));
+      return Err(at!(InvalidReservoirFrameDelay(delay)));
     }
 
     if config.switch_frame_interval > 0 && !config.low_latency {
-      return Err(InvalidSwitchFrameInterval(config.switch_frame_interval));
+      return Err(at!(InvalidSwitchFrameInterval(
+        config.switch_frame_interval
+      )));
     }
 
     if config.enable_timing_info && config.still_picture {
-      return Err(InvalidOptionWithStillPicture("enable_timing_info"));
+      return Err(at!(InvalidOptionWithStillPicture("enable_timing_info")));
     }
 
     // <https://aomediacodec.github.io/av1-spec/#color-config-syntax>
@@ -458,34 +475,34 @@ impl Config {
       && color_description.is_srgb_triple()
     {
       if config.pixel_range != PixelRange::Full {
-        return Err(ColorConfigurationMismatch);
+        return Err(at!(ColorConfigurationMismatch));
       }
       if config.chroma_sampling != ChromaSampling::Cs444 {
-        return Err(ColorConfigurationMismatch);
+        return Err(at!(ColorConfigurationMismatch));
       }
     }
 
     if let Some(level_idx) = config.level_idx {
       if level_idx > 31 {
-        return Err(LevelUndefined);
+        return Err(at!(LevelUndefined));
       }
       if level_idx < 31 {
         if !AV1_LEVEL_DEFINED[level_idx as usize] {
-          return Err(LevelUndefined);
+          return Err(at!(LevelUndefined));
         }
         if pixel_count > AV1_LEVEL_MAX_PIC_SIZE[level_idx as usize] as u64 {
-          return Err(LevelConstraintsExceeded);
+          return Err(at!(LevelConstraintsExceeded));
         }
         if config.width > AV1_LEVEL_MAX_H_SIZE[level_idx as usize] {
-          return Err(LevelConstraintsExceeded);
+          return Err(at!(LevelConstraintsExceeded));
         }
         if config.height > AV1_LEVEL_MAX_V_SIZE[level_idx as usize] {
-          return Err(LevelConstraintsExceeded);
+          return Err(at!(LevelConstraintsExceeded));
         }
         if (pixel_count * config.time_base.num).div_ceil(config.time_base.den)
           > AV1_LEVEL_MAX_DISPLAY_RATE[level_idx as usize] as u64
         {
-          return Err(LevelConstraintsExceeded);
+          return Err(at!(LevelConstraintsExceeded));
         }
       }
     }
@@ -498,19 +515,19 @@ impl Config {
     if !config.vaq_strength.is_finite()
       || !(0.0..=4.0).contains(&config.vaq_strength)
     {
-      return Err(InvalidVaqStrength(config.vaq_strength.to_bits()));
+      return Err(at!(InvalidVaqStrength(config.vaq_strength.to_bits())));
     }
     if !config.seg_boost.is_finite()
       || !(0.5..=4.0).contains(&config.seg_boost)
     {
-      return Err(InvalidSegBoost(config.seg_boost.to_bits()));
+      return Err(at!(InvalidSegBoost(config.seg_boost.to_bits())));
     }
 
     // TODO: add more validation
     let rc = &self.rate_control;
 
     if (rc.emit_pass_data || rc.summary.is_some()) && config.bitrate == 0 {
-      return Err(TargetBitrateNeeded);
+      return Err(at!(TargetBitrateNeeded));
     }
 
     Ok(())
@@ -522,8 +539,8 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns `InvalidConfig` if the tiling config is invalid.
-  pub fn tiling_info(&self) -> Result<TilingInfo, InvalidConfig> {
+  /// Returns [`At<InvalidConfig>`](At) if the tiling config is invalid.
+  pub fn tiling_info(&self) -> ConfigResult<TilingInfo> {
     self.validate()?;
 
     let seq = crate::encoder::Sequence::new(&self.enc);
@@ -551,7 +568,10 @@ mod tests {
     for bd in [0usize, 4, 6, 7, 9, 11, 13, 16, 32] {
       let mut cfg = base_config();
       cfg.enc.bit_depth = bd;
-      match cfg.validate() {
+      // `decompose()` yields the owned inner error (dropping the trace, which
+      // the test doesn't assert on) without tripping the `into_inner`
+      // deprecation.
+      match cfg.validate().map_err(|e| e.decompose().0) {
         Err(InvalidConfig::InvalidBitDepth(got)) => assert_eq!(got, bd),
         other => panic!("bit_depth {bd} should be rejected, got {other:?}"),
       }
@@ -577,7 +597,10 @@ mod tests {
       let mut cfg = base_config();
       cfg.enc.vaq_strength = v;
       assert!(
-        matches!(cfg.validate(), Err(InvalidConfig::InvalidVaqStrength(_))),
+        matches!(
+          cfg.validate().as_ref().map_err(At::error),
+          Err(InvalidConfig::InvalidVaqStrength(_))
+        ),
         "vaq_strength={v} should be rejected"
       );
     }
@@ -589,7 +612,10 @@ mod tests {
       let mut cfg = base_config();
       cfg.enc.vaq_strength = v;
       assert!(
-        matches!(cfg.validate(), Err(InvalidConfig::InvalidVaqStrength(_))),
+        matches!(
+          cfg.validate().as_ref().map_err(At::error),
+          Err(InvalidConfig::InvalidVaqStrength(_))
+        ),
         "vaq_strength={v} should be rejected"
       );
     }
@@ -601,7 +627,10 @@ mod tests {
       let mut cfg = base_config();
       cfg.enc.seg_boost = v;
       assert!(
-        matches!(cfg.validate(), Err(InvalidConfig::InvalidSegBoost(_))),
+        matches!(
+          cfg.validate().as_ref().map_err(At::error),
+          Err(InvalidConfig::InvalidSegBoost(_))
+        ),
         "seg_boost={v} should be rejected"
       );
     }
@@ -613,7 +642,10 @@ mod tests {
       let mut cfg = base_config();
       cfg.enc.seg_boost = v;
       assert!(
-        matches!(cfg.validate(), Err(InvalidConfig::InvalidSegBoost(_))),
+        matches!(
+          cfg.validate().as_ref().map_err(At::error),
+          Err(InvalidConfig::InvalidSegBoost(_))
+        ),
         "seg_boost={v} should be rejected"
       );
     }
@@ -646,7 +678,10 @@ mod tests {
       cfg.enc.time_base = crate::api::Rational { num, den };
       let got = cfg.validate();
       assert!(
-        matches!(got, Err(InvalidConfig::InvalidFrameRateDen { .. })),
+        matches!(
+          got.as_ref().map_err(At::error),
+          Err(InvalidConfig::InvalidFrameRateDen { .. })
+        ),
         "fps {den}/{num} must be rejected as InvalidFrameRateDen, got {got:?}"
       );
     }
