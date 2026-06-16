@@ -14,6 +14,23 @@
   `benchmarks/issue6-bottomup-qm-2026-06-13.md`.
 
 ### Fixed
+- **Library now rejects a pathological frame rate (#20)** — the
+  scene-change-driven encode path (the `scenechange` feature, on by default)
+  forwarded the configured frame rate (`time_base.den / time_base.num`)
+  unclamped into `av-scenechange`'s `TilingInfo::from_target_tiles`, where an
+  extreme rate makes `min_tile_rows_ratelimit_log2` exceed `max_tile_rows_log2`
+  and the subsequent `clamp(min, max)` panics with `min > max`
+  (`av-scenechange-0.14.1/src/data/tile.rs:314`). The previous #16 fix bounded
+  only the **fuzz harness** (`src/fuzzing.rs`); `Config::validate()` still
+  admitted fps up to `u32::MAX`, so a default-feature encode with an
+  extreme-but-valid config could still reach the panic at encode time.
+  `validate()` now rejects any effective rate above `MAX_FRAME_RATE` (65536 fps
+  — far above broadcast/web/high-speed-capture rates and well below the
+  ~143616 fps panic onset for the smallest frame) as `InvalidFrameRateDen`,
+  mirroring the sane-fps bound the harness applies. Purely additive rejection of
+  inputs that previously panicked — no legitimate frame rate is affected.
+  Regression tests `rejects_pathological_frame_rate` /
+  `accepts_realistic_frame_rates` in `src/api/config/mod.rs`.
 - **Fuzz harness slow-unit timeouts + av-scenechange panic (#13, #15, #16, #17)** —
   the `encode` / `encode_decode` / `encode_decode_hbd` targets could pick the most
   exhaustive RDO presets (speed 0–3) on up to 271²×3-frame inputs, producing
