@@ -44,6 +44,37 @@ let mut ctx: Context<u8> = cfg.new_context().unwrap();
 // send frames, receive packets...
 ```
 
+### Cooperative cancellation
+
+The `stop` feature (`features = ["stop"]`) lets a watchdog or request-deadline
+thread abort an in-progress encode. Pass any [`enough::Stop`][enough] token to
+`Context::set_stop`; it is checked once per superblock. The simplest
+constructible token is `almost_enough::Stopper` (`cargo add almost-enough`) —
+`#[derive(Clone)]`, and all clones share one cancellation flag:
+
+```rust
+use std::sync::Arc;
+use zenrav1e::prelude::*;
+
+// Continuing from the example above, with the `stop` feature enabled:
+let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+// Hand the encoder a clone; keep `stopper` to trigger cancellation elsewhere.
+let stopper = almost_enough::Stopper::new();
+ctx.set_stop(Arc::new(stopper.clone()));
+
+// From a deadline/watchdog thread (or on client disconnect):
+stopper.cancel();
+// `send_frame` / `receive_packet` then return `Err(EncoderStatus::Cancelled)`.
+
+// To clear cancellation again, restore the no-op token:
+ctx.set_stop(Arc::new(zenrav1e::Unstoppable));
+```
+
+`zenrav1e` re-exports `Stop`, `StopReason`, and `Unstoppable` from [`enough`][enough]
+so you can name them without a direct dependency; the concrete `Stopper` token
+lives in the companion `almost-enough` crate.
+
 ## Building
 
 ```bash
