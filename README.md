@@ -25,24 +25,90 @@ All upstream rav1e video encoding capabilities are preserved.
 
 ## Usage
 
-zenrav1e is a library. If you want to encode AVIF images, use [ravif](https://lib.rs/crates/ravif) or [zenavif](https://github.com/imazen/zenavif), which wrap zenrav1e with a higher-level API.
+zenrav1e is a library. If you want to encode AVIF images, use [ravif](https://lib.rs/crates/ravif) or [zenavif](https://github.com/imazen/zenavif), which wrap zenrav1e with a higher-level API — they handle RGB→YCbCr conversion and AVIF muxing for you. Reach for the raw API below only if you need direct control.
 
-For direct use:
+```toml
+[dependencies]
+zenrav1e = { version = "0.1.4", default-features = false, features = ["threading"] }
+# Drop `default-features = false` (or add the `asm` feature) to enable the
+# x86_64 assembly kernels — that path additionally requires NASM at build time.
+```
+
+> **Input is planar YCbCr, not RGB.** rav1e (like AV1 itself) encodes
+> Y′CbCr planes — there is no RGB entry point. If you fill the planes with
+> interleaved RGB bytes the encode *succeeds* but the colors come out wrong,
+> because the encoder reads plane 0 as luma and planes 1/2 as chroma. Convert
+> to YCbCr (e.g. BT.601/709) and lay the samples out one plane at a time. The
+> defaults below are 8-bit (`Context<u8>`) 4:2:0 (`ChromaSampling::Cs420`), so
+> the U and V planes are half-resolution in each dimension. For 10/12-bit use
+> `Context<u16>` and pass a `source_bytewidth` of `2` to `copy_from_raw_u8`.
 
 ```rust
 use zenrav1e::prelude::*;
 
-let mut enc = EncoderConfig::default();
-enc.width = 640;
-enc.height = 480;
-enc.speed_settings = SpeedSettings::from_preset(6);
-enc.still_picture = true;
-enc.enable_qm = true;  // quantization matrices
+// `y`, `u`, `v`: tightly packed planar YCbCr 4:2:0, 8-bit (U/V half-size).
+fn encode_still(
+    y: &[u8], u: &[u8], v: &[u8],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut enc = EncoderConfig::default();
+    enc.width = 640;
+    enc.height = 480;
+    enc.still_picture = true;                      // single-frame AVIF still
+    enc.chroma_sampling = ChromaSampling::Cs420;   // YCbCr 4:2:0 (the default)
+    enc.bit_depth = 8;                             // 8-bit (the default)
+    enc.quantizer = 80;                            // see the quantizer note below
+    enc.speed_settings = SpeedSettings::from_preset(6);
+    enc.enable_qm = true;                          // quantization matrices (~10% BD-rate)
 
-let cfg = Config::new().with_encoder_config(enc);
-let mut ctx: Context<u8> = cfg.new_context().unwrap();
-// send frames, receive packets...
+    let cfg = Config::new().with_encoder_config(enc);
+    let mut ctx: Context<u8> = cfg.new_context()?;
+
+    // Allocate a frame sized to the config and copy each YCbCr plane in.
+    // `copy_from_raw_u8(src, src_stride_in_bytes, src_bytewidth)`:
+    //   - src_bytewidth = 1 for `Context<u8>`, 2 for `Context<u16>` (10/12-bit)
+    //   - src_stride is the row stride of *your* buffer; the call handles the
+    //     frame's internal (padded) stride. Here each plane is tightly packed,
+    //     so the stride is just that plane's width.
+    let mut frame = ctx.new_frame();
+    let planes = [y, u, v];
+    for (plane, src) in frame.planes.iter_mut().zip(planes) {
+        // Chroma planes are subsampled by `xdec`/`ydec` for 4:2:0, so derive
+        // each plane's row width from its own decimation factor.
+        let plane_width = (enc.width + (1 << plane.cfg.xdec) - 1) >> plane.cfg.xdec;
+        plane.copy_from_raw_u8(src, plane_width, 1);
+    }
+
+    ctx.send_frame(frame)?;
+    ctx.flush(); // signal end-of-stream so the still gets emitted
+
+    // Drain packets. For a still picture this yields exactly one packet.
+    let mut bitstream = Vec::new();
+    loop {
+        match ctx.receive_packet() {
+            Ok(packet) => bitstream.extend_from_slice(&packet.data),
+            Err(EncoderStatus::Encoded) => {}          // frame consumed, no packet yet
+            Err(EncoderStatus::LimitReached) => break, // all frames emitted
+            Err(EncoderStatus::NeedMoreData) => break, // nothing left after flush
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    // `bitstream` is a raw AV1 bitstream (OBUs / temporal units) — NOT a `.avif`
+    // file. To get a playable image, mux it into an AVIF/HEIF container with
+    // `zenavif`, `ravif`, or `zenavif-serialize`. (Those crates also do the
+    // RGB→YCbCr conversion, so prefer them unless you need this level of control.)
+    Ok(bitstream)
+}
 ```
+
+### Quantizer scale
+
+`EncoderConfig::quantizer` is the AV1 base **q-index**, a `usize` in `0..=255`
+(default `100`). **Lower means higher quality and larger output; higher means
+smaller and lower quality** — the opposite direction from a "quality %" dial.
+`quantizer = 0` is the special mathematically-lossless mode (see the lossless
+feature above); `255` is the most aggressive. For perceptual quality targeting,
+the `ravif`/`zenavif` layers map a friendlier quality scale onto this q-index.
 
 ### Cooperative cancellation
 

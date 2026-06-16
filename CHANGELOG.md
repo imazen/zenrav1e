@@ -14,6 +14,18 @@
   `benchmarks/issue6-bottomup-qm-2026-06-13.md`.
 
 ### Fixed
+- **`docs(readme)`: complete the truncated encode example** — the README's
+  direct-use snippet ended at `// send frames, receive packets...`, so the
+  entire encode loop was undocumented and the program could not be written
+  (found by an insulated external-developer usability test). Replaced it with a
+  complete, copy-pasteable still-image example: the full
+  `new_frame` → fill Y/U/V planes (`Plane::copy_from_raw_u8`) → `send_frame` →
+  `flush` → `receive_packet` loop over the real `EncoderStatus` variants,
+  writing `packet.data`. Also made explicit that input is **planar YCbCr, not
+  RGB** (filling planes with RGB encodes cleanly but yields garbage colors),
+  that the output is a **raw AV1 bitstream needing a muxer** (zenavif/ravif),
+  the **`quantizer` q-index scale + direction** (0..=255, lower = higher
+  quality, 0 = lossless), and a pasteable `[dependencies]` line.
 - **Fuzz `encode` harness time bound** — `ArbitraryEncoder` allowed a 256×256,
   3-frame encode at speed preset 0 (most exhaustive RDO), ~44 s for a 58-byte
   input (fuzz timeout / DoS). Tightened to 128×128 and ≤2 frames so even the
