@@ -148,11 +148,12 @@ pub struct EncoderConfig {
   /// > Only effective when `enable_vaq` is true.
   pub vaq_strength: f64,
 
-  /// Segmentation boost power (default 1.0 = disabled).
+  /// Segmentation boost power (valid range 0.5..=4.0, default 1.0 = disabled).
   /// When > 1.0, amplifies the dynamic range of segmentation QP offsets
   /// independently of RDO distortion weighting. This allows wider bit
   /// redistribution without inflating total bitrate through RDO.
   /// Typical values: 1.0 (off), 1.5–2.5 (moderate–aggressive boost).
+  /// Values outside `0.5..=4.0` are rejected by `validate()` as `InvalidSegBoost`.
   pub seg_boost: f64,
 
   /// Enable trellis quantization (Viterbi DP coefficient optimization).
