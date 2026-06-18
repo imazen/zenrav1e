@@ -82,6 +82,10 @@ pub fn optimize<T: Coefficient>(
     return eob;
   }
   let dampening = (80.0 / (ac_quant as f64).max(80.0)).min(1.0);
+  // The unit lambda (no extra scale) is the calibrated optimum: a 2026-06-18
+  // sweep over lambda scales {0.5, 0.75, 1.0, 1.5, 2.0} on a 38-image real-photo
+  // corpus showed BD-rate is best at 1.0 (0.5:-0.39% < 0.75:-0.75% < 1.0:-0.94%
+  // > 1.5:+0.15% > 2.0:+1.83%). See benchmarks/trellis_rdoq_2026-06-18.md.
   let lambda_trellis = lambda * tx_dist_scale * dampening;
 
   let tx_class = tx_type_to_class[scan_tx_type as usize];
@@ -259,7 +263,7 @@ pub fn optimize<T: Coefficient>(
       let coeff_raw = i32::cast_from(coeffs[pos]);
       let orig_level = i32::cast_from(qcoeffs[pos]).unsigned_abs();
 
-      if orig_level < 2 {
+      if orig_level == 0 {
         continue;
       }
 
@@ -286,17 +290,30 @@ pub fn optimize<T: Coefficient>(
       // Levels stay ≥ 1 here (tail-zeroing is the EOB shrinkage in Phase 1).
       // Contexts are held fixed across the block, the same approximation the
       // single-step round-down used.
-      let dist_at = |level: u32| sq_err(coeff, level, eff_quant, log_tx_scale) as f64;
+      let dist_at =
+        |level: u32| sq_err(coeff, level, eff_quant, log_tx_scale) as f64;
       let rate_at = |level: u32| {
         lambda_trellis
           * coeff_rate(
-            level, ctx, br_ctx_arr[i], is_eob_coeff, fc, txs_ctx, plane_type,
+            level,
+            ctx,
+            br_ctx_arr[i],
+            is_eob_coeff,
+            fc,
+            txs_ctx,
+            plane_type,
           )
       };
 
+      // Interior coefficients may descend all the way to 0 (true RDOQ zeroing —
+      // where the larger gains live); the EOB coefficient stays >= 1 (its tail
+      // is Phase 1's job). The early-break still holds: distortion grows
+      // monotonically toward level 0, so high-magnitude coefficients are never
+      // zeroed (their dist(0) exceeds the best cost immediately).
+      let floor = if is_eob_coeff { 1 } else { 0 };
       let mut best_level = orig_level;
       let mut best_cost = dist_at(orig_level) + rate_at(orig_level);
-      for level in (1..orig_level).rev() {
+      for level in (floor..orig_level).rev() {
         let dist = dist_at(level);
         if dist >= best_cost {
           break; // exact monotonic early-break
