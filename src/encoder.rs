@@ -1921,10 +1921,27 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       raw_tx_dist =
         (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
 
-      if rdo_type == RDOType::TxDistEstRate {
-        // look up rate and distortion in table
-        let estimated_rate =
-          estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
+      if rdo_type == RDOType::TxDistEstRate && !need_recon_pixel {
+        // Only when real coeff coding was skipped — when need_recon_pixel is set
+        // write_coeffs_lv_map (above) already coded the real coeff bits to `w`,
+        // so adding an estimate too would double-count and corrupt the decision.
+        // Stage-2 probe (env-gated): replace the coarse RDO_RATE_TABLE lookup
+        // with the per-coefficient closed-form rate estimate (same CDF rate
+        // model as the trellis), which is far more accurate.
+        static CLOSED_FORM: std::sync::OnceLock<bool> =
+          std::sync::OnceLock::new();
+        let use_closed_form = *CLOSED_FORM.get_or_init(|| {
+          std::env::var("ZENRAV1E_CLOSED_FORM_RATE").as_deref() == Ok("1")
+        });
+        let estimated_rate = if use_closed_form {
+          let plane_type = if p == 0 { 0 } else { 1 };
+          let bits = crate::quantize::trellis::estimate_block_coeff_rate(
+            qcoeffs, eob, tx_size, tx_type, &cw.fc, plane_type,
+          );
+          (bits * (1u32 << crate::ec::OD_BITRES) as f64).round() as u64
+        } else {
+          estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist)
+        };
         w.add_bits_frac(estimated_rate as u32);
       }
 

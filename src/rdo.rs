@@ -1915,7 +1915,17 @@ pub fn rdo_tx_type_decision<T: Pixel>(
       Some(cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling));
   }
 
-  let rdo_type = if fi.use_tx_domain_distortion {
+  // Stage-2 probe (env-gated): route the per-tx-type rate through the closed-form
+  // estimate (TxDistEstRate skips real coeff coding; encode_tx_block adds the
+  // per-coeff estimate when ZENRAV1E_CLOSED_FORM_RATE=1). This is the heavy lever:
+  // rdo_tx_type_decision real-codes every tx-type candidate for every mode.
+  static TXTYPE_EST: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+  let txtype_est = *TXTYPE_EST.get_or_init(|| {
+    std::env::var("ZENRAV1E_TXTYPE_ESTIMATE").as_deref() == Ok("1")
+  });
+  let rdo_type = if txtype_est {
+    RDOType::TxDistEstRate
+  } else if fi.use_tx_domain_distortion {
     RDOType::TxDistRealRate
   } else {
     RDOType::PixelDistRealRate
