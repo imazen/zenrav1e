@@ -167,6 +167,9 @@ criterion = { version = "0.8", default-features = false }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 assert_cmd = "2.0"
 criterion = "0.8"
+# Pure-Rust AV1 decoder; tests/trellis_roundtrip.rs uses it to verify that
+# enable_trellis (multi-level RDOQ) output is valid, decodable AV1.
+rav1d-safe = "0.5.7"
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"
