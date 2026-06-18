@@ -269,38 +269,48 @@ pub fn optimize<T: Coefficient>(
       }
 
       let coeff = (coeff_raw as i64) << log_tx_scale;
-      let new_level = orig_level - 1;
-
-      let dist_orig = sq_err(coeff, orig_level, eff_quant, log_tx_scale);
-      let dist_new = sq_err(coeff, new_level, eff_quant, log_tx_scale);
-      let dd = (dist_new - dist_orig) as f64;
-
       let is_eob_coeff = i == best_new_eob - 1;
       let ctx = if is_eob_coeff { eob_ctx_arr[i] } else { sig_ctx[i] };
 
-      let rate_orig = coeff_rate(
-        orig_level,
-        ctx,
-        br_ctx_arr[i],
-        is_eob_coeff,
-        fc,
-        txs_ctx,
-        plane_type,
-      );
-      let rate_new = coeff_rate(
-        new_level,
-        ctx,
-        br_ctx_arr[i],
-        is_eob_coeff,
-        fc,
-        txs_ctx,
-        plane_type,
-      );
-      let rate_saved = rate_orig - rate_new;
+      // Multi-level round-down: evaluate candidate levels orig_level-1,
+      // orig_level-2, ..., 1 and keep the rate-distortion minimum (vs keeping
+      // orig_level). This generalises the previous single-step (orig_level-1
+      // only) round-down to a full descent of the level.
+      //
+      // Distortion is measured in the transform domain and grows monotonically
+      // as the level falls further below the unquantized value, so once the
+      // distortion term alone reaches the current best *total* cost, no smaller
+      // level can win (rate is non-negative ⇒ total cost ≥ distortion). We stop
+      // the scan there; the early-out is exact — it never skips a better level.
+      //
+      // Levels stay ≥ 1 here (tail-zeroing is the EOB shrinkage in Phase 1).
+      // Contexts are held fixed across the block, the same approximation the
+      // single-step round-down used.
+      let dist_at = |level: u32| sq_err(coeff, level, eff_quant, log_tx_scale) as f64;
+      let rate_at = |level: u32| {
+        lambda_trellis
+          * coeff_rate(
+            level, ctx, br_ctx_arr[i], is_eob_coeff, fc, txs_ctx, plane_type,
+          )
+      };
 
-      if rate_saved > 0.0 && dd < lambda_trellis * rate_saved {
+      let mut best_level = orig_level;
+      let mut best_cost = dist_at(orig_level) + rate_at(orig_level);
+      for level in (1..orig_level).rev() {
+        let dist = dist_at(level);
+        if dist >= best_cost {
+          break; // exact monotonic early-break
+        }
+        let cost = dist + rate_at(level);
+        if cost < best_cost {
+          best_cost = cost;
+          best_level = level;
+        }
+      }
+
+      if best_level != orig_level {
         let sign = if coeff_raw < 0 { -1i32 } else { 1 };
-        qcoeffs[pos] = T::cast_from(sign * new_level as i32);
+        qcoeffs[pos] = T::cast_from(sign * best_level as i32);
       }
     }
   }
@@ -511,6 +521,35 @@ mod tests {
     assert_eq!(sq_err(100, 10, 10, 0), 0);
     assert_eq!(sq_err(100, 9, 10, 0), 100);
     assert_eq!(sq_err(100, 0, 10, 1), 2500);
+  }
+
+  /// The multi-level round-down's exact early-break relies on transform-domain
+  /// distortion growing monotonically as the level drops below the quantized
+  /// value. Verify that property across a grid of coefficients and quantizers —
+  /// if it ever failed, the `dist >= best_cost { break }` early-out could skip a
+  /// cheaper level.
+  #[test]
+  fn sq_err_monotonic_below_quantized_level() {
+    // Worst case for "rounds up": round-to-nearest (the deadzone quantizer biases
+    // toward zero by < q/2, so it rounds up even less). Only levels the trellis
+    // actually optimises (orig_level >= 2) are in scope.
+    for &q in &[8u32, 40, 100, 199] {
+      for &coeff_mag in &[100i64, 137, 333, 512, 2000, 16000] {
+        let orig = (coeff_mag as u32 + q / 2) / q; // round-to-nearest
+        if orig < 2 {
+          continue; // matches the `orig_level < 2` gate in optimize()
+        }
+        let mut prev = sq_err(coeff_mag, orig, q, 0);
+        for level in (0..orig).rev() {
+          let d = sq_err(coeff_mag, level, q, 0);
+          assert!(
+            d >= prev,
+            "sq_err non-monotonic: coeff={coeff_mag} q={q} level={level} d={d} prev={prev}"
+          );
+          prev = d;
+        }
+      }
+    }
   }
 
   #[test]
