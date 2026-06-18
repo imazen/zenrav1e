@@ -342,9 +342,9 @@ pub fn optimize<T: Coefficient>(
 
 /// Closed-form estimate of a transform block's coefficient coding rate (bits),
 /// using the same per-coefficient CDF rate model the trellis uses (`coeff_rate`
-/// + `eob_position_rate`). Reads CDFs only — no entropy-coder mutation, no
-/// rollback. Mirrors `write_coeffs_lv_map`'s symbols (EOB position + per-coeff
-/// base level / base-range / sign / golomb).
+/// and `eob_position_rate`). Reads CDFs only — no entropy-coder mutation and no
+/// rollback. Mirrors `write_coeffs_lv_map`'s symbols (EOB position, per-coeff
+/// base level, base-range, sign, and golomb).
 ///
 /// Validated RD-neutral building block: routed into mode/tx RDO it reproduces
 /// the real-coding tx-type/mode decisions to within ±0.3% BD-rate (see
