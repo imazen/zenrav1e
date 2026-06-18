@@ -340,6 +340,58 @@ pub fn optimize<T: Coefficient>(
     .unwrap_or(0) as u16
 }
 
+/// Closed-form estimate of a transform block's coefficient coding rate (bits),
+/// using the same per-coefficient CDF rate model the trellis uses (`coeff_rate`
+/// + `eob_position_rate`). Reads CDFs only — no entropy-coder mutation, no
+/// rollback. Mirrors `write_coeffs_lv_map`'s symbols (EOB position + per-coeff
+/// base level / base-range / sign / golomb).
+///
+/// Validated RD-neutral building block: routed into mode/tx RDO it reproduces
+/// the real-coding tx-type/mode decisions to within ±0.3% BD-rate (see
+/// `benchmarks/stage2_rdo_estimate_2026-06-18.md`). It is NOT wired into the
+/// encode path — the 2026-06-18 Stage-2 study measured that replacing real coeff
+/// coding with this estimate caps at ~5% encoder speedup (coefficient
+/// entropy-coding is only ~5% of RDO cost; transform/quant/distortion dominate),
+/// which did not justify a user-facing flag. Kept for future RDO rate work.
+#[allow(dead_code)]
+pub(crate) fn estimate_block_coeff_rate<T: Coefficient>(
+  qcoeffs: &[T], eob: u16, tx_size: TxSize, tx_type: TxType, fc: &CDFContext,
+  plane_type: usize,
+) -> f64 {
+  let n = eob as usize;
+  if n == 0 {
+    return 0.0;
+  }
+  let scan_tx_type =
+    if tx_type == TxType::WHT_WHT { TxType::DCT_DCT } else { tx_type };
+  let scan = &av1_scan_orders[tx_size as usize][scan_tx_type as usize].scan;
+  let tx_class = tx_type_to_class[scan_tx_type as usize];
+  let txs_ctx = ContextWriter::get_txsize_entropy_ctx(tx_size);
+  let bhl = ContextWriter::get_txb_bhl(tx_size);
+  let coded_size = av1_get_coded_tx_size(tx_size);
+  let area = coded_size.area();
+  let height = coded_size.height();
+  let stride = height + TX_PAD_HOR;
+
+  let mut levels_buf = [0u8; TX_PAD_2D];
+  let levels = &mut levels_buf[TX_PAD_TOP * stride..];
+  init_levels(qcoeffs, height, levels, stride);
+
+  let mut rate =
+    eob_position_rate(n as u16, tx_size, tx_class, fc, txs_ctx, plane_type);
+  for i in 0..n {
+    let pos = scan[i] as usize;
+    let level = i32::cast_from(qcoeffs[pos]).unsigned_abs();
+    let is_eob = i == n - 1;
+    let ctx = ContextWriter::get_nz_map_ctx(
+      levels, pos, bhl, area, i, is_eob, tx_size, tx_class,
+    );
+    let br_ctx = ContextWriter::get_br_ctx(levels, pos, bhl, tx_class);
+    rate += coeff_rate(level, ctx, br_ctx, is_eob, fc, txs_ctx, plane_type);
+  }
+  rate
+}
+
 // ---------------------------------------------------------------------------
 // Rate estimation helpers
 // ---------------------------------------------------------------------------
