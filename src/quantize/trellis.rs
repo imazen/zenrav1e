@@ -317,6 +317,24 @@ pub fn optimize<T: Coefficient>(
 // Rate estimation helpers
 // ---------------------------------------------------------------------------
 
+/// Precomputed `log2(CDF_TOTAL / range)` for every possible `range` in
+/// `[1, CDF_TOTAL]`. Each entry is initialised with the **identical** expression
+/// `cdf_rate` evaluated inline, so a lookup returns the bit-for-bit same `f64`.
+/// This makes the substitution provably decision-neutral (same rates → same
+/// trellis choices → identical bitstream) while replacing a per-coefficient
+/// libm `log2()` — a transcendental that dominates the rate loop — with one
+/// array load. Index 0 is unused (`range >= 1`).
+static CDF_RATE_LUT: std::sync::LazyLock<[f64; CDF_TOTAL as usize + 1]> =
+  std::sync::LazyLock::new(|| {
+    let mut t = [0.0f64; CDF_TOTAL as usize + 1];
+    let mut range = 1usize;
+    while range <= CDF_TOTAL as usize {
+      t[range] = (CDF_TOTAL as f64 / range as f64).log2();
+      range += 1;
+    }
+    t
+  });
+
 /// Approximate rate (in bits) for coding symbol `s` given a CDF table.
 ///
 /// Uses the information-theoretic cost: -log2(p(s)) where probability is
@@ -332,8 +350,10 @@ fn cdf_rate(s: u32, cdf: &[u16]) -> f64 {
     CDF_TOTAL
   };
   let range = fl.saturating_sub(fh).max(1);
-  // -log2(range / CDF_TOTAL) = log2(CDF_TOTAL / range)
-  (CDF_TOTAL as f64 / range as f64).log2()
+  // -log2(range / CDF_TOTAL) = log2(CDF_TOTAL / range), read from a precomputed
+  // LUT that is bit-identical to the inline `.log2()` (see CDF_RATE_LUT): the
+  // trellis makes exactly the same decisions and the bitstream is unchanged.
+  CDF_RATE_LUT[range as usize]
 }
 
 /// Rate (in bits) for coding one coefficient at a given level.
@@ -525,5 +545,89 @@ mod tests {
     assert_eq!(golomb_cost(0), 1.0); // x=1, length=1, cost=1
     assert_eq!(golomb_cost(1), 3.0); // x=2, length=2, cost=3
     assert_eq!(golomb_cost(5), 5.0); // x=6, length=3, cost=5
+  }
+
+  /// The original inline-`log2()` rate, kept for the equivalence proof and the
+  /// A/B microbench below.
+  fn cdf_rate_log2_ref(s: u32, cdf: &[u16]) -> f64 {
+    let fh = (cdf[s as usize] >> EC_PROB_SHIFT) as u32;
+    let fl = if s > 0 {
+      (cdf[(s - 1) as usize] >> EC_PROB_SHIFT) as u32
+    } else {
+      CDF_TOTAL
+    };
+    let range = fl.saturating_sub(fh).max(1);
+    (CDF_TOTAL as f64 / range as f64).log2()
+  }
+
+  /// RD-neutrality proof: the LUT returns the bit-for-bit identical `f64` as the
+  /// inline `log2()` for every reachable `range`, and `cdf_rate` matches the
+  /// reference across representative CDFs. Identical rates ⇒ identical trellis
+  /// decisions ⇒ identical bitstream.
+  #[test]
+  fn lut_is_bit_identical_to_log2() {
+    for range in 1..=CDF_TOTAL {
+      let lut = CDF_RATE_LUT[range as usize];
+      let direct = (CDF_TOTAL as f64 / range as f64).log2();
+      assert_eq!(lut.to_bits(), direct.to_bits(), "range={range}");
+    }
+    let cdfs: [&[u16]; 3] = [
+      &[384 << 6, 256 << 6, 128 << 6, 5],
+      &[128 << 6, 5],
+      &[500 << 6, 400 << 6, 100 << 6, 3 << 6, 7],
+    ];
+    for cdf in cdfs {
+      for s in 0..cdf.len() as u32 {
+        assert_eq!(
+          cdf_rate(s, cdf).to_bits(),
+          cdf_rate_log2_ref(s, cdf).to_bits(),
+          "cdf={cdf:?} s={s}"
+        );
+      }
+    }
+  }
+
+  /// Paired A/B microbench (run with `--release -- --nocapture`). Interleaves
+  /// LUT vs `log2()` rounds to cancel turbo/thermal drift; asserts identical
+  /// totals so it doubles as a correctness check.
+  #[test]
+  fn bench_cdf_rate_lut_vs_log2() {
+    use std::hint::black_box;
+    use std::time::{Duration, Instant};
+    let cdfs: [&[u16]; 4] = [
+      &[384 << 6, 256 << 6, 128 << 6, 5],
+      &[128 << 6, 5],
+      &[500 << 6, 400 << 6, 100 << 6, 3 << 6, 7],
+      &[300 << 6, 200 << 6, 90 << 6, 40 << 6, 10 << 6, 9],
+    ];
+    // Kept modest so it stays cheap in debug CI while still giving a stable
+    // ratio under `--release -- --nocapture`.
+    let iters = 200_000usize;
+    let rounds = 3;
+    black_box(cdf_rate(0, cdfs[0]));
+    let (mut sum_lut, mut sum_log) = (0.0f64, 0.0f64);
+    let (mut t_lut, mut t_log) = (Duration::ZERO, Duration::ZERO);
+    for _ in 0..rounds {
+      let s0 = Instant::now();
+      for i in 0..iters {
+        sum_lut += cdf_rate(black_box((i as u32) & 3), cdfs[i & 3]);
+      }
+      t_lut += s0.elapsed();
+      let s1 = Instant::now();
+      for i in 0..iters {
+        sum_log += cdf_rate_log2_ref(black_box((i as u32) & 3), cdfs[i & 3]);
+      }
+      t_log += s1.elapsed();
+    }
+    black_box(sum_lut);
+    black_box(sum_log);
+    assert_eq!(sum_lut.to_bits(), sum_log.to_bits(), "A/B totals must match");
+    let n = (iters * rounds) as f64;
+    eprintln!(
+      "cdf_rate A/B: LUT {:.2} ns/call | log2 {:.2} ns/call | {:.2}x faster",
+      t_lut.as_nanos() as f64 / n,
+      t_log.as_nanos() as f64 / n,
+      t_log.as_nanos() as f64 / t_lut.as_nanos().max(1) as f64
+    );
   }
 }
