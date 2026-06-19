@@ -22,6 +22,17 @@
   (borrow) or `e.decompose().0` (owned); propagating with `?` into a
   `Box<dyn Error>` / `anyhow` context still works unchanged. Version bumped
   `0.1.4` → `0.2.0`.
+- **Leaner default features.** `default` is now `["asm", "threading"]` (was
+  `["asm", "threading", "signal_support", "scenechange"]`). `scenechange` (pulls
+  the `av-scenechange` crate; only used for video/by-GOP keyframe placement) and
+  `signal_support` (`signal-hook`, a CLI-only Ctrl-C concern used solely in
+  `src/bin/*`) moved to the `binaries` feature, so the `rav1e` CLI is unchanged.
+  Library consumers no longer pull `av-scenechange` or `signal-hook` by default;
+  still-image encoders fall back to the existing no-op scene-change stub. A
+  consumer that built with default features **and** relied on scene-cut keyframe
+  placement should now add `features = ["scenechange"]` explicitly. (Note: the
+  primary downstream — ravif/zenavif — already builds with
+  `default-features = false`, so it is unaffected.)
 
 ### Investigated
 - **#6 bottom-up partition × QM regression** — measured negative result, no fix
