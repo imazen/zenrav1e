@@ -160,9 +160,11 @@ pub struct T35 {
 // `Encoded`). Attaching an `At<>` trace here would put trace allocation and
 // extra register pressure on the hottest path for a status that is usually not
 // even an error. The cold config-validation API (`Config::validate`,
-// `new_context`, the channel constructors) uses `At<InvalidConfig>` instead —
-// see `ConfigResult` in `src/api/config/mod.rs`. The C API mirrors this enum as
-// a bare `extern "C"` status and cannot carry `At<>` regardless.
+// `new_context`, the channel constructors) returns a bare `InvalidConfig` —
+// self-describing, so a trace adds nothing (see `ConfigResult` in
+// `src/api/config/mod.rs`). `At<>` is reserved for non-obvious origins like the
+// summary-parsing `RateControlError`. The C API mirrors this enum as a bare
+// `extern "C"` status and cannot carry `At<>` regardless.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
 pub enum EncoderStatus {
   /// The encoder needs more data to produce an output packet.

@@ -37,11 +37,13 @@ impl ToError for std::num::ParseIntError {
 }
 
 impl ToError for std::io::Error {}
-// Config validation now returns `At<InvalidConfig>` (the trace points at the
-// failing validation site); `Display` renders the full trace into the message.
-impl ToError for zenrav1e::At<zenrav1e::InvalidConfig> {}
+// Config validation returns a bare, self-describing `InvalidConfig`; the
+// per-frame `EncoderStatus` is likewise bare. The summary-parsing
+// `RateControlError` is whereat-traced (`At<…>`) — its `Display` renders the
+// trace pointing at the deserializer site that rejected the blob.
+impl ToError for zenrav1e::InvalidConfig {}
 impl ToError for zenrav1e::EncoderStatus {}
-impl ToError for zenrav1e::config::RateControlError {}
+impl ToError for zenrav1e::At<zenrav1e::config::RateControlError> {}
 
 pub fn print_error(e: &dyn std::error::Error) {
   error!("{}", e);

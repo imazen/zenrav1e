@@ -14,7 +14,6 @@ use crate::api::internal::ContextInner;
 use crate::api::util::*;
 
 use crossbeam::channel::*;
-use whereat::at;
 
 use crate::rate::RCState;
 use crate::util::Pixel;
@@ -51,12 +50,12 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
+  /// - Returns [`InvalidConfig`](crate::prelude::InvalidConfig) if the configuration is invalid.
   pub fn new_channel<T: Pixel>(&self) -> ConfigResult<VideoDataChannel<T>> {
     let rc = &self.rate_control;
 
     if rc.emit_pass_data || rc.summary.is_some() {
-      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
     let v = if self.slots > 1 {
       self.new_by_gop_channel(self.slots)?
@@ -77,7 +76,7 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
+  /// - Returns [`InvalidConfig`](crate::prelude::InvalidConfig) if the configuration is invalid.
   ///
   /// # Panics
   ///
@@ -89,7 +88,7 @@ impl Config {
     let rc = &self.rate_control;
 
     if !rc.emit_pass_data {
-      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
     if self.slots > 1 {
@@ -111,7 +110,7 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
+  /// - Returns [`InvalidConfig`](crate::prelude::InvalidConfig) if the configuration is invalid.
   ///
   /// # Panics
   ///
@@ -122,7 +121,7 @@ impl Config {
   ) -> ConfigResult<(VideoDataChannel<T>, RcDataSender)> {
     let rc = &self.rate_control;
     if rc.emit_pass_data || rc.summary.is_none() {
-      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
     if self.slots > 1 {
@@ -147,7 +146,7 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns [`At<InvalidConfig>`](crate::At) if the configuration is invalid.
+  /// - Returns [`InvalidConfig`](crate::prelude::InvalidConfig) if the configuration is invalid.
   ///
   /// # Panics
   ///
@@ -158,7 +157,7 @@ impl Config {
   ) -> ConfigResult<(VideoDataChannel<T>, PassDataChannel)> {
     let rc = &self.rate_control;
     if rc.summary.is_none() || !rc.emit_pass_data {
-      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
     if self.slots > 1 {

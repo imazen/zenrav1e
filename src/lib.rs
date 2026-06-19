@@ -45,12 +45,13 @@ use crate::encoder::*;
 pub use crate::frame::Frame;
 pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 
-// `whereat` error-location tracking for the cold config-validation path.
-// See `Config::validate` / `Config::new_context`: those return
-// `At<InvalidConfig>` so server-side callers get a stack trace pointing at the
-// exact validation failure. The hot per-frame status `EncoderStatus`
-// (`receive_packet` / `send_frame`) is deliberately left bare — see the note
-// at its definition in `src/api/util.rs`.
+// `whereat` error-location tracking, applied where an error's origin is
+// genuinely non-obvious: the summary-parsing error `RateControlError`
+// (`RateControlSummary::from_summary_slice`) returns `At<RateControlError>`, so
+// a corrupt multipass blob points at the parse site. Errors that are already
+// self-describing or hot-path stay bare: `InvalidConfig` (each variant names the
+// rejected setting; a trace would only point back into `validate()`) and the
+// per-frame `EncoderStatus` (see the note at its definition in `src/api/util.rs`).
 pub use whereat::At;
 whereat::define_at_crate_info!();
 

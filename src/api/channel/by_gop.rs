@@ -14,7 +14,6 @@ use crate::api::config::*;
 use crate::api::util::*;
 
 use crossbeam::channel::*;
-use whereat::at;
 
 #[cfg(not(feature = "scenechange"))]
 use crate::av_scenechange as scene_detect;
@@ -337,14 +336,14 @@ impl Config {
   ///
   /// # Errors
   ///
-  /// - Returns [`At<InvalidConfig>`](crate::At) if configuration is invalid.
+  /// - Returns [`InvalidConfig`](crate::prelude::InvalidConfig) if configuration is invalid.
   pub fn new_by_gop_channel<T: Pixel>(
     &self, slots: usize,
   ) -> ConfigResult<VideoDataChannel<T>> {
     let rc = &self.rate_control;
 
     if rc.emit_pass_data || rc.summary.is_some() {
-      return Err(at!(InvalidConfig::RateControlConfigurationMismatch));
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
     self.validate()?;

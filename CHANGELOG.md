@@ -3,24 +3,25 @@
 ## [Unreleased]
 
 ### Changed (BREAKING)
-- **Config validation now returns `At<InvalidConfig>` for server-side stack
-  traces.** `Config::validate`, `Config::new_context`, `Config::tiling_info`,
-  and the `new_channel` / `new_firstpass_channel` / `new_secondpass_channel` /
-  `new_multipass_channel` / `new_by_gop_channel` constructors now return
-  `Result<_, whereat::At<InvalidConfig>>` (aliased `ConfigResult<T>`) instead of
-  bare `InvalidConfig`. The trace points at the exact validation site that
-  rejected the configuration. `At` is re-exported at the crate root and
-  `InvalidConfig` itself is unchanged. These paths are cold (run once per encode
-  session). `EncoderStatus` — the hot per-frame status from
-  `Context::receive_packet` / `Context::send_frame` — **intentionally stays
-  bare**: `whereat` is deliberately kept off the encode hot path (trace
-  allocation / register-spill avoidance, and it is frequently ordinary control
-  flow such as `NeedMoreData`, not an error). The C API (`src/capi.rs`) is
-  unchanged — it stores only `EncoderStatus` and discards the construction
-  error to a null pointer. Migration: a caller that matched
-  `Err(InvalidConfig::X)` now matches `Err(e)` then inspects `e.error()`
-  (borrow) or `e.decompose().0` (owned); propagating with `?` into a
-  `Box<dyn Error>` / `anyhow` context still works unchanged. Version bumped
+- **`whereat` traces applied by benefit, not by API boundary.** An earlier
+  iteration wrapped the config-validation API in `At<InvalidConfig>`; that was
+  reverted after review. `InvalidConfig` is **bare** again — every variant names
+  the exact setting it rejected (`InvalidWidth(8)`, `InvalidBitDepth(7)`, …), so
+  it is self-describing and a trace would only point back into `validate()`,
+  which the variant already implies. `Config::validate` / `new_context` /
+  `tiling_info` and the channel constructors return `Result<_, InvalidConfig>`
+  (the `ConfigResult<T>` alias is now bare). The per-frame `EncoderStatus` stays
+  bare too (hot path / ordinary control flow).
+  Instead, the trace is applied where an origin is genuinely **non-obvious**:
+  **`RateControlError` (a.k.a. `rate::Error`) is now `At`-wrapped.**
+  `RateControlSummary::from_slice` and `RateControlConfig::from_summary_slice`
+  return `Result<_, whereat::At<RateControlError>>` — a `CorruptedSummary` comes
+  out of the binary deserializer, so the trace points at the parse site that
+  rejected the blob (which the flat `String` message can't convey). `At` is
+  re-exported at the crate root. Migration: a caller of `from_summary_slice`
+  matches `Err(e)` then inspects `e.error()` (borrow); `?` into
+  `Box<dyn Error>` / `anyhow` still works. The C API (`src/capi.rs`) is
+  unchanged (it uses `.ok()` / discards construction errors). Version bumped
   `0.1.4` → `0.2.0`.
 - **Pure-Rust, toolchain-free default features.** `default` is now
   `["threading"]` (was `["asm", "threading", "signal_support", "scenechange"]`).

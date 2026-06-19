@@ -8,10 +8,17 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use thiserror::Error;
+use whereat::{At, at};
 
 use crate::rate::*;
 
-/// Rate control errors
+/// Rate control errors.
+///
+/// Returned wrapped in a [`whereat`] [`At`] (`At<Error>`) by
+/// [`RateControlSummary::from_slice`] / [`RateControlConfig::from_summary_slice`]:
+/// unlike [`InvalidConfig`](crate::prelude::InvalidConfig) (self-describing
+/// config validation), a corrupt-summary failure originates deep in the binary
+/// deserializer, so the trace points at the parse site that rejected the blob.
 #[derive(Debug, Error)]
 pub enum Error {
   /// The summary provided is not compatible with the current encoder version
@@ -32,12 +39,15 @@ pub struct RateControlConfig {
 pub use crate::rate::RCSummary as RateControlSummary;
 
 impl RateControlSummary {
-  /// Deserializes a byte slice into a `RateControlSummary`
-  pub(crate) fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
+  /// Deserializes a byte slice into a `RateControlSummary`.
+  ///
+  /// On failure returns [`At<Error>`](At) — the trace points at the parse site,
+  /// since a corrupt summary's origin isn't evident from the error alone.
+  pub(crate) fn from_slice(bytes: &[u8]) -> Result<Self, At<Error>> {
     let mut de = RCDeserialize::default();
     let _ = de.buffer_fill(bytes, 0, TWOPASS_HEADER_SZ);
 
-    de.parse_summary().map_err(Error::CorruptedSummary)
+    de.parse_summary().map_err(|e| at!(Error::CorruptedSummary(e)))
   }
 }
 
@@ -46,8 +56,9 @@ impl RateControlConfig {
   ///
   /// # Errors
   ///
-  /// Returns an error if the serialized data is invalid.
-  pub fn from_summary_slice(bytes: &[u8]) -> Result<Self, Error> {
+  /// Returns [`At<Error>`](At) if the serialized data is invalid; the trace
+  /// points at the deserializer site that rejected the summary blob.
+  pub fn from_summary_slice(bytes: &[u8]) -> Result<Self, At<Error>> {
     Ok(Self {
       summary: Some(RateControlSummary::from_slice(bytes)?),
       ..Default::default()
@@ -74,5 +85,19 @@ impl RateControlConfig {
   pub const fn with_emit_data(mut self, emit: bool) -> Self {
     self.emit_pass_data = emit;
     self
+  }
+}
+
+#[cfg(test)]
+mod whereat_trace_tests {
+  use super::*;
+
+  #[test]
+  fn corrupt_summary_carries_whereat_trace() {
+    // A short garbage blob fails the binary deserializer; the error must come
+    // back whereat-traced (At<Error>) pointing at the parse site.
+    let err = RateControlConfig::from_summary_slice(&[0u8; 4]).unwrap_err();
+    assert!(matches!(err.error(), Error::CorruptedSummary(_)), "{:?}", err.error());
+    assert!(err.frame_count() >= 1, "trace should carry the parse-site frame");
   }
 }
