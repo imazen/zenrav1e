@@ -42,19 +42,22 @@ binaries = [
   "nom",
   "libc",
   "av1-grain/parse",
-  # CLI also wants scene-cut keyframe placement + Ctrl-C handling (both moved
-  # out of the library `default` below — they're binary/video concerns).
+  # The reference CLI stays fast + full-featured: SIMD (asm), scene-cut keyframe
+  # placement, and Ctrl-C handling — all moved out of the library `default`
+  # below (build-toolchain / video / binary concerns), kept on for the binaries.
+  "asm",
   "scenechange",
   "signal_support",
 ]
 stop = ["enough"]
 scenechange = ["dep:av-scenechange"]
-# Library default is lean: SIMD + threading only. `scenechange` (pulls
-# av-scenechange; only used for video/by-GOP keyframe placement — still-image
-# encoders fall back to the no-op stub) and `signal_support` (signal-hook, a
-# CLI-only Ctrl-C concern, used solely in src/bin/*) live in `binaries` instead,
-# so library consumers don't carry them.
-default = ["asm", "threading"]
+# Library default is pure-Rust and toolchain-free: threading only. `asm` (NASM
+# SIMD via nasm-rs/cc — a build-toolchain dependency), `scenechange` (pulls
+# av-scenechange; video/by-GOP keyframe placement, with a no-op stub for still
+# images), and `signal_support` (signal-hook; CLI-only Ctrl-C, used solely in
+# src/bin/*) are all opt-in and carried by `binaries` for the CLI. Consumers
+# wanting SIMD add `features = ["asm"]` (the ravif/zenavif chain already does).
+default = ["threading"]
 git_version = ["built/git2"]
 asm = ["nasm-rs", "cc", "dep:safe_unaligned_simd", "av-scenechange?/asm", "libc", "new_debug_unreachable"]
 threading = ["rayon/threads"]

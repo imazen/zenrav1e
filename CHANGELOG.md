@@ -22,17 +22,24 @@
   (borrow) or `e.decompose().0` (owned); propagating with `?` into a
   `Box<dyn Error>` / `anyhow` context still works unchanged. Version bumped
   `0.1.4` → `0.2.0`.
-- **Leaner default features.** `default` is now `["asm", "threading"]` (was
-  `["asm", "threading", "signal_support", "scenechange"]`). `scenechange` (pulls
-  the `av-scenechange` crate; only used for video/by-GOP keyframe placement) and
-  `signal_support` (`signal-hook`, a CLI-only Ctrl-C concern used solely in
-  `src/bin/*`) moved to the `binaries` feature, so the `rav1e` CLI is unchanged.
-  Library consumers no longer pull `av-scenechange` or `signal-hook` by default;
-  still-image encoders fall back to the existing no-op scene-change stub. A
-  consumer that built with default features **and** relied on scene-cut keyframe
-  placement should now add `features = ["scenechange"]` explicitly. (Note: the
-  primary downstream — ravif/zenavif — already builds with
-  `default-features = false`, so it is unaffected.)
+- **Pure-Rust, toolchain-free default features.** `default` is now
+  `["threading"]` (was `["asm", "threading", "signal_support", "scenechange"]`).
+  Three concerns moved to the `binaries` feature so the `rav1e` CLI stays fast +
+  full-featured while library consumers carry none of them by default:
+  - `asm` — NASM SIMD (via `nasm-rs` + `cc`); a **build-toolchain** dependency.
+    A plain default build is now pure Rust and needs no NASM/C toolchain. Add
+    `features = ["asm"]` for the SIMD speedups.
+  - `scenechange` — pulls `av-scenechange`; only used for video/by-GOP keyframe
+    placement. Still-image encoders fall back to the existing no-op stub. Add
+    `features = ["scenechange"]` for scene-cut keyframe placement.
+  - `signal_support` — `signal-hook`, a CLI-only Ctrl-C concern used solely in
+    `src/bin/*`; never belonged in a library default.
+
+  The default dependency tree drops to just `maybe-rayon`. Verified: pure-Rust
+  default builds + 129 lib tests + clippy `-D warnings` pass; the asm path and
+  the CLI (built with `binaries`) are unchanged. **The primary downstream —
+  ravif/zenavif/zencodecs — already builds `default-features = false` and opts
+  into `asm`/`threading` explicitly, so it is unaffected.**
 
 ### Investigated
 - **#6 bottom-up partition × QM regression** — measured negative result, no fix
