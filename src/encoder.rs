@@ -2415,7 +2415,22 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
 
   // write tx_size here
-  if fi.tx_mode_select {
+  //
+  // The bitstream `tx_mode` is `TX_MODE_SELECT` only when `fi.tx_mode_select`
+  // AND the frame is not coded-lossless: AV1 spec 5.9.21 infers `ONLY_4X4` for
+  // lossless frames and writes no `tx_mode` bit (see `header.rs` where the bit
+  // is gated on `!fi.is_lossless()`). So the tx-size syntax below — which is
+  // only valid under `TX_MODE_SELECT` — must be suppressed for lossless too.
+  //
+  // `is_lossless()` is keyed on the rate-control-assigned `base_q_idx` (set in
+  // `set_quantizers` before encoding), so it is the authoritative predicate
+  // here. `fi.tx_mode_select` alone is not: an inter frame sets it from
+  // `enable_inter_txfm_split` with no quantizer check, and even a key frame's
+  // `config.quantizer > 0` proxy disagrees when bitrate-mode rate control
+  // drives `base_q_idx` to 0. In either case an intra block (e.g. BLOCK_32X32)
+  // would otherwise reach `write_tx_size_intra` with the lossless-forced
+  // `TX_4X4`, whose depth (3) exceeds `MAX_TX_DEPTH` (2) — the panic in #24.
+  if fi.tx_mode_select && !fi.is_lossless() {
     if bsize > BlockSize::BLOCK_4X4 && (!is_inter || !skip) {
       if !is_inter {
         cw.write_tx_size_intra(w, tile_bo, bsize, tx_size);

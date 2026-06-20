@@ -106,5 +106,7 @@ jobs:
       - name: Regression seeds
         run: |
           if [ -d fuzz/regression ] && [ "$(ls fuzz/regression/ 2>/dev/null | wc -l)" -gt 0 ]; then
-            cargo test --test fuzz_regression 2>/dev/null || echo "No regression test found — seeds exist but no test harness"
+            # `_fuzz_replay` exposes `pub mod fuzzing` so the harness can replay
+            # the committed crash seeds through the real fuzz entry points.
+            cargo test --features _fuzz_replay --test fuzz_regression
           fi

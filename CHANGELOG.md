@@ -54,6 +54,25 @@
   `benchmarks/issue6-bottomup-qm-2026-06-13.md`.
 
 ### Fixed
+- **No panic on a coded-lossless inter frame (#24)** — `encode` fuzzing tripped
+  `debug_assert!(depth <= MAX_TX_DEPTH)` in `tx_size_to_depth`
+  (`src/context/transform_unit.rs:639`). A lossless frame forces `TX_4X4` on
+  every block, but the inter-frame path set `tx_mode_select` from
+  `enable_inter_txfm_split` with no lossless check, so an intra block inside a
+  lossless inter frame still emitted tx-size syntax via `write_tx_size_intra`.
+  For a `BLOCK_32X32` block the `TX_32X32 → TX_16X16 → TX_8X8 → TX_4X4` descent
+  is depth 3, past `MAX_TX_DEPTH` (2). The frame became lossless via
+  bitrate-mode rate control driving `base_q_idx` to 0, so the config-quantizer
+  proxy disagreed with the runtime state. AV1 (spec 5.9.21) infers
+  `tx_mode = ONLY_4X4` for lossless and writes no tx-size syntax — matching
+  `header.rs`, the tx-size syntax in `encode_block_post_cdef` is now suppressed
+  whenever `fi.is_lossless()` (the authoritative, rate-control-aware predicate),
+  fixing both the inter-frame path and the bitrate-mode key-frame disagreement.
+  Regression: a dav1d encode→decode roundtrip of a multi-frame lossless stream
+  at speeds 9/10 (`multiframe_lossless_*`), a decoder-free public-API guard
+  (`lossless_inter_frame_tx_size_no_panic`), and the seed replay
+  `fuzz/regression/txsize-depth-lossless-inter-encode.bin` via the new
+  `tests/fuzz_regression.rs` harness (`_fuzz_replay` feature).
 - **Library now rejects a pathological frame rate (#20)** — the
   scene-change-driven encode path (the `scenechange` feature, on by default)
   forwarded the configured frame rate (`time_base.den / time_base.num`)

@@ -2565,3 +2565,60 @@ fn lossless_mode_produces_valid_output() {
   let pkt = pkt.unwrap();
   assert!(!pkt.data.is_empty(), "Packet should contain data");
 }
+
+#[test]
+fn lossless_inter_frame_tx_size_no_panic() {
+  // Regression for imazen/zenrav1e#24: a coded-lossless *inter* frame panicked
+  // in `tx_size_to_depth` (`debug_assert!(depth <= MAX_TX_DEPTH)`).
+  //
+  // Lossless forces `TX_4X4` on every block, but the inter-frame path set
+  // `tx_mode_select = enable_inter_txfm_split` with no lossless check, so an
+  // intra block inside it still emitted tx-size syntax. For a `BLOCK_32X32`
+  // block the `TX_32X32 -> TX_16X16 -> TX_8X8 -> TX_4X4` descent is depth 3,
+  // past `MAX_TX_DEPTH` (2). AV1 infers `tx_mode = ONLY_4X4` for lossless (no
+  // tx-size syntax), so the fix suppresses that syntax when `is_lossless()`.
+  //
+  // Speeds 9 and 10 enable `inter_tx_split` (speed 10 also forces 32x32
+  // partitions — the exact failing block size); `low_latency` + multiple
+  // frames produces the inter frames. This drives the failing config through
+  // the public API and asserts the drain does not panic. (The dav1d roundtrip
+  // in `test_encode_decode` additionally pixel-verifies the bitstream when the
+  // decode-test feature is on.)
+  for speed in [9u8, 10u8] {
+    let mut enc = EncoderConfig::with_speed_preset(speed);
+    enc.width = 64;
+    enc.height = 64;
+    enc.quantizer = 0; // lossless
+    enc.min_key_frame_interval = 15;
+    enc.max_key_frame_interval = 15;
+    enc.low_latency = true;
+    enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+
+    let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+    let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+    for f in 0..3u8 {
+      let mut frame = ctx.new_frame();
+      for plane in &mut frame.planes {
+        let stride = plane.cfg.stride;
+        for (y, row) in plane.data_origin_mut().chunks_mut(stride).enumerate()
+        {
+          for (x, px) in row.iter_mut().enumerate() {
+            *px = ((x * 3 + y * 5 + f as usize * 17) % 256) as u8;
+          }
+        }
+      }
+      let _ = ctx.send_frame(Arc::new(frame));
+    }
+    ctx.flush();
+
+    loop {
+      match ctx.receive_packet() {
+        Ok(_) | Err(EncoderStatus::Encoded) => {}
+        Err(EncoderStatus::LimitReached)
+        | Err(EncoderStatus::NeedMoreData) => break,
+        Err(e) => panic!("speed {speed}: unexpected encoder status {e:?}"),
+      }
+    }
+  }
+}

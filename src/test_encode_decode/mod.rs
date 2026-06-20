@@ -832,6 +832,64 @@ fn still_picture_mode(decoder: &str) {
   );
 }
 
+// Regression for imazen/zenrav1e#24: a coded-lossless inter frame panicked in
+// `tx_size_to_depth` (`debug_assert!(depth <= MAX_TX_DEPTH)`).
+//
+// A lossless frame forces `TX_4X4` on every block, but an inter frame set
+// `tx_mode_select = enable_inter_txfm_split` with no lossless check, so an
+// intra block inside it still emitted tx-size syntax via `write_tx_size_intra`.
+// For a `BLOCK_32X32` block the `TX_32X32 -> TX_16X16 -> TX_8X8 -> TX_4X4`
+// descent is depth 3, past `MAX_TX_DEPTH` (2). AV1 infers `tx_mode = ONLY_4X4`
+// for lossless (no tx-size syntax), so the fix suppresses that syntax whenever
+// `is_lossless()`. Speed 9/10 are the speeds that enable inter_tx_split (and
+// speed 10 forces 32x32 partitions, the exact failing block size); low_latency
+// + limit>1 produces the inter frames. `verify` also requires the decoded
+// pixels to match the lossless reconstruction exactly.
+fn multiframe_lossless(decoder: &str, speed: u8) {
+  let limit = 3; // Force inter frames after the key frame.
+  let w = 64;
+  let h = 64;
+  let quantizer = 0; // Lossless.
+
+  let mut dec = get_decoder::<u8>(decoder, w, h);
+  dec.encode_decode(
+    true,
+    w,
+    h,
+    speed,
+    quantizer,
+    limit,
+    8,
+    Default::default(),
+    15,
+    15,
+    0,
+    true, // low_latency -> inter frames carry intra blocks
+    false,
+    0,
+    0,
+    0,
+    false,
+    None,
+  );
+}
+
+macro_rules! test_multiframe_lossless {
+  ($($S:expr),+) => {
+    $(
+      pastey::item!{
+        #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+        #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        fn [<multiframe_lossless_speed_ $S>](decoder: &str) {
+          multiframe_lossless(decoder, $S);
+        }
+      }
+    )*
+  }
+}
+
+test_multiframe_lossless! {9, 10}
+
 pub(crate) fn get_decoder<T: Pixel>(
   decoder: &str, w: usize, h: usize,
 ) -> Box<dyn TestDecoder<T>> {

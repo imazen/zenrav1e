@@ -10,7 +10,12 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use libfuzzer_sys::arbitrary::{Arbitrary, Error, Unstructured};
+// `arbitrary` reaches this module two ways: under `cfg(fuzzing)` via
+// libfuzzer-sys (which re-exports the same crate), and under the `_fuzz_replay`
+// feature as an optional direct dependency — so the regression harness in
+// `tests/fuzz_regression.rs` can replay seeds through the real fuzz entry
+// points on stable, without a nightly fuzz build.
+use arbitrary::{Arbitrary, Error, Unstructured};
 
 use crate::prelude::*;
 
@@ -299,6 +304,11 @@ impl Arbitrary<'_> for ArbitraryEncoder {
   }
 }
 
+/// # Panics
+///
+/// Panics if the context cannot be created from an otherwise-valid config, or
+/// if `arbitrary.pixels` is empty (the `Arbitrary` impl guarantees it is not).
+/// Panics surfacing here are exactly what the fuzzer is meant to catch.
 pub fn fuzz_encode(arbitrary: ArbitraryEncoder) {
   let res = arbitrary.config.new_context();
   if res.is_err() {
@@ -324,6 +334,11 @@ pub fn fuzz_encode(arbitrary: ArbitraryEncoder) {
   let _ = encode_frames(&mut context, frames);
 }
 
+// The fields are populated by the derived `Arbitrary` impl and consumed by
+// `fuzz_encode_decode`, which only exists under `decode_test_dav1d`. When this
+// struct is compiled for `_fuzz_replay` without that feature (the regression
+// harness skips the decode seeds), the fields are written-but-not-read.
+#[cfg_attr(not(feature = "decode_test_dav1d"), allow(dead_code))]
 #[derive(Debug)]
 pub struct DecodeTestParameters<T: Pixel> {
   w: usize,
@@ -391,7 +406,11 @@ impl<T: Pixel> Arbitrary<'_> for DecodeTestParameters<T> {
   }
 }
 
-#[cfg(feature = "decode_test_dav1d")]
+// The decode roundtrip needs `crate::test_encode_decode`, which only compiles
+// under `test`/`fuzzing`. So this entry point (and its byte shim) exists in the
+// real fuzz build and in-crate tests, but not in a bare `_fuzz_replay` library
+// build — there the regression harness simply skips the `encode_decode*` seeds.
+#[cfg(all(any(test, fuzzing), feature = "decode_test_dav1d"))]
 pub fn fuzz_encode_decode<T: Pixel>(p: DecodeTestParameters<T>) {
   use crate::test_encode_decode::*;
 
@@ -416,4 +435,43 @@ pub fn fuzz_encode_decode<T: Pixel>(p: DecodeTestParameters<T>) {
     p.still_picture,
     None,
   );
+}
+
+// Byte-entry shims for the regression harness (`tests/fuzz_regression.rs`).
+//
+// libfuzzer's `fuzz_target!(|data: T| ...)` feeds the raw input as
+// `T::arbitrary_take_rest(Unstructured::new(bytes))`. These helpers do the
+// identical parse so a committed crash seed lands on the same encoder
+// configuration when replayed on the stable toolchain — and keep all
+// `arbitrary` use inside this module, so the test crate only needs
+// `zenrav1e::fuzzing`. A seed that no longer parses to a value (e.g. after a
+// fuzz-input layout change) is simply a no-op replay, never a panic.
+
+/// Replay an `encode`-target seed through [`fuzz_encode`].
+pub fn fuzz_encode_bytes(bytes: &[u8]) {
+  if let Ok(enc) =
+    ArbitraryEncoder::arbitrary_take_rest(Unstructured::new(bytes))
+  {
+    fuzz_encode(enc);
+  }
+}
+
+/// Replay a `construct_context`-target seed through [`fuzz_construct_context`].
+pub fn fuzz_construct_context_bytes(bytes: &[u8]) {
+  if let Ok(cfg) =
+    ArbitraryConfig::arbitrary_take_rest(Unstructured::new(bytes))
+  {
+    fuzz_construct_context(cfg);
+  }
+}
+
+/// Replay an `encode_decode`-target seed through [`fuzz_encode_decode`] for the
+/// given pixel type (`u8` = `encode_decode`, `u16` = `encode_decode_hbd`).
+#[cfg(all(any(test, fuzzing), feature = "decode_test_dav1d"))]
+pub fn fuzz_encode_decode_bytes<T: Pixel>(bytes: &[u8]) {
+  if let Ok(p) =
+    DecodeTestParameters::<T>::arbitrary_take_rest(Unstructured::new(bytes))
+  {
+    fuzz_encode_decode(p);
+  }
 }

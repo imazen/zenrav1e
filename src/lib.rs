@@ -337,5 +337,12 @@ pub mod bench {
   }
 }
 
-#[cfg(fuzzing)]
+// Also exposed under the `_fuzz_replay` feature so the integration test
+// `tests/fuzz_regression.rs` can replay fuzz seeds through the real
+// `fuzz_encode` / `fuzz_construct_context` / `fuzz_encode_decode` entry points
+// on the stable toolchain (an integration test links the library compiled
+// without `cfg(test)`, so a plain `cfg(test)` gate would not reach it). The
+// feature is non-default and underscore-prefixed (internal), so it does not
+// widen the public API for normal consumers.
+#[cfg(any(fuzzing, feature = "_fuzz_replay"))]
 pub mod fuzzing;
