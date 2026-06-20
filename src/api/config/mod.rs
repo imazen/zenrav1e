@@ -456,9 +456,7 @@ impl Config {
     }
 
     if config.switch_frame_interval > 0 && !config.low_latency {
-      return Err(InvalidSwitchFrameInterval(
-        config.switch_frame_interval
-      ));
+      return Err(InvalidSwitchFrameInterval(config.switch_frame_interval));
     }
 
     if config.enable_timing_info && config.still_picture {
@@ -671,10 +669,7 @@ mod tests {
       cfg.enc.time_base = crate::api::Rational { num, den };
       let got = cfg.validate();
       assert!(
-        matches!(
-          got.as_ref(),
-          Err(InvalidConfig::InvalidFrameRateDen { .. })
-        ),
+        matches!(got.as_ref(), Err(InvalidConfig::InvalidFrameRateDen { .. })),
         "fps {den}/{num} must be rejected as InvalidFrameRateDen, got {got:?}"
       );
     }

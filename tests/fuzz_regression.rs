@@ -54,9 +54,7 @@ fn regression_dir() -> PathBuf {
 /// Any entry point may legitimately drop the input or return early, but it must
 /// not panic. A panic propagates and fails the test with the seed name.
 fn replay_seed(path: &Path, name: &str) {
-  use zenrav1e::fuzzing::{
-    fuzz_construct_context_bytes, fuzz_encode_bytes,
-  };
+  use zenrav1e::fuzzing::{fuzz_construct_context_bytes, fuzz_encode_bytes};
 
   let bytes = fs::read(path).unwrap_or_else(|e| panic!("read {name}: {e}"));
 

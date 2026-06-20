@@ -97,7 +97,11 @@ mod whereat_trace_tests {
     // A short garbage blob fails the binary deserializer; the error must come
     // back whereat-traced (At<Error>) pointing at the parse site.
     let err = RateControlConfig::from_summary_slice(&[0u8; 4]).unwrap_err();
-    assert!(matches!(err.error(), Error::CorruptedSummary(_)), "{:?}", err.error());
+    assert!(
+      matches!(err.error(), Error::CorruptedSummary(_)),
+      "{:?}",
+      err.error()
+    );
     assert!(err.frame_count() >= 1, "trace should carry the parse-site frame");
   }
 }
