@@ -1,4 +1,6 @@
-# zenrav1e [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenrav1e/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenrav1e/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zenrav1e?style=flat-square)](https://crates.io/crates/zenrav1e) [![lib.rs](https://img.shields.io/crates/v/zenrav1e?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zenrav1e) [![docs.rs](https://img.shields.io/docsrs/zenrav1e?style=flat-square)](https://docs.rs/zenrav1e) [![MSRV](https://img.shields.io/badge/MSRV-1.89-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue?style=flat-square)](#license)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# zenrav1e [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenrav1e/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenrav1e/actions/workflows/ci.yml)
 
 zenrav1e is an AV1 encoder tuned for still and animated AVIF images — an Imazen
 fork of [rav1e](https://github.com/xiph/rav1e) that adds frequency-dependent
@@ -178,31 +180,6 @@ cargo check --features asm
 Requires Rust 1.89+. The `asm` feature needs [NASM](https://nasm.us/) 2.14.02+
 on x86_64.
 
-<!-- crates.io:skip-start -->
-## Benchmarks
-
-BD-rate is measured against upstream rav1e with SSIMULACRA2 (negative = better
-compression at equal quality). Headline measured results:
-
-| Configuration | BD-rate vs upstream | Encode time | Corpus |
-|---|--:|--:|---|
-| `enable_qm` (default-recommended) | **−10.1%** mean | ~1× | 63 images, speed 6 |
-| `enable_qm` + forced `rdo_tx_decision` | −10.3% mean | ~3× | 63 images, speed 6 |
-| `enable_trellis` (opt-in) | −0.94% mean (Y) | ~+72% | 38 photos, speed 4 |
-
-Quantization matrices are the big, cheap win and the recommended default-on
-feature. Trellis RDOQ is opt-in because it mainly helps photographic content (it
-can mildly regress born-digital figures and line-art). Several other knobs
-(VAQ, `Tune::StillImage`, variance boost, segment boost, bottom-up partition
-search) were measured and **left off** because they shift the operating point
-or regress without improving compression efficiency.
-
-Full methodology, per-image data, and the negative results are in
-[`benchmarks/`](https://github.com/imazen/zenrav1e/tree/master/benchmarks)
-(see [`benchmarks/README.md`](https://github.com/imazen/zenrav1e/blob/master/benchmarks/README.md)).
-Kernel-level microbenchmarks live in [`benches/`](https://github.com/imazen/zenrav1e/tree/master/benches)
-(`cargo bench --features bench`).
-<!-- crates.io:skip-end -->
 
 ## License
 

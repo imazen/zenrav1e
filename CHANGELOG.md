@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Documentation
+- README overhaul to the zen house style: standardized `flat-square` badge row
+  (CI/crates.io/lib.rs/docs.rs/MSRV/license, no `branch=`), a `## Quick start`
+  section, refreshed feature claims (multi-level trellis RDOQ −0.94% BD-rate
+  opt-in; pure-Rust toolchain-free default), `0.1.4`→`0.2.0` dep snippet, a
+  skip-wrapped Benchmarks section + `benchmarks/README.md` index, the rendered
+  crosslink footer, and a split crates.io README (`README.crates.md`, generated;
+  `readme` + `include` updated in `Cargo.toml`).
+
 ### Changed (BREAKING)
 - **`whereat` traces applied by benefit, not by API boundary.** An earlier
   iteration wrapped the config-validation API in `At<InvalidConfig>`; that was
