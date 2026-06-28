@@ -1,6 +1,6 @@
 <!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
 
-# zenrav1e [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenrav1e/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zenrav1e/actions/workflows/ci.yml)
+# zenrav1e
 
 zenrav1e is an AV1 encoder tuned for still and animated AVIF images — an Imazen
 fork of [rav1e](https://github.com/xiph/rav1e) that adds frequency-dependent
