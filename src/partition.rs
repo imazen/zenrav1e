@@ -418,6 +418,34 @@ impl BlockSize {
     xdec != 0 && self.width_log2() == 2 || ydec != 0 && self.height_log2() == 2
   }
 
+  /// True for every block size except the three "smaller than 8x8" sizes
+  /// (`BLOCK_4X4`, `BLOCK_4X8`, `BLOCK_8X4`).
+  ///
+  /// This mirrors the *ordinal* `bsize >= BLOCK_8X8` comparison libaom uses to gate
+  /// several per-block syntax elements (`av1_use_angle_delta`, `av1_allow_palette`,
+  /// `av1/common/reconintra.h` + `av1/common/blockd.h`) -- both the encoder and decoder
+  /// derive the comparison from the position of `bsize` in the canonical 22-entry
+  /// `BLOCK_SIZE` C enum, where all six "extended" 4:1-aspect sizes (`BLOCK_4X16`,
+  /// `BLOCK_16X4`, `BLOCK_8X32`, `BLOCK_32X8`, `BLOCK_16X64`, `BLOCK_64X16`) are appended
+  /// *after* every classic size (including `BLOCK_128X128`), so they always compare
+  /// `>=` any classic threshold ordinally, regardless of their physical dimensions.
+  ///
+  /// Do NOT write `bsize >= BlockSize::BLOCK_8X8` directly to express this: `BlockSize`'s
+  /// `PartialOrd` (above) is width/height-based, not ordinal, and under it
+  /// `BLOCK_4X16 >= BLOCK_8X8` / `BLOCK_16X4 >= BLOCK_8X8` are *incomparable* (`None`),
+  /// which makes the `>=` operator silently evaluate to `false` -- diverging from the
+  /// spec/libaom's ordinal `true`. That divergence causes the encoder to skip writing
+  /// (or the RDO search to skip considering) a required syntax element for exactly the
+  /// two most common `HORZ_4`/`VERT_4` sub-block sizes, desyncing any spec-conformant
+  /// decoder (confirmed against libaom `aomdec`; see zenrav1e#26).
+  #[inline]
+  pub const fn ge_8x8_ordinal(self) -> bool {
+    !matches!(
+      self,
+      BlockSize::BLOCK_4X4 | BlockSize::BLOCK_4X8 | BlockSize::BLOCK_8X4
+    )
+  }
+
   #[inline]
   pub const fn sub8x8_offset(
     self, xdec: usize, ydec: usize,

@@ -1727,8 +1727,11 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     }
   }
 
+  // `bsize.ge_8x8_ordinal()`, not `bsize >= BlockSize::BLOCK_8X8`: must match the write
+  // side's gate in `encode_block_post_cdef` exactly, including for BLOCK_4X16/BLOCK_16X4
+  // (see `BlockSize::ge_8x8_ordinal`'s doc comment).
   if fi.config.speed_settings.prediction.fine_directional_intra
-    && bsize >= BlockSize::BLOCK_8X8
+    && bsize.ge_8x8_ordinal()
   {
     // Find the best angle delta for the current best prediction mode
     let luma_deltas = best.pred_mode_luma.angle_delta_count();

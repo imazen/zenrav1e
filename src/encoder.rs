@@ -2365,7 +2365,10 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
 
   if !is_inter {
-    if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+    // NOTE: `bsize >= BlockSize::BLOCK_8X8` is deliberately NOT used here: it silently
+    // diverges from libaom's ordinal `av1_use_angle_delta` for BLOCK_4X16/BLOCK_16X4
+    // (see `BlockSize::ge_8x8_ordinal`'s doc comment for the full explanation).
+    if luma_mode.is_directional() && bsize.ge_8x8_ordinal() {
       cw.write_angle_delta(w, angle_delta.y, luma_mode);
     }
     if has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling) {
@@ -2379,13 +2382,14 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         assert!(cfl_allowed);
         cw.write_cfl_alphas(w, cfl);
       }
-      if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+      if chroma_mode.is_directional() && bsize.ge_8x8_ordinal() {
         cw.write_angle_delta(w, angle_delta.uv, chroma_mode);
       }
     }
 
+    // Same ordinal-vs-dimension caveat as above (matches libaom's `av1_allow_palette`).
     if fi.allow_screen_content_tools > 0
-      && bsize >= BlockSize::BLOCK_8X8
+      && bsize.ge_8x8_ordinal()
       && bsize.width() <= 64
       && bsize.height() <= 64
     {
