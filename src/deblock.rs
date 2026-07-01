@@ -1253,8 +1253,16 @@ fn sse_h_edge<T: Pixel>(
   if tx_edge {
     let prev_block = deblock_up(blocks, bo, rec_plane);
     let block_edge = bo.0.y & (block.n4_h as usize - 1) == 0;
+    // `vertical` here means "is this a vertical edge" (bounds the filter reach by tx
+    // WIDTH), not "does the filter operate vertically" -- sse_h_edge scans HORIZONTAL
+    // edges, so this must be false (bounds by tx HEIGHT), matching filter_h_edge's own
+    // call below at the real filter-application site. Was `true` (copy-paste from
+    // sse_v_edge): harmless for near-square tx sizes (the min(14, ...) cap hides it),
+    // but produces an oversized filter_size for extreme-aspect tx (e.g. TX_16X4 from
+    // PARTITION_HORZ_4/VERT_4), reaching past the plane's allocated bounds near a frame
+    // edge -- PlaneRegion::subregion bounds panic. See docs/RD_GAP_VS_LIBAOM.md.
     let filter_size =
-      deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
+      deblock_size(block, prev_block, rec_plane, pli, false, block_edge);
     if filter_size > 0 {
       let po = bo.plane_offset(rec_plane.plane_cfg); // rec and src have identical subsampling
       let rec_region = rec_plane.subregion(Area::Rect {
