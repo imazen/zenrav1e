@@ -2020,13 +2020,18 @@ pub fn get_sub_partitions(
   if partition == PARTITION_NONE {
     return partition_offsets;
   }
-  if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+  // HORZ_4/VERT_4 (uniform 4-way splits) always use every one of the four
+  // offsets, like SPLIT -- but the caller must pass a quarter-spaced
+  // `four_partitions` for them (see `rdo_partition_simple`), not the
+  // half-spaced 2x2-quadrant grid used for HORZ/VERT/SPLIT.
+  let is_4way = partition == PARTITION_HORZ_4 || partition == PARTITION_VERT_4;
+  if partition == PARTITION_VERT || partition == PARTITION_SPLIT || is_4way {
     partition_offsets.push(four_partitions[1]);
   };
-  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
+  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT || is_4way {
     partition_offsets.push(four_partitions[2]);
   };
-  if partition == PARTITION_SPLIT {
+  if partition == PARTITION_SPLIT || is_4way {
     partition_offsets.push(four_partitions[3]);
   };
 
@@ -2049,7 +2054,7 @@ fn rdo_partition_none<T: Pixel>(
   cost
 }
 
-// VERTICAL, HORIZONTAL or simple SPLIT
+// VERTICAL, HORIZONTAL, simple SPLIT, or uniform 4-way HORZ_4/VERT_4
 #[inline(always)]
 fn rdo_partition_simple<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
@@ -2060,6 +2065,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 ) -> Option<f64> {
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
   let subsize = bsize.subsize(partition).unwrap();
+  let is_4way = partition == PARTITION_HORZ_4 || partition == PARTITION_VERT_4;
 
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
@@ -2070,26 +2076,61 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     0.0
   };
 
-  let hbsw = subsize.width_mi(); // Half the block size width in blocks
-  let hbsh = subsize.height_mi(); // Half the block size height in blocks
-  let four_partitions = [
-    tile_bo,
-    TileBlockOffset(BlockOffset { x: tile_bo.0.x + hbsw, y: tile_bo.0.y }),
-    TileBlockOffset(BlockOffset { x: tile_bo.0.x, y: tile_bo.0.y + hbsh }),
-    TileBlockOffset(BlockOffset {
-      x: tile_bo.0.x + hbsw,
-      y: tile_bo.0.y + hbsh,
-    }),
-  ];
+  let four_partitions = if is_4way {
+    // Uniform 4-way split: `subsize` (BLOCK_16X4/32X8/64X16 for HORZ_4;
+    // BLOCK_4X16/8X32/16X64 for VERT_4) IS already the quarter-sliver itself
+    // (unlike HORZ/VERT/SPLIT below, where `subsize` is a half-sized child), so
+    // a single subsize-derived step applied 0..4 times along the split axis
+    // gives the four sliver origins directly -- there is no 2x2 quadrant grid.
+    if partition == PARTITION_HORZ_4 {
+      let step = subsize.height_mi();
+      std::array::from_fn(|i| {
+        TileBlockOffset(BlockOffset {
+          x: tile_bo.0.x,
+          y: tile_bo.0.y + i * step,
+        })
+      })
+    } else {
+      let step = subsize.width_mi();
+      std::array::from_fn(|i| {
+        TileBlockOffset(BlockOffset {
+          x: tile_bo.0.x + i * step,
+          y: tile_bo.0.y,
+        })
+      })
+    }
+  } else {
+    let hbsw = subsize.width_mi(); // Half the block size width in blocks
+    let hbsh = subsize.height_mi(); // Half the block size height in blocks
+    [
+      tile_bo,
+      TileBlockOffset(BlockOffset { x: tile_bo.0.x + hbsw, y: tile_bo.0.y }),
+      TileBlockOffset(BlockOffset { x: tile_bo.0.x, y: tile_bo.0.y + hbsh }),
+      TileBlockOffset(BlockOffset {
+        x: tile_bo.0.x + hbsw,
+        y: tile_bo.0.y + hbsh,
+      }),
+    ]
+  };
 
   let partitions = get_sub_partitions(&four_partitions, partition);
 
   let mut rd_cost_sum = 0.0;
 
   for offset in partitions {
-    let hbs = subsize.width_mi() >> 1;
-    let has_cols = offset.0.x + hbs < ts.mi_width;
-    let has_rows = offset.0.y + hbs < ts.mi_height;
+    // HORZ_4/VERT_4 are only ever offered as RDO candidates when the *whole*
+    // parent block (not just its half-point) is verified within frame bounds
+    // (see the candidate-list gate in `encode_partition_topdown`), so every
+    // quarter-sliver offset is unconditionally in-bounds here. The half-point
+    // formula below (calibrated for HORZ/VERT/SPLIT's half-sized children)
+    // would wrongly reject an in-bounds sliver near the frame edge if reused
+    // for a quarter-sliver's genuinely different, per-axis extent.
+    let (has_cols, has_rows) = if is_4way {
+      (true, true)
+    } else {
+      let hbs = subsize.width_mi() >> 1;
+      (offset.0.x + hbs < ts.mi_width, offset.0.y + hbs < ts.mi_height)
+    };
 
     if has_cols && has_rows {
       let mode_decision =
@@ -2169,22 +2210,21 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
           &mut child_modes,
         ))
       }
-      PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
-        rdo_partition_simple(
-          fi,
-          ts,
-          cw,
-          w_pre_cdef,
-          w_post_cdef,
-          bsize,
-          tile_bo,
-          inter_cfg,
-          partition,
-          rdo_type,
-          best_rd,
-          &mut child_modes,
-        )
-      }
+      PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT | PARTITION_HORZ_4
+      | PARTITION_VERT_4 => rdo_partition_simple(
+        fi,
+        ts,
+        cw,
+        w_pre_cdef,
+        w_post_cdef,
+        bsize,
+        tile_bo,
+        inter_cfg,
+        partition,
+        rdo_type,
+        best_rd,
+        &mut child_modes,
+      ),
       _ => {
         unreachable!();
       }

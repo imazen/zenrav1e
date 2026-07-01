@@ -3304,7 +3304,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     // which is the only path cavif/zenavif ever use -- see docs/RD_GAP_VS_LIBAOM.md).
     // has_cols/has_rows are always true here (must_split's negation guarantees it), kept
     // for defensive parity with encode_partition_bottomup's equivalent check.
-    let mut candidates = ArrayVec::<PartitionType, 4>::new();
+    let mut candidates = ArrayVec::<PartitionType, 6>::new();
     candidates.push(PartitionType::PARTITION_SPLIT);
     if bsize
       <= fi.config.speed_settings.partition.non_square_partition_max_threshold
@@ -3314,6 +3314,33 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       }
       if has_rows && fi.sequence.chroma_sampling != ChromaSampling::Cs422 {
         candidates.push(PartitionType::PARTITION_VERT);
+      }
+
+      // PARTITION_HORZ_4/VERT_4 (uniform 4-way splits, zenrav1e#26): spec-legal only
+      // for exactly these three square sizes (`BlockSize::subsize` has no other
+      // HORZ_4/VERT_4 arms -- any other bsize would panic in the `.unwrap()` inside
+      // `rdo_partition_simple`) and only reachable via the full (has_rows && has_cols)
+      // partition-symbol branch (`write_partition`'s reduced-choice edge branches only
+      // ever assert SPLIT/HORZ or SPLIT/VERT). has_cols/has_rows above only check the
+      // *half*-point, which is not enough here: unlike HORZ/VERT (whose child can
+      // legally straddle the frame edge, matching AV1's own conditional-last-child
+      // spec text), Phase 1 keeps every one of the four quarter-slivers simple by
+      // requiring the *whole* parent block -- not just its half-point -- to be within
+      // frame bounds, so there is never a partial 4th sub-block to special-case.
+      let fully_contained = tile_bo.0.x + bsize.width_mi() <= ts.mi_width
+        && tile_bo.0.y + bsize.height_mi() <= ts.mi_height;
+      if fully_contained
+        && matches!(
+          bsize,
+          BlockSize::BLOCK_16X16
+            | BlockSize::BLOCK_32X32
+            | BlockSize::BLOCK_64X64
+        )
+      {
+        candidates.push(PartitionType::PARTITION_HORZ_4);
+        if fi.sequence.chroma_sampling != ChromaSampling::Cs422 {
+          candidates.push(PartitionType::PARTITION_VERT_4);
+        }
       }
     }
     candidates.push(PartitionType::PARTITION_NONE);
@@ -3509,11 +3536,16 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         part_decision.filter_intra_mode,
       );
     }
-    PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
+    PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT | PARTITION_HORZ_4
+    | PARTITION_VERT_4 => {
       if !rdo_output.part_modes.is_empty() {
         debug_assert!(can_split && !must_split);
 
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
+        // (this also covers HORZ_4/VERT_4: the candidate gate above only ever offers them
+        // when fully contained, so they are only ever chosen through this RDO path, never
+        // through the `must_split` branch below -- `partitions.len()` is 4 for these two
+        // types, same as SPLIT, and this loop already handles that generically per-mode).
         for mode in rdo_output.part_modes {
           // Each block is subjected to a new splitting decision
           encode_partition_topdown(
