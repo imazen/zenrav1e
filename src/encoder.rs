@@ -3293,7 +3293,27 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   } else if can_split {
     debug_assert!(bsize.is_sqr());
 
-    // Blocks of sizes within the supported range are subjected to a partitioning decision
+    // Blocks of sizes within the supported range are subjected to a partitioning decision.
+    // PARTITION_HORZ/VERT are only offered at or below non_square_partition_max_threshold,
+    // mirroring encode_partition_bottomup's gating of the same setting (this call site
+    // previously hardcoded SPLIT/NONE only, so the setting was dead for top-down encoding,
+    // which is the only path cavif/zenavif ever use -- see docs/RD_GAP_VS_LIBAOM.md).
+    // has_cols/has_rows are always true here (must_split's negation guarantees it), kept
+    // for defensive parity with encode_partition_bottomup's equivalent check.
+    let mut candidates = ArrayVec::<PartitionType, 4>::new();
+    candidates.push(PartitionType::PARTITION_SPLIT);
+    if bsize
+      <= fi.config.speed_settings.partition.non_square_partition_max_threshold
+    {
+      if has_cols {
+        candidates.push(PartitionType::PARTITION_HORZ);
+      }
+      if has_rows && fi.sequence.chroma_sampling != ChromaSampling::Cs422 {
+        candidates.push(PartitionType::PARTITION_VERT);
+      }
+    }
+    candidates.push(PartitionType::PARTITION_NONE);
+
     rdo_output = rdo_partition_decision(
       fi,
       ts,
@@ -3303,7 +3323,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       bsize,
       tile_bo,
       &rdo_output,
-      &[PartitionType::PARTITION_SPLIT, PartitionType::PARTITION_NONE],
+      &candidates,
       rdo_type,
       inter_cfg,
     );
