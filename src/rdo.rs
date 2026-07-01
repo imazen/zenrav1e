@@ -842,7 +842,6 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
       tx_size,
       tx_set,
       tx_types,
-      best_rd,
       use_filter_intra,
       filter_intra_mode,
     );
@@ -1896,7 +1895,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   cw: &mut ContextWriter, cw_checkpoint: &mut Option<ContextWriterCheckpoint>,
   mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
-  tx_types: &[TxType], cur_best_rd: f64, use_filter_intra: bool,
+  tx_types: &[TxType], use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
@@ -1922,7 +1921,6 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   };
   let need_recon_pixel = tx_size.block_size() != bsize && !is_inter;
 
-  let mut first_iteration = true;
   for &tx_type in tx_types {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
@@ -1997,17 +1995,6 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     cw.rollback(cw_checkpoint.as_ref().unwrap());
 
     let rd = compute_rd_cost(fi, rate, distortion);
-
-    if first_iteration {
-      // We use an optimization to early exit after testing the first
-      // transform type if the cost is higher than the existing best.
-      // The idea is that if this transform size is not better than he
-      // previous size, it is not worth testing remaining modes for this size.
-      if rd > cur_best_rd {
-        break;
-      }
-      first_iteration = false;
-    }
 
     if rd < best_rd {
       best_rd = rd;
