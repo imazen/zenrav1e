@@ -23,7 +23,16 @@
   while active (the segmentation-channel variant double-boosted flats,
   +1.92% ssim2 BD). Replaces the "Variance Boost measured as a regression"
   status below — that verdict was about the segmentation channel.
-  Strength fit + RD numbers: zenavif docs/TUNE_SSIMULACRA2_PLAN.md.
+  Strength offline-fit (follow-up commit): swept {off,1,2,3,4.5,6} + a
+  keep-segmentation arm on the zenavif train26 corpus (24 train-split
+  origins × 12 q, cavif s2+tune, BD vs boost-off, butteraugli veto) —
+  **strength 1.0 ships**: ssim2 median −2.34% / mean −2.24% (19/24
+  better), butteraugli agreeing (3n −1.13%, max −0.76%); 4.5/6.0 and
+  keep-segmentation were butteraugli-vetoed (max +4.5..+5.5%). libaom's
+  3.0 default over-boosts here because the Psychovisual pipeline already
+  activity-masks distortion. 110/110-cell conformance (aomdec +
+  rav1d-safe) at both s2+tune and s1-deep+tune, at strength 3.0 AND at
+  the shipped 1.0. Record: zenavif benchmarks/rd_gap_deltaq_2026-07-02.tsv.
 - **`Tune::Ssimulacra2`** (a37faea8): SSIMULACRA2-tuned still-image mode
   porting the two libaom `--tune=ssimulacra2` mechanisms that measured as
   wins on top of the Psychovisual pipeline — aom-parity chroma delta-q by

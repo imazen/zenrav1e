@@ -1052,10 +1052,22 @@ fn first_ac_qi_at_or_above(target: f64, bit_depth: usize) -> u8 {
   255
 }
 
-/// Variance Boost strength in libaom units (deltaq_strength=100 ⇒ 3.0).
-/// FIT PARAMETER: swept offline on the zenavif rd_gap harness; libaom's
-/// default is the starting point.
-const DELTAQ_VARIANCE_BOOST_STRENGTH: f64 = 3.0;
+/// Variance Boost strength in libaom units (libaom's own default
+/// `deltaq_strength=100` maps to 3.0).
+///
+/// FIT (2026-07-02, zenavif rd_gap harness): {off, 1, 2, 3, 4.5, 6} plus a
+/// keep-segmentation arm, on the train26 corpus (24 train-split origins ×
+/// 12 q, cavif s2 + this tune), direct BD-rate vs boost-off with a
+/// butteraugli 3-norm/max veto. Strength 1.0 won: ssim2 median −2.34% /
+/// mean −2.24% (better on 19/24, the only arm with BOTH butteraugli norms
+/// also negative: 3n −1.13%, max −0.76%); 2.0 and 3.0 were close on ssim2
+/// but worse on butteraugli; 4.5/6.0 and the keep-segmentation arm were
+/// butteraugli-vetoed outright (max +4.5..+5.5%). libaom's 3.0 does not
+/// transfer unchanged because zenrav1e's Psychovisual distortion pipeline
+/// already carries variance-based activity masking — a gentler allocation
+/// boost on top is optimal. Full record: zenavif
+/// benchmarks/rd_gap_deltaq_2026-07-02.tsv.
+const DELTAQ_VARIANCE_BOOST_STRENGTH: f64 = 1.0;
 
 /// `delta_q_res` (as log2) by base qindex, following libaom's
 /// `aom_get_variance_boost_delta_q_res` (encodeframe.c at rev 632172a4):
@@ -1068,17 +1080,6 @@ fn variance_boost_delta_q_res_log2(base_q_idx: u8) -> u8 {
     80..=119 => 1,  // res 2
     _ => 0,         // res 1
   }
-}
-
-// DEV-SWEEP-GATE helpers (strip at landing together with the call sites).
-fn deltaq_env_disabled() -> bool {
-  std::env::var("ZENRAV1E_DELTAQ").is_ok_and(|v| v == "0")
-}
-fn deltaq_env_strength() -> Option<f64> {
-  std::env::var("ZENRAV1E_DELTAQ_STRENGTH").ok()?.parse().ok()
-}
-fn deltaq_env_keep_seg() -> bool {
-  std::env::var("ZENRAV1E_DELTAQ_SEG").is_ok_and(|v| v == "1")
 }
 
 /// Boosted per-superblock qindex for a smoothed 8×8 variance, following
@@ -1850,32 +1851,29 @@ impl<T: Pixel> FrameInvariants<T> {
     // DELTA_Q_VARIANCE_BOOST, the tune's companion allocation mechanism) —
     // flat / fine-gradient superblocks get a finer quantizer through real
     // per-SB delta_q syntax. Segmentation's k-means ALT_Q channel is
-    // replaced: it allocates by the same variance signal, and stacking the
-    // two double-boosts flats (measured +1.92% ssim2 BD-rate when the
-    // boost was routed through segmentation on top of it, 2026-07-02).
-    // DEV-SWEEP-GATE (strip at landing): ZENRAV1E_DELTAQ=0 disables the
-    // boost; ZENRAV1E_DELTAQ_STRENGTH=<f64> overrides the strength (libaom
-    // units, default 3.0); ZENRAV1E_DELTAQ_SEG=1 keeps segmentation
-    // enabled alongside the boost.
+    // replaced while the boost is active: it allocates by the same variance
+    // signal, and stacking the two double-boosts flats (+1.92% ssim2
+    // BD-rate through the segmentation channel, and the keep-segmentation
+    // arm of the strength fit was butteraugli-vetoed at max +5.4%;
+    // 2026-07-02).
     self.delta_q_present = false;
     self.delta_q_res_log2 = 0;
     if self.config.tune == Tune::Ssimulacra2
       && self.base_q_idx > 0
       && (self.frame_type == FrameType::KEY || self.intra_only)
-      && !deltaq_env_disabled()
     {
-      let strength =
-        deltaq_env_strength().unwrap_or(DELTAQ_VARIANCE_BOOST_STRENGTH);
       let base_q_idx = self.base_q_idx;
       let bit_depth = self.sequence.bit_depth;
       if let Some(cfd) = self.coded_frame_data.as_mut() {
-        cfd.compute_variance_boost_sb_qindex(strength, base_q_idx, bit_depth);
+        cfd.compute_variance_boost_sb_qindex(
+          DELTAQ_VARIANCE_BOOST_STRENGTH,
+          base_q_idx,
+          bit_depth,
+        );
         if !cfd.sb_qindex.is_empty() {
           self.delta_q_present = true;
           self.delta_q_res_log2 = variance_boost_delta_q_res_log2(base_q_idx);
-          if !deltaq_env_keep_seg() {
-            self.enable_segmentation = false;
-          }
+          self.enable_segmentation = false;
         }
       }
     }
