@@ -2141,7 +2141,7 @@ fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   child_size: BlockSize, child_bo: TileBlockOffset, inter_cfg: &InterConfig,
-  rdo_type: RDOType, child_none: &PartitionParameters,
+  rdo_type: RDOType, child_none: &PartitionParameters, depth: u8,
 ) -> Option<f64> {
   debug_assert!(child_size.is_sqr());
   // Mirror `encode_partition_topdown`'s `can_split` gate for the child: the
@@ -2203,6 +2203,39 @@ fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
       break; // cannot beat the NONE leaf; abandon the deeper estimate
     }
     let g_mode = rdo_mode_decision(fi, ts, cw, quarter, g_bo, inter_cfg);
+    // Level-N refinement (s1 deep mode, `split_trial_depth` > 1): refine
+    // this quarter's own cost with a recursive deeper estimate before
+    // adding it -- exactly the same min(NONE leaf, one-level-deeper SPLIT)
+    // comparison, applied one level further down. At depth 1 (the default,
+    // and the only depth reachable on every preset) this is `None` and the
+    // code below is byte-identical to the original one-level estimate.
+    let g_refined = if depth > 1 {
+      rdo_split_child_deeper_cost(
+        fi,
+        ts,
+        cw,
+        w_pre_cdef,
+        w_post_cdef,
+        quarter,
+        g_bo,
+        inter_cfg,
+        rdo_type,
+        &g_mode,
+        depth - 1,
+      )
+    } else {
+      None
+    };
+    if let Some(refined) = g_refined {
+      // The recursive call already wrote the quarter's SPLIT symbol and its
+      // sixteenth NONE leaves (context left in the deeper-encoded state for
+      // sibling estimation), and `refined` already includes that symbol's
+      // tell-metered cost -- the same accounting convention as this level's
+      // own `deeper_cost` vs `child_none` comparison. No NONE symbol, no
+      // NONE-leaf encode for this quarter.
+      deeper_cost += refined;
+      continue;
+    }
     deeper_cost += g_mode.rd_cost;
     if quarter >= BlockSize::BLOCK_8X8 && quarter.is_sqr() {
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
@@ -2406,6 +2439,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
           inter_cfg,
           rdo_type,
           &mode_decision,
+          fi.config.speed_settings.partition.split_trial_depth.max(1),
         )
       } else {
         None

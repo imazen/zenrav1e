@@ -88,6 +88,7 @@ impl Default for SpeedSettings {
           BlockSize::BLOCK_64X64,
         ),
         mixed_3way_partitions: false,
+        split_trial_depth: 1,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: false,
@@ -250,6 +251,17 @@ pub struct PartitionSpeedSettings {
   /// search byte-identical to builds without this feature — it is an
   /// explicit opt-in for beyond-matched-speed operating points.
   pub mixed_3way_partitions: bool,
+
+  /// Recursion depth of the top-down SPLIT-trial cost refinement
+  /// (`min(NONE leaf, one-level-deeper SPLIT)` per child).
+  ///
+  /// `1` (the default at every preset, and the minimum — `0` is treated as
+  /// `1`) is the shipped one-level estimate; higher values refine each
+  /// quarter's cost recursively, sharpening SPLIT-vs-large-block ranking
+  /// where large partition ranges are searched, at extra encode cost.
+  /// Only meaningful above the minimum partition size; an explicit opt-in
+  /// for beyond-matched-speed operating points.
+  pub split_trial_depth: u8,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

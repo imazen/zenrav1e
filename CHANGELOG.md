@@ -209,6 +209,12 @@
   improved on 16/19 images, encode time 1.057× median — RD parity crossed
   at matched speed. Full data in the `zenavif` sibling repo's
   `docs/RD_GAP_VS_LIBAOM.md` "Fixed 2026-07-02".
+- **`PartitionSpeedSettings::split_trial_depth`** — the b073182c one-level
+  SPLIT-trial cost refinement generalized to a recursion-depth knob (default
+  `1` = unchanged, byte-identical; `0` treated as `1`). Depth 2 applies the
+  same `min(NONE leaf, deeper SPLIT)` comparison one level further down,
+  sharpening SPLIT-vs-large-block ranking where wide partition ranges are
+  searched — an opt-in for deep/max-quality modes (cavif `-s1`, #27).
 - **`PARTITION_HORZ_A`/`HORZ_B`/`VERT_A`/`VERT_B` in the RDO search (#27,
   Phase 2 of extended AV1 partition types)** — the four mixed-granularity
   3-way splits (one half stays a single block, the other half splits again
