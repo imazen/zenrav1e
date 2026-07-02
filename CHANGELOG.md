@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 ### Fixed
+- **`qm_v` omitted whenever a QM frame's u/v delta-qs coincided** (9a8eaf61).
+  AV1 5.9.12 codes `qm_v` iff the sequence header's `separate_uv_delta_q`
+  (always 1 here); gating it on the frame-level `diff_uv_delta` produced
+  streams aomdec rejects and dav1d-lineage decoders silently mis-parse.
+  Masked by the Daala chroma offsets (u ≠ v almost always); exposed by
+  `Tune::Ssimulacra2`'s aom-style chroma delta-q (u == v). zenrav1e#29.
+- **Rectangular transforms quantized with transposed QM weights** (2310c7be).
+  rav1e stores coefficients transposed (like dav1d); `qm_table()` didn't swap
+  w/h the way rav1d-safe's `dav1d_qm_tbl` mapping deliberately does, so every
+  rect TX used the transposed matrix — self-consistent in the encoder, wrong
+  on every conforming decoder. Small at the near-flat levels 12–15 the
+  existing curve picks, catastrophic at steeper levels (decoded ssim2
+  85.7→55.7 at cavif Q85 with the ssimulacra2-tune curve). Adds
+  transpose-pair + rav1d-reference spot tests. zenrav1e#29.
 - **64×64-parent `HORZ_4`/`VERT_4` slivers emitted corrupt bitstreams** (3fa735dc).
   `BLOCK_64X16`/`BLOCK_16X64` — reachable only via `override_partition_range`
   up to 64 — desynced every conforming decoder through their never-validated
