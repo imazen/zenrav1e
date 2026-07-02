@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 ### Added
+- **Per-superblock delta-q coding** (d125713f): the encoder can now code real
+  `delta_q` syntax — frame-header `delta_q_present`/`delta_q_res` (spec
+  5.9.17), the per-SB `delta_q_index` symbol at the first block of each
+  superblock (spec-exact skip-SB omission and per-tile qindex predictor),
+  the `delta_q_cdf` with dav1d-matching defaults, and per-SB qindex plumbed
+  through quantize/dequant/rate via `get_qidx` composing with segmentation
+  exactly like `init_quant_tables`. Includes a checkpoint fix for the
+  rollback-unprotected `code_deltas` flag (same side-state class as
+  zenrav1e#27) that any delta coding would have desynced on. Inert unless a
+  frame sets `delta_q_present` — byte-identity vs previous master verified
+  across tunes.
+- **Variance Boost per-SB delta-q for `Tune::Ssimulacra2`** (66733720): port
+  of libaom's `DELTA_Q_VARIANCE_BOOST` (allintra_vis.c rev 632172a4,
+  SVT-AV1-PSY lineage) through the real delta-q syntax — flat/fine-gradient
+  superblocks get a finer quantizer (octile-5 smoothed 8×8 variance, aom
+  boost curve + qindex damping, res 1/2/4/8 by base qindex), with per-SB
+  RDO distortion follow `(ac_q(base)/ac_q(sb))²` and segmentation disabled
+  while active (the segmentation-channel variant double-boosted flats,
+  +1.92% ssim2 BD). Replaces the "Variance Boost measured as a regression"
+  status below — that verdict was about the segmentation channel.
+  Strength fit + RD numbers: zenavif docs/TUNE_SSIMULACRA2_PLAN.md.
 - **`Tune::Ssimulacra2`** (a37faea8): SSIMULACRA2-tuned still-image mode
   porting the two libaom `--tune=ssimulacra2` mechanisms that measured as
   wins on top of the Psychovisual pipeline — aom-parity chroma delta-q by
