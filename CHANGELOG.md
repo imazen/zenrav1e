@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Fixed
+- **64×64-parent `HORZ_4`/`VERT_4` slivers emitted corrupt bitstreams** (3fa735dc).
+  `BLOCK_64X16`/`BLOCK_16X64` — reachable only via `override_partition_range`
+  up to 64 — desynced every conforming decoder through their never-validated
+  `TX_64X16`/`TX_16X64` max transforms. Intra slivers now cap to
+  `TX_32X16`/`TX_16X32` (spec-valid; decoder follows the written depth), the
+  tx-size RDO walk shrinks by the consumed level (an out-of-alphabet depth-3
+  symbol otherwise), inter frames without `enable_inter_txfm_split` no longer
+  offer 64×64-parent 4-way candidates, and the intra tx-depth bound is a hard
+  assert in all builds. Byte-identical at every shipped preset; validating the
+  real 64-dim sliver transforms is #28.
+
 ### Documentation
 - README overhaul to the zen house style: standardized `flat-square` badge row
   (CI/crates.io/lib.rs/docs.rs/MSRV/license, no `branch=`), a `## Quick start`
