@@ -748,9 +748,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.using_qmatrix {
       self.write::<4, u8>(fi.qm_level[0])?; // qm_y
       self.write::<4, u8>(fi.qm_level[1])?; // qm_u
-      let diff_uv_delta = fi.dc_delta_q[1] != fi.dc_delta_q[2]
-        || fi.ac_delta_q[1] != fi.ac_delta_q[2];
-      if diff_uv_delta {
+      // qm_v is present iff the SEQUENCE header's separate_uv_delta_q is set
+      // (AV1 5.9.12) -- for non-monochrome, zenrav1e always signals
+      // separate_uv_delta_q=1 (write_color_config). Gating qm_v on the
+      // frame-level diff_uv_delta (as this used to) omitted it whenever the
+      // u/v delta-qs happened to coincide, desyncing every conforming
+      // decoder (aomdec rejects the frame; dav1d-lineage decoders read the
+      // next 4 header bits as qm_v and silently mis-decode).
+      if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
         self.write::<4, u8>(fi.qm_level[2])?; // qm_v
       }
     }
