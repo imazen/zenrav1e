@@ -54,6 +54,14 @@ impl ActivityMask {
     ActivityMask { variances: variances.into_boxed_slice() }
   }
 
+  /// Raw 8×8 source variances in importance-block raster order (the same
+  /// sum-of-squared-deviations scale as `variance_8x8`). Empty when the
+  /// mask was never filled (activity masking disabled).
+  #[inline]
+  pub fn variances(&self) -> &[u32] {
+    &self.variances
+  }
+
   #[profiling::function]
   pub fn fill_scales(
     &self, bit_depth: usize, activity_scales: &mut Box<[DistortionScale]>,

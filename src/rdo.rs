@@ -440,18 +440,43 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
-/// Compute a scaling factor to multiply the distortion of a block by,
-/// this factor is determined using temporal RDO.
+/// Per-superblock distortion multiplier for frames coding per-SB delta-q:
+/// `(ac_q(base)/ac_q(sb))²`, so RDO inside a boosted (lower-qindex)
+/// superblock values distortion more — the λ-side follow of the quantizer
+/// boost, mirroring libaom's per-SB rdmult tracking the boosted qindex.
+/// Identity when the frame codes no delta-q.
+#[inline]
+fn sb_dist_scale<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset,
+) -> DistortionScale {
+  use crate::context::SUPERBLOCK_TO_BLOCK_SHIFT;
+  if !fi.delta_q_present {
+    return DistortionScale::default();
+  }
+  match fi.coded_frame_data.as_ref() {
+    Some(cfd) if !cfd.sb_dist_scales.is_empty() => {
+      let x = frame_bo.0.x >> SUPERBLOCK_TO_BLOCK_SHIFT;
+      let y = frame_bo.0.y >> SUPERBLOCK_TO_BLOCK_SHIFT;
+      cfd.sb_dist_scales[y * cfd.sb_qindex_cols() + x]
+    }
+    _ => DistortionScale::default(),
+  }
+}
+
+/// Compute a scaling factor to multiply the distortion of a block by:
+/// the temporal-RDO factor when enabled, composed with the per-SB delta-q
+/// factor (`sb_dist_scale`) when the frame codes delta-q.
 ///
 /// # Panics
 ///
-/// - If called with `bsize` of 8x8 or smaller
+/// - If called with temporal RDO enabled and `bsize` above 8x8
 /// - If the coded frame data doesn't exist on the `FrameInvariants`
 pub fn distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
+  let sb_scale = sb_dist_scale(fi, frame_bo);
   if !fi.config.temporal_rdo() {
-    return DistortionScale::default();
+    return sb_scale;
   }
   // EncoderConfig::temporal_rdo() should always return false in situations
   // where distortion is computed on > 8x8 blocks, so we should never hit this
@@ -462,7 +487,7 @@ pub fn distortion_scale<T: Pixel>(
   let y = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
-  coded_data.distortion_scales[y * coded_data.w_in_imp_b + x]
+  coded_data.distortion_scales[y * coded_data.w_in_imp_b + x] * sb_scale
 }
 
 /// # Panics

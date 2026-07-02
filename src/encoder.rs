@@ -117,16 +117,22 @@ pub enum Tune {
   /// Optimized for SSIMULACRA2 scores on still images, modeled on libaom's
   /// `--tune=ssimulacra2` (aomenc 3.14.1, rev 632172a4). Uses the perceptual
   /// distortion metric with activity masking (like Psychovisual), plus the
-  /// two mechanisms that measured as wins on top of it: aom-style chroma
-  /// delta-q by subsampling, and the SSIMULACRA2-tuned quantization-matrix
-  /// level curves (QM is always on for this tune).
+  /// mechanisms that measured as wins on top of it: aom-style chroma
+  /// delta-q by subsampling, the SSIMULACRA2-tuned quantization-matrix
+  /// level curves (QM is always on for this tune), and the Variance Boost
+  /// per-superblock delta-q (flat superblocks get a finer quantizer through
+  /// real delta_q syntax; replaces segmentation's variance allocation for
+  /// keyframes under this tune).
   ///
   /// Every ported libaom mechanism was A/B-measured with ssim2 AND
-  /// butteraugli (metric-gaming guard); aom's all-intra rdmult weight,
-  /// sharpness-7 trellis, and Variance Boost delta-q measured as regressions
-  /// on top of zenrav1e's Daala-lineage rate control / activity masking and
-  /// are deliberately not part of this tune (measured 2026-07-02, zenavif
-  /// docs/TUNE_SSIMULACRA2_PLAN.md).
+  /// butteraugli (metric-gaming guard); aom's all-intra rdmult weight and
+  /// sharpness-7 trellis measured as regressions on top of zenrav1e's
+  /// Daala-lineage rate control / activity masking and are deliberately not
+  /// part of this tune. Variance Boost routed through the segmentation
+  /// channel also regressed (double-boosting flats against the
+  /// activity-masked segmentation); the shipped form codes real per-SB
+  /// delta_q with segmentation disabled instead (measured 2026-07-02,
+  /// zenavif docs/TUNE_SSIMULACRA2_PLAN.md).
   Ssimulacra2,
 }
 
@@ -1014,6 +1020,95 @@ pub struct CodedFrameData<T: Pixel> {
   pub sb_dist_scales: Box<[DistortionScale]>,
 }
 
+/// Sorts `vars` in place and samples octile 5 with 1:2:1 smoothing across
+/// the neighboring octiles, following libaom's
+/// `av1_get_variance_boost_block_variance` (aq_variance.c at rev 632172a4).
+/// The index arithmetic generalizes aom's full-superblock constants
+/// (31/39/47 of 64) to partial edge superblocks. Returns at least 1
+/// (aom treats variance-0 superblocks as variance 1).
+fn octile5_smoothed_variance(vars: &mut [u32]) -> u64 {
+  debug_assert!(!vars.is_empty());
+  vars.sort_unstable();
+  let n = vars.len();
+  let oct = (n / 8).max(1);
+  let middle = (5 * n / 8).max(1) - 1;
+  let lower = middle.saturating_sub(oct).max(oct - 1);
+  let upper = (middle + oct).min(n - 1);
+  ((vars[lower] as u64 + 2 * vars[middle] as u64 + vars[upper] as u64 + 2) / 4)
+    .max(1)
+}
+
+/// First qindex whose AC quantizer is at or above `target`, mirroring
+/// libaom's `av1_convert_q_to_qindex` (a linear scan over the monotone
+/// quantizer table; both sides of libaom's comparison carry the same /4
+/// scaling, so comparing raw `ac_q` values is exact).
+fn first_ac_qi_at_or_above(target: f64, bit_depth: usize) -> u8 {
+  use crate::quantize::ac_q;
+  for qi in 0..=255u8 {
+    if ac_q(qi, 0, bit_depth).get() as f64 >= target {
+      return qi;
+    }
+  }
+  255
+}
+
+/// Variance Boost strength in libaom units (deltaq_strength=100 ⇒ 3.0).
+/// FIT PARAMETER: swept offline on the zenavif rd_gap harness; libaom's
+/// default is the starting point.
+const DELTAQ_VARIANCE_BOOST_STRENGTH: f64 = 3.0;
+
+/// `delta_q_res` (as log2) by base qindex, following libaom's
+/// `aom_get_variance_boost_delta_q_res` (encodeframe.c at rev 632172a4):
+/// finer resolution at low base qindex where per-SB deltas are small,
+/// coarser at high base qindex to cut signaling overhead.
+fn variance_boost_delta_q_res_log2(base_q_idx: u8) -> u8 {
+  match base_q_idx {
+    160..=255 => 3, // res 8
+    120..=159 => 2, // res 4
+    80..=119 => 1,  // res 2
+    _ => 0,         // res 1
+  }
+}
+
+// DEV-SWEEP-GATE helpers (strip at landing together with the call sites).
+fn deltaq_env_disabled() -> bool {
+  std::env::var("ZENRAV1E_DELTAQ").is_ok_and(|v| v == "0")
+}
+fn deltaq_env_strength() -> Option<f64> {
+  std::env::var("ZENRAV1E_DELTAQ_STRENGTH").ok()?.parse().ok()
+}
+fn deltaq_env_keep_seg() -> bool {
+  std::env::var("ZENRAV1E_DELTAQ_SEG").is_ok_and(|v| v == "1")
+}
+
+/// Boosted per-superblock qindex for a smoothed 8×8 variance, following
+/// libaom's `av1_get_sbq_variance_boost` (allintra_vis.c at rev 632172a4).
+/// `strength` is in libaom's internal units (its default
+/// `deltaq_strength=100` maps to 3.0, clamped to [0, 6]). `base_q` must be
+/// `ac_q(base_q_idx, 0, bit_depth)` (precomputed by the caller).
+fn variance_boost_sb_qindex(
+  var: u64, strength: f64, base_q_idx: u8, base_q: f64, bit_depth: usize,
+) -> u8 {
+  // Still-picture boost curve: fast-growing for low-variance (flat or
+  // fine-gradient) superblocks, no boost above the crossover at
+  // variance 1024.
+  let strength = strength.clamp(0.0, 6.0);
+  let qstep_ratio =
+    (0.15 * strength * (10.0 - (var as f64).log2()) + 1.0).clamp(1.0, 8.0);
+  let target_q = base_q / qstep_ratio;
+  let target_qindex = first_ac_qi_at_or_above(target_q, bit_depth);
+
+  // aom scales the raw qindex delta down by (base+544)/1279 (empirically
+  // chosen upstream: boosts shrink as base qindex drops) and caps the
+  // boost at 80 qindex steps, always staying lossy (qindex ≥ 1).
+  let boost = ((base_q_idx as f64 + 544.0)
+    * (base_q_idx as i32 - target_qindex as i32) as f64
+    / 1279.0)
+    .round() as i32;
+  let boost = boost.clamp(0, 80);
+  (base_q_idx as i32 - boost).max(1) as u8
+}
+
 impl<T: Pixel> CodedFrameData<T> {
   pub fn new(fi: &FrameInvariants<T>) -> CodedFrameData<T> {
     // Width and height are padded to 8×8 block size.
@@ -1051,6 +1146,71 @@ impl<T: Pixel> CodedFrameData<T> {
   #[inline]
   pub fn sb_qindex_cols(&self) -> usize {
     self.w_in_imp_b.div_ceil(8)
+  }
+
+  /// "Variance Boost" per-superblock target qindex for real per-SB delta-q
+  /// coding: a port of libaom's `av1_get_sbq_variance_boost`
+  /// (allintra_vis.c at rev 632172a4, SVT-AV1-PSY lineage). Flat and
+  /// fine-gradient superblocks (low 8×8 source variance at the smoothed
+  /// 5th octile) get a lower quantizer; busy superblocks stay at the frame
+  /// base. Also fills `sb_dist_scales` with `(ac_q(base)/ac_q(sb))²` so
+  /// RDO distortion weighting follows the boosted quantizer per SB
+  /// (libaom's per-SB rdmult follow, `av1_quantize.c` qindex_rd).
+  ///
+  /// Requires `activity_mask` to be filled (`use_activity`); clears the
+  /// maps (disabling delta-q) otherwise or when `base_q_idx == 0`.
+  pub fn compute_variance_boost_sb_qindex(
+    &mut self, strength: f64, base_q_idx: u8, bit_depth: usize,
+  ) {
+    use crate::quantize::ac_q;
+
+    let w = self.w_in_imp_b;
+    let h = self.h_in_imp_b;
+    let vars = self.activity_mask.variances();
+    if w == 0 || h == 0 || vars.len() != w * h || base_q_idx == 0 {
+      self.sb_qindex = Box::default();
+      self.sb_dist_scales = Box::default();
+      return;
+    }
+
+    let sb_cols = w.div_ceil(8);
+    let sb_rows = h.div_ceil(8);
+    // dynamic allocation: once per frame
+    let mut qindex_map = vec![0u8; sb_cols * sb_rows].into_boxed_slice();
+    let mut dist_scales =
+      vec![DistortionScale::default(); sb_cols * sb_rows].into_boxed_slice();
+    let base_q = ac_q(base_q_idx, 0, bit_depth).get() as f64;
+    // aom's high-bit-depth variance helpers normalize to the 8-bit range
+    // before the per-pixel division; match that.
+    let norm_shift = 2 * (bit_depth - 8) as u32;
+
+    let mut sb_vars = [0u32; 64];
+    for sby in 0..sb_rows {
+      for sbx in 0..sb_cols {
+        let x0 = sbx * 8;
+        let x1 = (x0 + 8).min(w);
+        let y0 = sby * 8;
+        let y1 = (y0 + 8).min(h);
+        let mut n = 0usize;
+        for y in y0..y1 {
+          for x in x0..x1 {
+            // Per-pixel 8×8 variance, truncated — aom's `vf(...) / 64`.
+            sb_vars[n] = (vars[y * w + x] >> norm_shift) / 64;
+            n += 1;
+          }
+        }
+        let var = octile5_smoothed_variance(&mut sb_vars[..n]);
+        let sb_qindex = variance_boost_sb_qindex(
+          var, strength, base_q_idx, base_q, bit_depth,
+        );
+        let sb_q = ac_q(sb_qindex, 0, bit_depth).get() as f64;
+        qindex_map[sby * sb_cols + sbx] = sb_qindex;
+        dist_scales[sby * sb_cols + sbx] =
+          DistortionScale::from((base_q / sb_q) * (base_q / sb_q));
+      }
+    }
+    self.sb_qindex = qindex_map;
+    self.sb_dist_scales = dist_scales;
   }
 
   // Assumes that we have already computed activity scales and distortion scales
@@ -1685,6 +1845,40 @@ impl<T: Pixel> FrameInvariants<T> {
     // starves quality. Not part of Tune::Ssimulacra2.
     self.me_lambda = self.lambda.sqrt();
     self.dist_scale = qps.dist_scale.map(DistortionScale::from);
+
+    // Tune::Ssimulacra2: per-superblock delta-q "Variance Boost" (libaom's
+    // DELTA_Q_VARIANCE_BOOST, the tune's companion allocation mechanism) —
+    // flat / fine-gradient superblocks get a finer quantizer through real
+    // per-SB delta_q syntax. Segmentation's k-means ALT_Q channel is
+    // replaced: it allocates by the same variance signal, and stacking the
+    // two double-boosts flats (measured +1.92% ssim2 BD-rate when the
+    // boost was routed through segmentation on top of it, 2026-07-02).
+    // DEV-SWEEP-GATE (strip at landing): ZENRAV1E_DELTAQ=0 disables the
+    // boost; ZENRAV1E_DELTAQ_STRENGTH=<f64> overrides the strength (libaom
+    // units, default 3.0); ZENRAV1E_DELTAQ_SEG=1 keeps segmentation
+    // enabled alongside the boost.
+    self.delta_q_present = false;
+    self.delta_q_res_log2 = 0;
+    if self.config.tune == Tune::Ssimulacra2
+      && self.base_q_idx > 0
+      && (self.frame_type == FrameType::KEY || self.intra_only)
+      && !deltaq_env_disabled()
+    {
+      let strength =
+        deltaq_env_strength().unwrap_or(DELTAQ_VARIANCE_BOOST_STRENGTH);
+      let base_q_idx = self.base_q_idx;
+      let bit_depth = self.sequence.bit_depth;
+      if let Some(cfd) = self.coded_frame_data.as_mut() {
+        cfd.compute_variance_boost_sb_qindex(strength, base_q_idx, bit_depth);
+        if !cfd.sb_qindex.is_empty() {
+          self.delta_q_present = true;
+          self.delta_q_res_log2 = variance_boost_delta_q_res_log2(base_q_idx);
+          if !deltaq_env_keep_seg() {
+            self.enable_segmentation = false;
+          }
+        }
+      }
+    }
 
     // Select QM levels based on quantizer index (all-intra heuristic from libaom).
     // AV1 spec 6.8.11: if CodedLossless == 1, using_qmatrix MUST be 0. Signaling
@@ -4903,5 +5097,77 @@ mod test {
     assert_eq!(select_sb_delta_q(95, 100, 3), (0, 100));
     // res 1: exact.
     assert_eq!(select_sb_delta_q(93, 100, 0), (-7, 93));
+  }
+
+  #[test]
+  fn octile5_full_superblock_matches_aom_indices() {
+    // 64 ascending values sort to identity; libaom samples sorted indices
+    // 31/39/47 with 1:2:1 smoothing and +2 rounding.
+    let mut v: [u32; 64] = core::array::from_fn(|i| (i as u32) * 10);
+    let got = octile5_smoothed_variance(&mut v);
+    assert_eq!(got, (310u64 + 2 * 390 + 470 + 2) / 4);
+  }
+
+  #[test]
+  fn octile5_handles_partial_superblocks() {
+    assert_eq!(octile5_smoothed_variance(&mut [7]), 7);
+    // All-zero variance clamps to 1 (aom's flat-patch rule).
+    assert_eq!(octile5_smoothed_variance(&mut [0; 64]), 1);
+    let mut v = [5u32; 3];
+    assert_eq!(octile5_smoothed_variance(&mut v), 5);
+  }
+
+  #[test]
+  fn variance_boost_flat_blocks_boosted_busy_blocks_not() {
+    let bd = 8;
+    let base_q_idx = 128u8;
+    let base_q = crate::quantize::ac_q(base_q_idx, 0, bd).get() as f64;
+
+    // At or above the variance-1024 crossover: no boost, at any strength.
+    for strength in [1.0, 3.0, 6.0] {
+      for var in [1024u64, 4096, 1 << 20] {
+        assert_eq!(
+          variance_boost_sb_qindex(var, strength, base_q_idx, base_q, bd),
+          base_q_idx,
+          "var={var} strength={strength}"
+        );
+      }
+    }
+
+    // Strength 0: no boost anywhere.
+    assert_eq!(
+      variance_boost_sb_qindex(1, 0.0, base_q_idx, base_q, bd),
+      base_q_idx
+    );
+
+    // Flat superblocks are boosted, monotonically in flatness and strength.
+    let flat = variance_boost_sb_qindex(1, 3.0, base_q_idx, base_q, bd);
+    let mid = variance_boost_sb_qindex(100, 3.0, base_q_idx, base_q, bd);
+    assert!(flat < mid, "flat={flat} mid={mid}");
+    assert!(mid < base_q_idx, "mid={mid}");
+    let flat_strong = variance_boost_sb_qindex(1, 6.0, base_q_idx, base_q, bd);
+    assert!(flat_strong <= flat, "flat_strong={flat_strong} flat={flat}");
+
+    // Always stays lossy.
+    for base in [1u8, 2, 10, 60] {
+      let q = crate::quantize::ac_q(base, 0, bd).get() as f64;
+      assert!(variance_boost_sb_qindex(1, 6.0, base, q, bd) >= 1);
+    }
+  }
+
+  #[test]
+  fn first_ac_qi_at_or_above_matches_table_semantics() {
+    use crate::quantize::ac_q;
+    let bd = 8;
+    for target_qi in [0u8, 1, 40, 128, 255] {
+      let target = ac_q(target_qi, 0, bd).get() as f64;
+      let got = first_ac_qi_at_or_above(target, bd);
+      // The scan must return an index whose quantizer is >= the target and
+      // whose predecessor (if any) is strictly below it (i.e. "first").
+      assert!(ac_q(got, 0, bd).get() as f64 >= target);
+      if got > 0 {
+        assert!((ac_q(got - 1, 0, bd).get() as f64) < target);
+      }
+    }
   }
 }
