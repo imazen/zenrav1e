@@ -226,6 +226,28 @@ fn qm_level_for_qindex_allintra(qindex: u8) -> u8 {
   }
 }
 
+// DEV-SWEEP-GATE helpers (strip at landing together with the call sites).
+// ZENRAV1E_QMDIST_TX: 0 (default) = off; 1 = force tx-domain distortion on
+// under Tune::Ssimulacra2 (unweighted control arm); 2 = QM-weighted
+// tx-domain distortion (the literal AOM_DIST_METRIC_QM_PSNR analog);
+// 3 = ratio composition (QM error discount multiplied into the
+// Psychovisual pixel metric's luma term, pixel-domain path kept).
+// ZENRAV1E_QMDIST_TRELLIS: 0 (default) = off; 1 = run the trellis under the
+// tune (unweighted control arm); 2 = trellis with QM-weighted coefficient
+// distortion.
+fn qmdist_tx_stage() -> u8 {
+  std::env::var("ZENRAV1E_QMDIST_TX")
+    .ok()
+    .and_then(|v| v.parse().ok())
+    .unwrap_or(0)
+}
+fn qmdist_trellis_stage() -> u8 {
+  std::env::var("ZENRAV1E_QMDIST_TRELLIS")
+    .ok()
+    .and_then(|v| v.parse().ok())
+    .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod qm_level_tests {
   use super::qm_level_for_qindex;
@@ -954,6 +976,28 @@ pub struct FrameInvariants<T: Pixel> {
   pub me_range_scale: u8,
   pub use_tx_domain_distortion: bool,
   pub use_tx_domain_rate: bool,
+  /// QM-weighted transform-domain RD distortion (`Tune::Ssimulacra2` with QM
+  /// active): weight per-coefficient error terms by the forward QM weight,
+  /// mirroring libaom's `dist_metric=AOM_DIST_METRIC_QM_PSNR` (which also
+  /// force-enables tx-domain distortion — see `use_tx_domain_distortion`).
+  pub qm_weighted_tx_dist: bool,
+  /// Run the trellis coefficient optimization under `Tune::Ssimulacra2` even
+  /// when `config.enable_trellis` is off (libaom's ss2 tune always runs its
+  /// trellis).
+  pub tune_trellis: bool,
+  /// Weight the trellis's coefficient distortion by the forward QM weight
+  /// (the `get_coeff_dist` half of libaom's `AOM_DIST_METRIC_QM_PSNR`).
+  pub qm_weighted_trellis: bool,
+  /// Ratio composition of the QM error discount with the Psychovisual pixel
+  /// metric (`Tune::Ssimulacra2` with QM active): `write_tx_block`
+  /// accumulates the block's QM-weighted and unweighted transform-domain
+  /// error (luma), and `compute_distortion` scales the activity-masked luma
+  /// pixel distortion by their ratio. The frequency-dependent forgiveness
+  /// QM dequant implies, WITHOUT replacing the pixel metric (replacing it —
+  /// libaom's literal QM_PSNR routing — measured +4.5% median worse on
+  /// zenrav1e because the pixel metric's activity masking is worth more
+  /// than the tx-domain discount).
+  pub qm_dist_ratio: bool,
   pub idx_in_group_output: u64,
   pub pyramid_level: u64,
   pub enable_early_exit: bool,
@@ -1394,8 +1438,32 @@ impl<T: Pixel> FrameInvariants<T> {
       render_width != width || render_height != height;
 
     let use_reduced_tx_set = config.speed_settings.transform.reduced_tx_set;
-    let use_tx_domain_distortion = config.tune == Tune::Psnr
-      && config.speed_settings.transform.tx_domain_distortion;
+    // QM-weighted RD distortion under Tune::Ssimulacra2 (libaom's
+    // dist_metric=AOM_DIST_METRIC_QM_PSNR analog): two surfaces, gated by
+    // the dev sweep envs below (strip at landing) —
+    //   tx stage:      1 = force tx-domain distortion on (unweighted
+    //                  control), 2 = QM-weighted tx-domain distortion.
+    //                  libaom forcibly enables tx-domain distortion whenever
+    //                  QM_PSNR is selected (rdopt_utils.h
+    //                  set_tx_domain_dist_params at rev 632172a4), because
+    //                  the weighting is only computable in transform space.
+    //                  3 = ratio composition: keep the Psychovisual
+    //                  pixel-domain metric and scale its luma term by the
+    //                  per-block QM-weighted/unweighted tx-error ratio —
+    //                  the frequency discount without giving up activity
+    //                  masking (the raw tx-domain switch measured +6.1%
+    //                  median worse than the pixel metric on train26).
+    //   trellis stage: 1 = run the trellis under the tune (unweighted
+    //                  control), 2 = trellis with QM-weighted coefficient
+    //                  distortion.
+    let (qmdist_tx, qmdist_trellis) = if config.tune == Tune::Ssimulacra2 {
+      (qmdist_tx_stage(), qmdist_trellis_stage())
+    } else {
+      (0, 0)
+    };
+    let use_tx_domain_distortion = (config.tune == Tune::Psnr
+      && config.speed_settings.transform.tx_domain_distortion)
+      || matches!(qmdist_tx, 1 | 2);
     let use_tx_domain_rate = config.speed_settings.transform.tx_domain_rate;
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
@@ -1481,6 +1549,10 @@ impl<T: Pixel> FrameInvariants<T> {
       me_range_scale: 1,
       use_tx_domain_distortion,
       use_tx_domain_rate,
+      qm_weighted_tx_dist: qmdist_tx == 2,
+      tune_trellis: qmdist_trellis >= 1,
+      qm_weighted_trellis: qmdist_trellis >= 2,
+      qm_dist_ratio: qmdist_tx == 3,
       idx_in_group_output: 0,
       pyramid_level: 0,
       enable_early_exit: true,
@@ -1746,6 +1818,10 @@ impl<T: Pixel> FrameInvariants<T> {
       me_range_scale: self.me_range_scale,
       use_tx_domain_distortion: self.use_tx_domain_distortion,
       use_tx_domain_rate: self.use_tx_domain_rate,
+      qm_weighted_tx_dist: self.qm_weighted_tx_dist,
+      tune_trellis: self.tune_trellis,
+      qm_weighted_trellis: self.qm_weighted_trellis,
+      qm_dist_ratio: self.qm_dist_ratio,
       idx_in_group_output: self.idx_in_group_output,
       pyramid_level: self.pyramid_level,
       enable_early_exit: self.enable_early_exit,
@@ -2338,10 +2414,23 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   // at lambda x0.25 and x1.0 on the zenavif rd_gap harness: +0.01% and
   // +0.21% median ssim2 BD-rate respectively, with butteraugli agreeing.
   // Not part of the tune; `enable_trellis` stays a plain user opt-in.
-  let eob = if fi.config.enable_trellis && eob > 1 {
+  // `fi.tune_trellis` / `fi.qm_weighted_trellis` are the QM-weighted-
+  // distortion arms of that mechanism (see `FrameInvariants::new`): the
+  // earlier measurement used the unweighted transform-domain error, which
+  // values HF errors at full cost even though QM dequant coarsens them.
+  let eob = if (fi.config.enable_trellis || fi.tune_trellis) && eob > 1 {
     let plane_type = if p == 0 { 0 } else { 1 };
     crate::quantize::trellis::optimize(
-      qcoeffs, coeffs, &ts.qc, tx_size, tx_type, fi.lambda, qm, eob, &*cw.fc,
+      qcoeffs,
+      coeffs,
+      &ts.qc,
+      tx_size,
+      tx_type,
+      fi.lambda,
+      qm,
+      fi.qm_weighted_trellis,
+      eob,
+      &*cw.fc,
       plane_type,
     )
   } else {
@@ -2396,6 +2485,53 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   // SAFETY: dequantize initialized rcoeffs
   let rcoeffs = unsafe { slice_assume_init_mut(rcoeffs) };
 
+  // QM ratio composition (`fi.qm_dist_ratio`): accumulate this TX's
+  // QM-weighted and unweighted transform-domain error into the trial's
+  // luma accumulators (reset at `encode_block_post_cdef` entry; consumed
+  // by `compute_distortion`). Runs on the pixel-domain distortion path, so
+  // it must not depend on `rdo_type.needs_tx_dist()`. Identity-transform
+  // TXs (`qm == None` — QM never applies to them) contribute equally to
+  // both sides, i.e. a neutral blend weight. The visible-area gate matches
+  // the tx-dist path: fully-invisible TXs carry no distortion.
+  if fi.qm_dist_ratio && p == 0 && visible_tx_w != 0 && visible_tx_h != 0 {
+    use crate::quantize::qm_tables::{AOM_QM_BITS, QM_FWD_WEIGHT};
+    const ROUND: i64 = 1 << (2 * AOM_QM_BITS - 1);
+    let mut wsum = 0u64;
+    let mut usum = 0u64;
+    match qm {
+      Some(qm_tbl) => {
+        let tail_wt = QM_FWD_WEIGHT[qm_tbl[qm_tbl.len() - 1] as usize] as i64;
+        for ((&a, &b), &iwt) in
+          coeffs.iter().zip(rcoeffs.iter()).zip(qm_tbl.iter())
+        {
+          let c = (i32::cast_from(a) - i32::cast_from(b)) as i64;
+          usum += (c * c) as u64;
+          let cw = c * QM_FWD_WEIGHT[iwt as usize] as i64;
+          wsum += ((cw * cw + ROUND) >> (2 * AOM_QM_BITS)) as u64;
+        }
+        for &a in &coeffs[rcoeffs.len()..] {
+          let c = i32::cast_from(a) as i64;
+          usum += (c * c) as u64;
+          let cw = c * tail_wt;
+          wsum += ((cw * cw + ROUND) >> (2 * AOM_QM_BITS)) as u64;
+        }
+      }
+      None => {
+        for (&a, &b) in coeffs.iter().zip(rcoeffs.iter()) {
+          let c = (i32::cast_from(a) - i32::cast_from(b)) as i64;
+          usum += (c * c) as u64;
+        }
+        for &a in &coeffs[rcoeffs.len()..] {
+          let c = i32::cast_from(a) as i64;
+          usum += (c * c) as u64;
+        }
+        wsum = usum;
+      }
+    }
+    ts.qm_ratio_w += wsum;
+    ts.qm_ratio_u += usum;
+  }
+
   if eob == 0 {
     // All zero coefficients is a no-op
   } else if !fi.use_tx_domain_distortion || need_recon_pixel {
@@ -2410,48 +2546,88 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     );
   }
 
-  let tx_dist =
-    if rdo_type.needs_tx_dist() && visible_tx_w != 0 && visible_tx_h != 0 {
-      // Store tx-domain distortion of this block
-      // rcoeffs above 32 rows/cols aren't held in the array, because they are
-      // always 0. The first 32x32 is stored first in coeffs so we can iterate
-      // over coeffs and rcoeffs for the first 32 rows/cols. For the
-      // coefficients above 32 rows/cols, we iterate over the rest of coeffs
-      // with the assumption that rcoeff coefficients are zero.
-      let mut raw_tx_dist = coeffs
-        .iter()
-        .zip(rcoeffs.iter())
-        .map(|(&a, &b)| {
-          let c = i32::cast_from(a) - i32::cast_from(b);
-          (c * c) as u64
-        })
-        .sum::<u64>()
-        + coeffs[rcoeffs.len()..]
+  let tx_dist = if rdo_type.needs_tx_dist()
+    && visible_tx_w != 0
+    && visible_tx_h != 0
+  {
+    // Store tx-domain distortion of this block
+    // rcoeffs above 32 rows/cols aren't held in the array, because they are
+    // always 0. The first 32x32 is stored first in coeffs so we can iterate
+    // over coeffs and rcoeffs for the first 32 rows/cols. For the
+    // coefficients above 32 rows/cols, we iterate over the rest of coeffs
+    // with the assumption that rcoeff coefficients are zero.
+    //
+    // QM-weighted variant (Tune::Ssimulacra2 with QM active, the
+    // AOM_DIST_METRIC_QM_PSNR analog — libaom av1_block_error_qm at rev
+    // 632172a4): each error term is scaled by the forward QM weight for
+    // its position before squaring, `(diff·fwd)² >> 2*AOM_QM_BITS`, so
+    // HF errors cost less in RD exactly as QM dequant coarsens them. The
+    // `qm` slice indexes the coefficient storage order identically to
+    // `dequantize_with_qm`, so the weight lookup shares the quantizer's
+    // (post-#29) orientation by construction. Coefficients beyond the
+    // coded area (never coded, reconstruct as 0) take the table's last —
+    // highest-frequency — weight.
+    let qm_dist_wts = if fi.qm_weighted_tx_dist { qm } else { None };
+    let mut raw_tx_dist = match qm_dist_wts {
+      Some(qm_tbl) => {
+        use crate::quantize::qm_tables::{AOM_QM_BITS, QM_FWD_WEIGHT};
+        const ROUND: i64 = 1 << (2 * AOM_QM_BITS - 1);
+        debug_assert_eq!(qm_tbl.len(), rcoeffs.len());
+        let tail_wt = QM_FWD_WEIGHT[qm_tbl[qm_tbl.len() - 1] as usize] as i64;
+        coeffs
           .iter()
-          .map(|&a| {
-            let c = i32::cast_from(a);
+          .zip(rcoeffs.iter())
+          .zip(qm_tbl.iter())
+          .map(|((&a, &b), &iwt)| {
+            let c = (i32::cast_from(a) - i32::cast_from(b)) as i64
+              * QM_FWD_WEIGHT[iwt as usize] as i64;
+            ((c * c + ROUND) >> (2 * AOM_QM_BITS)) as u64
+          })
+          .sum::<u64>()
+          + coeffs[rcoeffs.len()..]
+            .iter()
+            .map(|&a| {
+              let c = i32::cast_from(a) as i64 * tail_wt;
+              ((c * c + ROUND) >> (2 * AOM_QM_BITS)) as u64
+            })
+            .sum::<u64>()
+      }
+      None => {
+        coeffs
+          .iter()
+          .zip(rcoeffs.iter())
+          .map(|(&a, &b)| {
+            let c = i32::cast_from(a) - i32::cast_from(b);
             (c * c) as u64
           })
-          .sum::<u64>();
-
-      let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
-      let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
-
-      raw_tx_dist =
-        (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
-
-      if rdo_type == RDOType::TxDistEstRate {
-        // look up rate and distortion in table
-        let estimated_rate =
-          estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
-        w.add_bits_frac(estimated_rate as u32);
+          .sum::<u64>()
+          + coeffs[rcoeffs.len()..]
+            .iter()
+            .map(|&a| {
+              let c = i32::cast_from(a);
+              (c * c) as u64
+            })
+            .sum::<u64>()
       }
-
-      let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
-      RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
-    } else {
-      ScaledDistortion::zero()
     };
+
+    let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
+    let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
+
+    raw_tx_dist =
+      (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
+
+    if rdo_type == RDOType::TxDistEstRate {
+      // look up rate and distortion in table
+      let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
+      w.add_bits_frac(estimated_rate as u32);
+    }
+
+    let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
+    RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
+  } else {
+    ScaledDistortion::zero()
+  };
 
   (has_coeff, tx_dist)
 }
@@ -2762,6 +2938,14 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   // rolled back regardless may pass `PARTITION_NONE`.
   partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
+  // QM ratio composition: fresh accumulators for this trial encode (see
+  // `TileStateMut::qm_ratio_w`). Skip trials code no coefficients, leave
+  // the accumulators empty, and are scored by the undiscounted pixel
+  // metric — matching how skip is priced in the tx-domain path (plain SSE).
+  if fi.qm_dist_ratio {
+    ts.qm_ratio_w = 0;
+    ts.qm_ratio_u = 0;
+  }
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let is_inter = !luma_mode.is_intra();

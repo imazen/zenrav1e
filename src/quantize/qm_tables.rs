@@ -24,6 +24,46 @@ pub const AOM_QM_BITS: u8 = 5;
 /// Number of QM levels: 0..14 are weighted, level 15 = flat/identity matrix
 pub const NUM_QM_LEVELS: usize = 16;
 
+/// Forward QM weight for each inverse (dequant-side) weight value:
+/// `fwd = round((1 << 2*AOM_QM_BITS) / iwt) = round(1024 / iwt)`.
+///
+/// The tables in this module are the AV1 spec's *dequant-side* weights (what
+/// libaom stores as `iwt_matrix_ref`): 32 = unit, larger = coarser effective
+/// quantizer for that frequency. libaom additionally stores the encoder-side
+/// forward table `wt_matrix_ref`, which satisfies `wt == round(1024 / iwt)`
+/// exactly (verified numerically against quant_common.c at rev 632172a4);
+/// rather than duplicating every table, this LUT derives the forward weight
+/// on demand.
+///
+/// Used by the QM-weighted RD distortion (`Tune::Ssimulacra2` with QM
+/// active): a transform-domain error term `diff` at a coefficient position
+/// with inverse weight `iwt` costs
+/// `(diff * fwd)² >> 2*AOM_QM_BITS  ≈  diff² · (32/iwt)²`
+/// — high-frequency errors (large `iwt`, i.e. coarser dequant) cost less in
+/// RD decisions, consistent with what QM dequantization actually does to
+/// them. Mirrors libaom's `av1_block_error_qm` (tx_search.c) and
+/// `get_coeff_dist` (txb_rdopt_utils.h) under
+/// `dist_metric=AOM_DIST_METRIC_QM_PSNR`. At the flat weight (`iwt == 32`,
+/// `fwd == 32`) the expression reduces bit-exactly to the unweighted
+/// `diff²`.
+///
+/// Entry 0 is a guard (weight 0 never occurs in the spec tables) mapping to
+/// the identity weight 32. Entries are capped at 255: libaom's `qm_val_t` is
+/// `uint8_t`, so its forward table physically cannot exceed 255 (the spec
+/// tables' smallest inverse weights stay well above the 1024/255 ≈ 4
+/// boundary anyway), and the cap keeps the weighted-error i64 arithmetic
+/// trivially overflow-free at every bit depth.
+pub static QM_FWD_WEIGHT: [u8; 256] = {
+  let mut t = [32u8; 256];
+  let mut i = 1usize;
+  while i < 256 {
+    let w = (1024 + i / 2) / i;
+    t[i] = if w > 255 { 255 } else { w as u8 };
+    i += 1;
+  }
+  t
+};
+
 // ---------------------------------------------------------------------------
 // Fundamental tables (from AV1 specification)
 // ---------------------------------------------------------------------------
@@ -2219,6 +2259,58 @@ pub fn qm_table(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// `QM_FWD_WEIGHT` must reproduce libaom's stored forward table
+  /// (`wt_matrix_ref`, quant_common.c at rev 632172a4), which satisfies
+  /// `wt == round(1024 / iwt)`. Spot values verified against the aom source
+  /// (4x4 level-0 luma row: iwt 32,43,73,97,67,110,137,150,200 → wt
+  /// 32,24,14,11,15,9,7,7,5).
+  #[test]
+  fn fwd_weight_matches_aom_forward_table() {
+    for (iwt, wt) in [
+      (32u8, 32u8),
+      (43, 24),
+      (73, 14),
+      (97, 11),
+      (67, 15),
+      (110, 9),
+      (137, 7),
+      (150, 7),
+      (200, 5),
+      (38, 27),
+      (51, 20),
+    ] {
+      assert_eq!(QM_FWD_WEIGHT[iwt as usize], wt, "iwt={iwt}");
+    }
+    // Full-range invariant: round-half-up of 1024/iwt, capped at u8.
+    for iwt in 1usize..256 {
+      let exact = (1024.0f64 / iwt as f64).round().min(255.0) as u8;
+      assert_eq!(QM_FWD_WEIGHT[iwt], exact, "iwt={iwt}");
+    }
+    assert_eq!(QM_FWD_WEIGHT[0], 32, "guard entry");
+  }
+
+  /// Every ported inverse-weight table stays above the 1024/255 boundary,
+  /// so the u8 cap in `QM_FWD_WEIGHT` is never actually exercised by real
+  /// table data (it exists as an overflow guard only) — and the weighted
+  /// error arithmetic stays comfortably inside i64 at every bit depth.
+  #[test]
+  fn all_table_weights_above_forward_cap_boundary() {
+    let mut min_w = u8::MAX;
+    for level in 0..15u8 {
+      for plane in 0..2usize {
+        for tx in [
+          TX_4X4, TX_8X8, TX_16X16, TX_32X32, TX_4X8, TX_8X4, TX_8X16,
+          TX_16X8, TX_16X32, TX_32X16, TX_4X16, TX_16X4, TX_8X32, TX_32X8,
+        ] {
+          for &w in qm_table(level, plane, tx).unwrap() {
+            min_w = min_w.min(w);
+          }
+        }
+      }
+    }
+    assert!(min_w >= 5, "min inverse weight {min_w} < 5 (fwd would cap)");
+  }
 
   #[test]
   fn test_qm_table_level_15_returns_none() {

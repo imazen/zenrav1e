@@ -80,6 +80,17 @@ pub struct TileStateMut<'a, T: Pixel> {
   /// inside the SB uses this via `get_qidx`. Only meaningful when
   /// `fi.delta_q_present`.
   pub sb_qindex: u8,
+  /// QM-weighted / unweighted transform-domain error accumulators for the
+  /// current trial encode's luma plane (`fi.qm_dist_ratio`,
+  /// `Tune::Ssimulacra2`): reset at trial-encode entry, accumulated per TX
+  /// in `write_tx_block`, consumed by `compute_distortion` which scales the
+  /// luma pixel distortion by `qm_ratio_w / qm_ratio_u` — the frequency-
+  /// weighted discount that QM dequant implies for this block's error
+  /// spectrum, composed with (instead of replacing) the Psychovisual
+  /// activity-masked pixel metric.
+  pub qm_ratio_w: u64,
+  /// See [`Self::qm_ratio_w`].
+  pub qm_ratio_u: u64,
 }
 
 /// Contains information for a coded block that is
@@ -207,6 +218,8 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       // which isn't available here); unused until then.
       last_qidx: 0,
       sb_qindex: 0,
+      qm_ratio_w: 0,
+      qm_ratio_u: 0,
     }
   }
 

@@ -322,6 +322,23 @@ fn compute_distortion<T: Pixel>(
     ),
   } * fi.dist_scale[0];
 
+  // QM ratio composition (`fi.qm_dist_ratio`, Tune::Ssimulacra2): scale the
+  // luma pixel distortion by the trial's QM-weighted / unweighted
+  // transform-domain error ratio (accumulated per TX in `write_tx_block`,
+  // reset at trial entry). This prices in exactly the frequency-dependent
+  // error forgiveness that QM dequantization applies — libaom's
+  // AOM_DIST_METRIC_QM_PSNR intent — while keeping the activity-masked
+  // cdef_dist metric that replacing the domain outright would forfeit.
+  // Empty accumulators (skip trials, zero-visible blocks) leave the
+  // distortion untouched, mirroring how the tx-domain path prices skip
+  // with plain SSE.
+  if fi.qm_dist_ratio && ts.qm_ratio_u > 0 {
+    distortion = ScaledDistortion(
+      (u128::from(distortion.0) * u128::from(ts.qm_ratio_w)
+        / u128::from(ts.qm_ratio_u)) as u64,
+    );
+  }
+
   if is_chroma_block
     && !luma_only
     && fi.sequence.chroma_sampling != ChromaSampling::Cs400
@@ -367,7 +384,13 @@ fn compute_tx_distortion<T: Pixel>(
   is_chroma_block: bool, tile_bo: TileBlockOffset, tx_dist: ScaledDistortion,
   skip: bool, luma_only: bool,
 ) -> ScaledDistortion {
-  assert!(fi.config.tune == Tune::Psnr);
+  // Psnr opts into tx-domain distortion via speed settings; Ssimulacra2
+  // force-enables it for the QM-weighted distortion metric (see
+  // `FrameInvariants::new`), mirroring libaom's AOM_DIST_METRIC_QM_PSNR
+  // which is only computable in transform space. Skip blocks fall back to
+  // plain pixel SSE below — commensurate with (QM-weighted) tx-domain SSE,
+  // which equals it at the flat weight.
+  assert!(matches!(fi.config.tune, Tune::Psnr | Tune::Ssimulacra2));
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
@@ -2197,6 +2220,12 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
     let mut wr = WriterCounter::new();
     let tell = wr.tell_frac();
+    // QM ratio composition: this loop encodes trial TXs directly (not via
+    // `encode_block_post_cdef`), so reset the per-trial accumulators here.
+    if fi.qm_dist_ratio {
+      ts.qm_ratio_w = 0;
+      ts.qm_ratio_u = 0;
+    }
     // Rolled back below (`cw.rollback(...)`) after each candidate -- tx-type
     // RDO trials, never the persisted commit. `PARTITION_NONE` is a
     // documented placeholder (see `encode_tx_block`'s doc comment,

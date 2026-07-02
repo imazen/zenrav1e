@@ -42,6 +42,12 @@ const CDF_TOTAL: u32 = 32768 >> EC_PROB_SHIFT;
 /// `tx_type`: transform type (for scan order)
 /// `lambda`: Lagrangian multiplier from RDO
 /// `qm`: optional quantization matrix weights
+/// `qm_weight_dist`: weight each coefficient's distortion by the forward QM
+///   weight (`(diff·fwd)² >> 2*AOM_QM_BITS`) — the `get_coeff_dist` half of
+///   libaom's `AOM_DIST_METRIC_QM_PSNR` (txb_rdopt_utils.h at rev 632172a4).
+///   HF errors then cost less to give up, consistent with what QM dequant
+///   does to them. No-op when `qm` is `None`. The *reconstruction* side
+///   (`effective_ac_quant`) is always QM-exact regardless of this flag.
 /// `eob`: current end-of-block position (1-based, in scan order)
 /// `fc`: CDF context (frozen snapshot — not updated during trellis)
 /// `plane_type`: 0 for luma, 1 for chroma
@@ -49,8 +55,8 @@ const CDF_TOTAL: u32 = 32768 >> EC_PROB_SHIFT;
 /// Returns the new eob after optimization.
 pub fn optimize<T: Coefficient>(
   qcoeffs: &mut [T], coeffs: &[T], qc: &QuantizationContext, tx_size: TxSize,
-  tx_type: TxType, lambda: f64, qm: Option<&[u8]>, eob: u16, fc: &CDFContext,
-  plane_type: usize,
+  tx_type: TxType, lambda: f64, qm: Option<&[u8]>, qm_weight_dist: bool,
+  eob: u16, fc: &CDFContext, plane_type: usize,
 ) -> u16 {
   // WHT_WHT (lossless pseudo-type) shares DCT_DCT's 4x4 scan/class.
   let scan_tx_type =
@@ -172,10 +178,11 @@ pub fn optimize<T: Coefficient>(
     // Distortion increase from zeroing this coefficient.
     let eff_quant = effective_ac_quant(ac_quant, pos, qm);
     if eff_quant > 0 {
+      let wt = dist_weight(qm, qm_weight_dist, pos);
       let coeff_raw = i32::cast_from(coeffs[pos]);
       let coeff = (coeff_raw as i64) << log_tx_scale;
-      let dist_keep = sq_err(coeff, level, eff_quant, log_tx_scale);
-      let dist_zero = sq_err(coeff, 0, eff_quant, log_tx_scale);
+      let dist_keep = sq_err(coeff, level, eff_quant, log_tx_scale, wt);
+      let dist_zero = sq_err(coeff, 0, eff_quant, log_tx_scale, wt);
       dist_accum += (dist_zero - dist_keep) as f64;
     }
 
@@ -273,6 +280,7 @@ pub fn optimize<T: Coefficient>(
       }
 
       let coeff = (coeff_raw as i64) << log_tx_scale;
+      let wt = dist_weight(qm, qm_weight_dist, pos);
       let is_eob_coeff = i == best_new_eob - 1;
       let ctx = if is_eob_coeff { eob_ctx_arr[i] } else { sig_ctx[i] };
 
@@ -291,7 +299,7 @@ pub fn optimize<T: Coefficient>(
       // Contexts are held fixed across the block, the same approximation the
       // single-step round-down used.
       let dist_at =
-        |level: u32| sq_err(coeff, level, eff_quant, log_tx_scale) as f64;
+        |level: u32| sq_err(coeff, level, eff_quant, log_tx_scale, wt) as f64;
       let rate_at = |level: u32| {
         lambda_trellis
           * coeff_rate(
@@ -570,14 +578,34 @@ fn effective_ac_quant(
   }
 }
 
-/// Squared error between original coefficient and reconstruction.
+/// Forward QM distortion weight for a coefficient position: the
+/// `QM_FWD_WEIGHT` of the position's inverse weight when QM-weighted
+/// distortion is active, else the identity weight 32 (at which
+/// `sq_err` is bit-exactly the unweighted squared error).
+#[inline]
+fn dist_weight(qm: Option<&[u8]>, weight_dist: bool, pos: usize) -> i64 {
+  match qm {
+    Some(qm_tbl) if weight_dist && pos < qm_tbl.len() => {
+      crate::quantize::qm_tables::QM_FWD_WEIGHT[qm_tbl[pos] as usize] as i64
+    }
+    _ => 32,
+  }
+}
+
+/// Squared error between original coefficient and reconstruction, with the
+/// error term scaled by a forward QM weight `wt` before squaring:
+/// `((err·wt)² + round) >> 2*AOM_QM_BITS`, then the usual tx-scale shift.
+/// At the identity weight (`wt == 32`) this reduces **bit-exactly** to the
+/// unweighted `err² >> 2*log_tx_scale`: `err²·1024` has its low 10 bits
+/// zero, so adding the 512 rounding term cannot carry.
 #[inline]
 fn sq_err(
-  coeff_shifted: i64, level: u32, quant: u32, log_tx_scale: usize,
+  coeff_shifted: i64, level: u32, quant: u32, log_tx_scale: usize, wt: i64,
 ) -> i64 {
   let recon = level as i64 * quant as i64;
-  let err = coeff_shifted.abs() - recon;
-  (err * err) >> (2 * log_tx_scale)
+  let err = (coeff_shifted.abs() - recon) * wt;
+  ((err * err + (1 << (2 * AOM_QM_BITS - 1))) >> (2 * AOM_QM_BITS))
+    >> (2 * log_tx_scale)
 }
 
 #[cfg(test)]
@@ -586,10 +614,63 @@ mod tests {
 
   #[test]
   fn test_sq_err() {
-    assert_eq!(sq_err(100, 0, 10, 0), 10000);
-    assert_eq!(sq_err(100, 10, 10, 0), 0);
-    assert_eq!(sq_err(100, 9, 10, 0), 100);
-    assert_eq!(sq_err(100, 0, 10, 1), 2500);
+    assert_eq!(sq_err(100, 0, 10, 0, 32), 10000);
+    assert_eq!(sq_err(100, 10, 10, 0, 32), 0);
+    assert_eq!(sq_err(100, 9, 10, 0, 32), 100);
+    assert_eq!(sq_err(100, 0, 10, 1, 32), 2500);
+  }
+
+  /// The identity weight (32) must reproduce the unweighted squared error
+  /// bit-exactly — this is what keeps every non-QM-weighted trellis decision
+  /// byte-identical after the signature change.
+  #[test]
+  fn sq_err_identity_weight_is_bit_exact() {
+    for &coeff in &[0i64, 1, 7, 100, 137, 512, 16000, -333, (1 << 23) - 1] {
+      for &level in &[0u32, 1, 3, 9, 10, 100] {
+        for &q in &[1u32, 8, 40, 199, 4096] {
+          for lts in 0..=2usize {
+            let unweighted = {
+              let recon = level as i64 * q as i64;
+              let err = coeff.abs() - recon;
+              (err * err) >> (2 * lts)
+            };
+            assert_eq!(
+              sq_err(coeff, level, q, lts, 32),
+              unweighted,
+              "coeff={coeff} level={level} q={q} lts={lts}"
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /// Weighted error follows `((err·wt)² + 512) >> 10` and shrinks for
+  /// below-identity forward weights (the HF discount).
+  #[test]
+  fn sq_err_weighted_matches_formula() {
+    // err = 100 - 9*10 = 10. wt=16 (iwt 64, i.e. 2x-coarse HF): (160² + 512)
+    // >> 10 = (25600+512)>>10 = 25.
+    assert_eq!(sq_err(100, 9, 10, 0, 16), 25);
+    // Same err at identity weight: 100.
+    assert_eq!(sq_err(100, 9, 10, 0, 32), 100);
+    // wt=5 (iwt ~200, deep HF): (50² + 512) >> 10 = 2.
+    assert_eq!(sq_err(100, 9, 10, 0, 5), 2);
+  }
+
+  #[test]
+  fn dist_weight_selects_forward_weight() {
+    let qm: &[u8] = &[32, 43, 73, 97];
+    // Disabled or no table → identity.
+    assert_eq!(dist_weight(None, true, 0), 32);
+    assert_eq!(dist_weight(Some(qm), false, 1), 32);
+    // Enabled → QM_FWD_WEIGHT[iwt] (round(1024/iwt)).
+    assert_eq!(dist_weight(Some(qm), true, 0), 32);
+    assert_eq!(dist_weight(Some(qm), true, 1), 24);
+    assert_eq!(dist_weight(Some(qm), true, 2), 14);
+    assert_eq!(dist_weight(Some(qm), true, 3), 11);
+    // Out-of-table position → identity.
+    assert_eq!(dist_weight(Some(qm), true, 4), 32);
   }
 
   /// The multi-level round-down's exact early-break relies on transform-domain
@@ -608,9 +689,9 @@ mod tests {
         if orig < 2 {
           continue; // matches the `orig_level < 2` gate in optimize()
         }
-        let mut prev = sq_err(coeff_mag, orig, q, 0);
+        let mut prev = sq_err(coeff_mag, orig, q, 0, 32);
         for level in (0..orig).rev() {
-          let d = sq_err(coeff_mag, level, q, 0);
+          let d = sq_err(coeff_mag, level, q, 0, 32);
           assert!(
             d >= prev,
             "sq_err non-monotonic: coeff={coeff_mag} q={q} level={level} d={d} prev={prev}"
