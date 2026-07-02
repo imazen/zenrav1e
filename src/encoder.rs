@@ -1667,6 +1667,15 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   need_recon_pixel: bool,
   use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  // The `PartitionType` that produced this block from its immediate parent
+  // (mirrors libaom's `mbmi->partition`; zenrav1e#27) -- selects the
+  // VERT_A/VERT_B traversal-order tables in has_top_right/has_bottom_left.
+  // Threaded as an explicit parameter (NOT read from `cw.bc.blocks`, which
+  // is deliberately rollback-unprotected side state: RDO trial paths that
+  // call write_tx_blocks/write_tx_tree directly would read a stale value
+  // left by a previous, rolled-back trial at different geometry -- e.g. an
+  // impossible (VERT_B, BLOCK_16X8) pair indexing an empty vert table).
+  partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
@@ -1734,6 +1743,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       Some(mode),
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
+      partition,
     );
 
     if use_filter_intra && p == 0 {
@@ -2212,15 +2222,34 @@ pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
 /// - If an invalid motion vector is found
 #[profiling::function]
 pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
-  chroma_mode: PredictionMode, angle_delta: AngleDelta,
-  ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
-  tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
-  tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
-  rdo_type: RDOType, need_recon_pixel: bool,
-  enc_stats: Option<&mut EncoderStats>, use_filter_intra: bool,
+  fi: &FrameInvariants<T>,
+  ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter,
+  w: &mut W,
+  luma_mode: PredictionMode,
+  chroma_mode: PredictionMode,
+  angle_delta: AngleDelta,
+  ref_frames: [RefType; 2],
+  mvs: [MotionVector; 2],
+  bsize: BlockSize,
+  tile_bo: TileBlockOffset,
+  skip: bool,
+  cfl: CFLParams,
+  tx_size: TxSize,
+  tx_type: TxType,
+  mode_context: usize,
+  mv_stack: &[CandidateMV],
+  rdo_type: RDOType,
+  need_recon_pixel: bool,
+  enc_stats: Option<&mut EncoderStats>,
+  use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  // The `PartitionType` that produced `tile_bo`/`bsize` from its immediate
+  // parent (mirrors libaom's `mbmi->partition`; zenrav1e#27), threaded down
+  // to `encode_tx_block` for has_top_right/has_bottom_left. Only ever
+  // changes behavior for VERT_A/VERT_B, so RDO-trial call sites that get
+  // rolled back regardless may pass `PARTITION_NONE`.
+  partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -2521,6 +2550,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       need_recon_pixel,
       false, // filter intra not used for inter blocks
       FilterIntraMode::FILTER_DC_PRED,
+      partition,
     )
   } else {
     write_tx_blocks(
@@ -2542,6 +2572,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       need_recon_pixel,
       use_filter_intra,
       filter_intra_mode,
+      partition,
     )
   }
 }
@@ -2550,13 +2581,27 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
 ///
 /// - If attempting to encode a lossless block (not yet supported)
 pub fn write_tx_blocks<T: Pixel, W: Writer>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
-  chroma_mode: PredictionMode, angle_delta: AngleDelta,
-  tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
-  tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
-  rdo_type: RDOType, need_recon_pixel: bool, use_filter_intra: bool,
+  fi: &FrameInvariants<T>,
+  ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter,
+  w: &mut W,
+  luma_mode: PredictionMode,
+  chroma_mode: PredictionMode,
+  angle_delta: AngleDelta,
+  tile_bo: TileBlockOffset,
+  bsize: BlockSize,
+  tx_size: TxSize,
+  tx_type: TxType,
+  skip: bool,
+  cfl: CFLParams,
+  luma_only: bool,
+  rdo_type: RDOType,
+  need_recon_pixel: bool,
+  use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  // See `encode_tx_block`'s doc comment (zenrav1e#27). RDO-trial call
+  // sites that are rolled back regardless may pass `PARTITION_NONE`.
+  partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
   if skip {
     return (false, ScaledDistortion::zero());
@@ -2616,6 +2661,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         need_recon_pixel,
         use_filter_intra,
         filter_intra_mode,
+        partition,
       );
       partition_has_coeff |= has_coeff;
       tx_dist += dist;
@@ -2720,6 +2766,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
           need_recon_pixel,
           false, // filter intra is luma-only
           FilterIntraMode::FILTER_DC_PRED,
+          partition,
         );
         partition_has_coeff |= has_coeff;
         tx_dist += dist;
@@ -2731,12 +2778,24 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
 }
 
 pub fn write_tx_tree<T: Pixel, W: Writer>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
-  angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
-  tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
-  rdo_type: RDOType, need_recon_pixel: bool, use_filter_intra: bool,
+  fi: &FrameInvariants<T>,
+  ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter,
+  w: &mut W,
+  luma_mode: PredictionMode,
+  angle_delta_y: i8,
+  tile_bo: TileBlockOffset,
+  bsize: BlockSize,
+  tx_size: TxSize,
+  tx_type: TxType,
+  skip: bool,
+  luma_only: bool,
+  rdo_type: RDOType,
+  need_recon_pixel: bool,
+  use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  // See `encode_tx_block`'s doc comment (zenrav1e#27).
+  partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
   if skip {
     return (false, ScaledDistortion::zero());
@@ -2796,6 +2855,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
         need_recon_pixel,
         use_filter_intra,
         filter_intra_mode,
+        partition,
       );
       partition_has_coeff |= has_coeff;
       tx_dist += dist;
@@ -2891,6 +2951,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
           need_recon_pixel,
           false, // filter intra is luma-only
           FilterIntraMode::FILTER_DC_PRED,
+          partition,
         );
         partition_has_coeff |= has_coeff;
         tx_dist += dist;
@@ -2903,11 +2964,18 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
 
 #[profiling::function]
 pub fn encode_block_with_modes<T: Pixel, W: Writer>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset,
-  mode_decision: &PartitionParameters, rdo_type: RDOType,
+  fi: &FrameInvariants<T>,
+  ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter,
+  w_pre_cdef: &mut W,
+  w_post_cdef: &mut W,
+  bsize: BlockSize,
+  tile_bo: TileBlockOffset,
+  mode_decision: &PartitionParameters,
+  rdo_type: RDOType,
   enc_stats: Option<&mut EncoderStats>,
+  // See `encode_block_post_cdef`'s doc comment (zenrav1e#27).
+  partition: PartitionType,
 ) {
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
@@ -2967,6 +3035,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     enc_stats,
     mode_decision.use_filter_intra,
     mode_decision.filter_intra_mode,
+    partition,
   );
 }
 
@@ -3052,6 +3121,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     rdo_output.part_modes.push(mode_decision.clone());
 
     if !can_split {
+      // `encode_partition_bottomup` never offers HORZ_A/HORZ_B/VERT_A/VERT_B
+      // as candidates (zenrav1e#27 scope), so a block reached through this
+      // path can never actually be one of the mixed-granularity types --
+      // `PARTITION_NONE` here is a safe placeholder, not an approximation
+      // (see `encode_block_post_cdef`'s doc comment).
       encode_block_with_modes(
         fi,
         ts,
@@ -3063,6 +3137,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         &mode_decision,
         rdo_type,
         Some(enc_stats),
+        PartitionType::PARTITION_NONE,
       );
     }
   } // if !must_split
@@ -3215,6 +3290,9 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         }
 
         // FIXME: redundant block re-encode
+        // `best_partition` is the split (NONE/HORZ/VERT, never SPLIT --
+        // gated above) that produced `mode` from `bsize`/`tile_bo`, exactly
+        // mirroring libaom's `mbmi->partition` for this leaf.
         encode_block_with_modes(
           fi,
           ts,
@@ -3226,6 +3304,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           &mode,
           rdo_type,
           Some(enc_stats),
+          best_partition,
         );
       }
     }
@@ -3255,11 +3334,21 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 }
 
 fn encode_partition_topdown<T: Pixel, W: Writer>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset,
-  block_output: &Option<PartitionGroupParameters>, inter_cfg: &InterConfig,
+  fi: &FrameInvariants<T>,
+  ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter,
+  w_pre_cdef: &mut W,
+  w_post_cdef: &mut W,
+  bsize: BlockSize,
+  tile_bo: TileBlockOffset,
+  block_output: &Option<PartitionGroupParameters>,
+  inter_cfg: &InterConfig,
   enc_stats: &mut EncoderStats,
+  // The `PartitionType` that produced `bsize`/`tile_bo` from its immediate
+  // parent one recursion level up (`PARTITION_NONE` at the top of a
+  // superblock, where there is no enclosing split). See
+  // `encode_block_post_cdef`'s doc comment (zenrav1e#27).
+  parent_partition: PartitionType,
 ) {
   if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
     return;
@@ -3270,16 +3359,42 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
+  // Every child of PARTITION_HORZ_A/HORZ_B/VERT_A/VERT_B is an unconditional
+  // leaf per spec: `decode_partition`'s HORZ_A/HORZ_B/VERT_A/VERT_B arms call
+  // `decode_block` (not `decode_partition`) for all 3 sub-blocks, so NONE of
+  // them ever get a fresh `read_partition` symbol, no matter their size.
+  // The "whole" child (subsize -- HORZ's or VERT's own half) is already
+  // non-square, so it's excluded from a further decision by the `is_square`
+  // gates below, same as HORZ's/VERT's own children always have been. But
+  // the "split again" quarters (bsize2) ARE square -- unlike every other
+  // partition type reachable through this recursion (SPLIT's square
+  // children correctly DO get a fresh decision; HORZ_4/VERT_4's children
+  // are always non-square) -- so without this check they would incorrectly
+  // fall into the `can_split` branch below and write an extra, illegal
+  // partition symbol (verified: this was a real, reproducing bitstream
+  // desync -- `aomdec` "Corrupted segment_ids" -- fixed here, zenrav1e#27).
+  let is_forced_leaf_child = is_square
+    && matches!(
+      parent_partition,
+      PartitionType::PARTITION_HORZ_A
+        | PartitionType::PARTITION_HORZ_B
+        | PartitionType::PARTITION_VERT_A
+        | PartitionType::PARTITION_VERT_B
+    );
+
   // TODO: Update for 128x128 superblocks
   debug_assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
 
-  let must_split =
-    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+  let must_split = !is_forced_leaf_child
+    && is_square
+    && (bsize > fi.partition_range.max || !has_cols || !has_rows);
 
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-    if fi.frame_type.has_inter() &&
-      fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
-      bsize <= BlockSize::BLOCK_8X8 {
+    if is_forced_leaf_child
+      || (fi.frame_type.has_inter()
+        && fi.sequence.chroma_sampling != ChromaSampling::Cs420
+        && bsize <= BlockSize::BLOCK_8X8)
+    {
       false
     } else {
       (bsize > fi.partition_range.min && is_square) || must_split
@@ -3304,7 +3419,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     // which is the only path cavif/zenavif ever use -- see docs/RD_GAP_VS_LIBAOM.md).
     // has_cols/has_rows are always true here (must_split's negation guarantees it), kept
     // for defensive parity with encode_partition_bottomup's equivalent check.
-    let mut candidates = ArrayVec::<PartitionType, 6>::new();
+    let mut candidates = ArrayVec::<PartitionType, 10>::new();
     candidates.push(PartitionType::PARTITION_SPLIT);
     if bsize
       <= fi.config.speed_settings.partition.non_square_partition_max_threshold
@@ -3354,6 +3469,35 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         if fi.sequence.chroma_sampling != ChromaSampling::Cs422 {
           candidates.push(PartitionType::PARTITION_VERT_4);
         }
+
+        // PARTITION_HORZ_A/HORZ_B/VERT_A/VERT_B (mixed-granularity 3-way
+        // splits, zenrav1e#27): unlike HORZ_4/VERT_4, `BlockSize::subsize`
+        // has arms for these at every square size (including 8x8), but AV1
+        // restricts the *entropy-coded* extended-partition set to bsize
+        // strictly between 8x8 and 128x128 (`partition_cdf_length` returns
+        // the plain 4-symbol alphabet at BLOCK_8X8 -- matches
+        // `partition_w8_cdf`'s `[u16; 4]` sizing -- so writing one of these
+        // types there would write a CDF symbol index past the alphabet).
+        // rav1e's own recursion never reaches 128x128 either way (SB is
+        // 64x64 max here), so the reachable set is exactly the same
+        // {16X16,32X32,64X64} as HORZ_4/VERT_4 -- reuse `fully_contained`
+        // for the same reason (none of libaom's `decode_partition` HORZ_A/
+        // HORZ_B/VERT_A/VERT_B arms have a conditional last-child, so every
+        // sub-block must be fully in-bounds, matching HORZ_4/VERT_4's
+        // rationale above, not just HORZ/VERT's half-point check).
+        //
+        // Gated behind an explicit speed setting (default OFF at every
+        // preset): the wider search costs ~1.5x encode time on stills,
+        // which exceeds the matched-speed budget of the default operating
+        // point -- consumers opt in for deep/max-quality modes.
+        if fi.config.speed_settings.partition.mixed_3way_partitions {
+          candidates.push(PartitionType::PARTITION_HORZ_A);
+          candidates.push(PartitionType::PARTITION_HORZ_B);
+          if fi.sequence.chroma_sampling != ChromaSampling::Cs422 {
+            candidates.push(PartitionType::PARTITION_VERT_A);
+            candidates.push(PartitionType::PARTITION_VERT_B);
+          }
+        }
       }
     }
     candidates.push(PartitionType::PARTITION_NONE);
@@ -3381,7 +3525,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   let subsize = bsize.subsize(partition).unwrap();
 
-  if bsize >= BlockSize::BLOCK_8X8 && is_square {
+  // No partition symbol for a forced-leaf child (see `is_forced_leaf_child`
+  // above): its parent already wrote HORZ_A/HORZ_B/VERT_A/VERT_B, and this
+  // position never gets its own `read_partition` per spec.
+  if bsize >= BlockSize::BLOCK_8X8 && is_square && !is_forced_leaf_child {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
@@ -3547,27 +3694,39 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         Some(enc_stats),
         part_decision.use_filter_intra,
         part_decision.filter_intra_mode,
+        parent_partition,
       );
     }
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT | PARTITION_HORZ_4
-    | PARTITION_VERT_4 => {
+    | PARTITION_VERT_4 | PARTITION_HORZ_A | PARTITION_HORZ_B
+    | PARTITION_VERT_A | PARTITION_VERT_B => {
       if !rdo_output.part_modes.is_empty() {
         debug_assert!(can_split && !must_split);
 
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
-        // (this also covers HORZ_4/VERT_4: the candidate gate above only ever offers them
-        // when fully contained, so they are only ever chosen through this RDO path, never
-        // through the `must_split` branch below -- `partitions.len()` is 4 for these two
-        // types, same as SPLIT, and this loop already handles that generically per-mode).
+        // (this also covers HORZ_4/VERT_4/HORZ_A/HORZ_B/VERT_A/VERT_B: the candidate gate
+        // above only ever offers them when fully contained, so they are only ever chosen
+        // through this RDO path, never through the `must_split` branch below).
+        //
+        // `mode.bsize` (not the outer `subsize`) is the correct size for each recursion:
+        // for the uniform splits (SPLIT/HORZ/VERT/HORZ_4/VERT_4) every child shares
+        // `subsize`, so this was previously equivalent -- but HORZ_A/HORZ_B/VERT_A/VERT_B
+        // mix two different child sizes (a quarter-size `bsize.subsize(SPLIT)` for the
+        // "split again" side, `subsize` for the other), and `mode.bsize` (set by whichever
+        // size `rdo_mode_decision` was actually called with, in `rdo_partition_simple`) is
+        // the only value that's correct for every child of every partition type.
         for mode in rdo_output.part_modes {
-          // Each block is subjected to a new splitting decision
+          // Each block is subjected to a new splitting decision. `partition` (this level's
+          // own decision) becomes the child's `parent_partition` -- e.g. every one of
+          // HORZ_A's 3 children is tagged HORZ_A, matching libaom's `mbmi->partition`
+          // (zenrav1e#27).
           encode_partition_topdown(
             fi,
             ts,
             cw,
             w_pre_cdef,
             w_post_cdef,
-            subsize,
+            mode.bsize,
             mode.bo,
             &Some(PartitionGroupParameters {
               rd_cost: mode.rd_cost,
@@ -3576,6 +3735,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             }),
             inter_cfg,
             enc_stats,
+            partition,
           );
         }
       } else {
@@ -3611,6 +3771,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             &None,
             inter_cfg,
             enc_stats,
+            // Always PARTITION_SPLIT here (see `debug_assert!(must_split)`
+            // above; `must_split` only ever selects SPLIT).
+            partition,
           );
         });
       }
@@ -3618,12 +3781,67 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     _ => unreachable!(),
   }
 
+  // Same rationale as the write_partition gate above: a forced-leaf child
+  // never had its own partition decision, so it must not get its own
+  // context update either -- the enclosing HORZ_A/HORZ_B/VERT_A/VERT_B
+  // already updated the context for this whole region one level up.
   if is_square
     && bsize >= BlockSize::BLOCK_8X8
+    && !is_forced_leaf_child
     && (bsize == BlockSize::BLOCK_8X8
       || partition != PartitionType::PARTITION_SPLIT)
   {
-    cw.bc.update_partition_context(tile_bo, subsize, bsize);
+    // HORZ_A/HORZ_B/VERT_A/VERT_B cover the same `bsize`-sized region as
+    // every other partition type, but split it into two DIFFERENT-size
+    // context regions (mirrors libaom's `update_ext_partition_context`,
+    // `av1/common/av1_common_int.h`): the "split again" side gets tagged
+    // with the finer quarter size (`bsize2`), the "whole" side with
+    // `subsize` itself. Every other type (including HORZ_4/VERT_4) keeps
+    // the single-call form -- their children all share one size, so one
+    // context update over the whole `bsize` region already matches
+    // libaom's non-mixed cases. Both calls below cover a `subsize`-sized
+    // region (the top/bottom or left/right half), matching libaom exactly.
+    match partition {
+      PartitionType::PARTITION_HORZ_A => {
+        let bsize2 = bsize.subsize(PartitionType::PARTITION_SPLIT).unwrap();
+        cw.bc.update_partition_context(tile_bo, bsize2, subsize); // top
+        cw.bc.update_partition_context(
+          tile_bo.with_offset(0, hbs as isize),
+          subsize,
+          subsize,
+        ); // bottom
+      }
+      PartitionType::PARTITION_HORZ_B => {
+        let bsize2 = bsize.subsize(PartitionType::PARTITION_SPLIT).unwrap();
+        cw.bc.update_partition_context(tile_bo, subsize, subsize); // top
+        cw.bc.update_partition_context(
+          tile_bo.with_offset(0, hbs as isize),
+          bsize2,
+          subsize,
+        ); // bottom
+      }
+      PartitionType::PARTITION_VERT_A => {
+        let bsize2 = bsize.subsize(PartitionType::PARTITION_SPLIT).unwrap();
+        cw.bc.update_partition_context(tile_bo, bsize2, subsize); // left
+        cw.bc.update_partition_context(
+          tile_bo.with_offset(hbs as isize, 0),
+          subsize,
+          subsize,
+        ); // right
+      }
+      PartitionType::PARTITION_VERT_B => {
+        let bsize2 = bsize.subsize(PartitionType::PARTITION_SPLIT).unwrap();
+        cw.bc.update_partition_context(tile_bo, subsize, subsize); // left
+        cw.bc.update_partition_context(
+          tile_bo.with_offset(hbs as isize, 0),
+          bsize2,
+          subsize,
+        ); // right
+      }
+      _ => {
+        cw.bc.update_partition_context(tile_bo, subsize, bsize);
+      }
+    }
   }
 }
 
@@ -3962,6 +4180,8 @@ fn encode_tile<'a, T: Pixel>(
           &None,
           inter_cfg,
           &mut enc_stats,
+          // Top of the superblock: no enclosing split.
+          PartitionType::PARTITION_NONE,
         );
       }
 

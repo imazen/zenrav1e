@@ -152,19 +152,39 @@ static has_tr_vert_tables: &[&[u8]] = &[
   has_tr_128x128,    // 128x128
 ];
 
-// TODO: Enable the case for PARTITION_VERT_A/B once they can be encoded by rav1e.
 pub fn get_has_tr_table(
-  /*partition: PartitionType, */ bsize: BlockSize,
+  partition: PartitionType, bsize: BlockSize,
 ) -> &'static [u8] {
-  let ret: &[u8];
   // If this is a mixed vertical partition, look up bsize in orders_vert.
-  /*if partition == PartitionType::PARTITION_VERT_A || partition == PartitionType::PARTITION_VERT_B {
-    debug_assert!(bsize < BlockSize::BLOCK_SIZES);
-    ret = has_tr_vert_tables[bsize as usize];
-  } else */
+  // VERT_A/VERT_B's "split-again" side visits its two square sub-blocks in
+  // TL,BL order (not the TL,TR order every other partition type uses), so
+  // its within-superblock decode-order bookkeeping needs the dedicated
+  // has_tr_vert_tables -- see the comment on `has_tr_vert_tables` above.
+  // HORZ_A/HORZ_B don't need an analogous swap: their top-before-bottom
+  // visitation order already matches the default (non-vert) tables' Z-order
+  // assumption (zenrav1e#27; matches libaom's `get_has_tr_table`).
+  let ret: &[u8] = if partition == PartitionType::PARTITION_VERT_A
+    || partition == PartitionType::PARTITION_VERT_B
   {
-    ret = has_tr_tables[bsize as usize];
-  }
+    // has_tr_vert_tables only has entries for the 16 classic block sizes
+    // (matching libaom's `BLOCK_SIZES`, not `BLOCK_SIZES_ALL`), and the
+    // horizontal-rectangle slots within it are `has_null`: a block whose
+    // immediate parent split is VERT_A/VERT_B is always either a square
+    // quarter or VERT's own vertical-rect half, never a horizontal rect --
+    // the same invariant libaom's `assert(ret)` enforces. This is why
+    // `partition` must be threaded down as the CURRENT block's true parent
+    // split (never read from rollback-unprotected side state): an impossible
+    // (partition, bsize) pair like (VERT_B, 16X8) indexes an empty table.
+    debug_assert!((bsize as usize) < BlockSize::BLOCK_SIZES);
+    let t = has_tr_vert_tables[bsize as usize];
+    debug_assert!(
+      !t.is_empty(),
+      "impossible (partition, bsize) pair: ({partition:?}, {bsize:?})"
+    );
+    t
+  } else {
+    has_tr_tables[bsize as usize]
+  };
 
   //debug_assert!(ret != ptr::has_null());
 
@@ -172,9 +192,9 @@ pub fn get_has_tr_table(
 }
 
 pub fn has_top_right(
-  bsize: BlockSize, partition_bo: TileBlockOffset, top_available: bool,
-  right_available: bool, tx_size: TxSize, row_off: usize, col_off: usize,
-  ss_x: usize, _ss_y: usize,
+  partition: PartitionType, bsize: BlockSize, partition_bo: TileBlockOffset,
+  top_available: bool, right_available: bool, tx_size: TxSize, row_off: usize,
+  col_off: usize, ss_x: usize, _ss_y: usize,
 ) -> bool {
   if !top_available || !right_available {
     return false;
@@ -234,7 +254,7 @@ pub fn has_top_right(
       (blk_row_in_sb << (MAX_MIB_SIZE_LOG2 - bw_in_mi_log2)) + blk_col_in_sb;
     let idx1 = this_blk_index / 8;
     let idx2 = this_blk_index % 8;
-    let has_tr_table: &[u8] = get_has_tr_table(/*partition,*/ bsize);
+    let has_tr_table: &[u8] = get_has_tr_table(partition, bsize);
 
     ((has_tr_table[idx1] >> idx2) & 1) != 0
   }
@@ -356,25 +376,31 @@ static has_bl_vert_tables: &[&[u8]] = &[
 ];
 
 pub fn get_has_bl_table(
-  /*partition: PartitionType, */ bsize: BlockSize,
+  partition: PartitionType, bsize: BlockSize,
 ) -> &'static [u8] {
-  let ret: &[u8];
   // If this is a mixed vertical partition, look up bsize in orders_vert.
-  /*if (partition == PARTITION_VERT_A || partition == PARTITION_VERT_B) {
-    //assert(bsize < BLOCK_SIZES);
-    ret = has_bl_vert_tables[bsize as usize];
-  } else*/
+  // See `get_has_tr_table`'s comment: same VERT_A/VERT_B-only rationale.
+  let ret: &[u8] = if partition == PartitionType::PARTITION_VERT_A
+    || partition == PartitionType::PARTITION_VERT_B
   {
-    ret = has_bl_tables[bsize as usize];
-  }
+    debug_assert!((bsize as usize) < BlockSize::BLOCK_SIZES);
+    let t = has_bl_vert_tables[bsize as usize];
+    debug_assert!(
+      !t.is_empty(),
+      "impossible (partition, bsize) pair: ({partition:?}, {bsize:?})"
+    );
+    t
+  } else {
+    has_bl_tables[bsize as usize]
+  };
   //debug_assert!(ret != ptr::has_null());
   ret
 }
 
 pub fn has_bottom_left(
-  bsize: BlockSize, partition_bo: TileBlockOffset, bottom_available: bool,
-  left_available: bool, tx_size: TxSize, row_off: usize, col_off: usize,
-  _ss_x: usize, ss_y: usize,
+  partition: PartitionType, bsize: BlockSize, partition_bo: TileBlockOffset,
+  bottom_available: bool, left_available: bool, tx_size: TxSize,
+  row_off: usize, col_off: usize, _ss_x: usize, ss_y: usize,
 ) -> bool {
   if !bottom_available || !left_available {
     return false;
@@ -443,7 +469,7 @@ pub fn has_bottom_left(
       (blk_row_in_sb << (MAX_MIB_SIZE_LOG2 - bw_in_mi_log2)) + blk_col_in_sb;
     let idx1 = this_blk_index / 8;
     let idx2 = this_blk_index % 8;
-    let has_bl_table: &[u8] = get_has_bl_table(/*partition,*/ bsize);
+    let has_bl_table: &[u8] = get_has_bl_table(partition, bsize);
 
     ((has_bl_table[idx1] >> idx2) & 1) != 0
   }

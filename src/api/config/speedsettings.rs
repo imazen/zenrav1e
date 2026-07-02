@@ -87,6 +87,7 @@ impl Default for SpeedSettings {
           BlockSize::BLOCK_4X4,
           BlockSize::BLOCK_64X64,
         ),
+        mixed_3way_partitions: false,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: false,
@@ -239,6 +240,16 @@ pub struct PartitionSpeedSettings {
   ///
   /// Must be based on square block sizes, so e.g. 8×4 isn't allowed here.
   pub partition_range: PartitionRange,
+
+  /// Offer AV1's mixed-granularity 3-way partition types
+  /// (`PARTITION_HORZ_A`/`HORZ_B`/`VERT_A`/`VERT_B`) as candidates in the
+  /// top-down partition RDO search.
+  ///
+  /// Enabled is slower (~1.5x on still images) with a small compression
+  /// improvement. Disabled (the default at every speed preset) keeps the
+  /// search byte-identical to builds without this feature — it is an
+  /// explicit opt-in for beyond-matched-speed operating points.
+  pub mixed_3way_partitions: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

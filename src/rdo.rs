@@ -971,6 +971,10 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           luma_mode_is_intra && tx_size.block_size() != bsize;
 
         encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
+        // Rolled back below (`cw.rollback(cw_checkpoint)`) regardless of
+        // outcome -- an RDO trial, never the persisted commit. `PARTITION_NONE`
+        // is a documented placeholder (see `encode_block_post_cdef`'s doc
+        // comment, zenrav1e#27).
         let (has_coeff, tx_dist) = encode_block_post_cdef(
           fi,
           ts,
@@ -994,6 +998,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           None,
           false,
           FilterIntraMode::FILTER_DC_PRED,
+          PartitionType::PARTITION_NONE,
         );
 
         let rate = wr.tell_frac() - tell;
@@ -1114,6 +1119,9 @@ pub fn rdo_mode_decision<T: Pixel>(
     let mut wr = WriterCounter::new();
     let angle_delta = AngleDelta { y: best.angle_delta.y, uv: 0 };
 
+    // Rolled back on the next line -- a trial luma recon for CFL evaluation,
+    // never the persisted commit. `PARTITION_NONE` is a documented
+    // placeholder (see `encode_tx_block`'s doc comment, zenrav1e#27).
     write_tx_blocks(
       fi,
       ts,
@@ -1133,6 +1141,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
       best.use_filter_intra,
       best.filter_intra_mode,
+      PartitionType::PARTITION_NONE,
     );
     cw.rollback(&cw_checkpoint);
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400
@@ -1150,6 +1159,8 @@ pub fn rdo_mode_decision<T: Pixel>(
         tile_bo,
         best.skip,
       );
+      // Rolled back below (`cw.rollback(&cw_checkpoint)`) regardless of
+      // outcome -- an RDO trial, never the persisted commit (zenrav1e#27).
       let (has_coeff, _) = encode_block_post_cdef(
         fi,
         ts,
@@ -1173,6 +1184,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         None,
         false,
         FilterIntraMode::FILTER_DC_PRED,
+        PartitionType::PARTITION_NONE,
       );
 
       let rate = wr.tell_frac() - tell;
@@ -1540,6 +1552,10 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         let rec = &ts.rec.planes[0].as_const();
         let po = tile_bo.plane_offset(rec.plane_cfg);
         // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
+        // `opt_mode: None` makes every needs_* flag default `true` regardless
+        // of `partition` (see `get_intra_edges`), so this SATD mode-shortlist
+        // heuristic's `PARTITION_NONE` placeholder has no effect on its
+        // result either way -- and this call is never the persisted commit.
         get_intra_edges(
           &mut edge_buf,
           rec,
@@ -1553,6 +1569,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           None,
           fi.sequence.enable_intra_edge_filter,
           IntraParam::None,
+          PartitionType::PARTITION_NONE,
         )
       };
 
@@ -1686,6 +1703,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         let need_recon_pixel = tx_size.block_size() != bsize;
 
         encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, false);
+        // Rolled back below (`cw.rollback(cw_checkpoint)`) regardless of
+        // outcome -- an RDO trial, never the persisted commit (zenrav1e#27).
         let (has_coeff, tx_dist) = encode_block_post_cdef(
           fi,
           ts,
@@ -1709,6 +1728,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           None,
           true,
           fi_mode,
+          PartitionType::PARTITION_NONE,
         );
 
         let rate = wr.tell_frac() - tell;
@@ -1838,6 +1858,11 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       let input = &ts.input_tile.planes[p];
       let po = tile_bo.plane_offset(rec.plane_cfg);
       let mut edge_buf = Aligned::uninit_array();
+      // UV_CFL_PRED is never directional, so `needs_topright`/
+      // `needs_bottomleft` are always false here regardless of `partition`
+      // (see `get_intra_edges`) -- has_top_right/has_bottom_left are
+      // provably unreached for this call, so `PARTITION_NONE` is exact, not
+      // an approximation.
       let edge_buf = get_intra_edges(
         &mut edge_buf,
         &rec.as_const(),
@@ -1851,6 +1876,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         Some(PredictionMode::UV_CFL_PRED),
         fi.sequence.enable_intra_edge_filter,
         IntraParam::None,
+        PartitionType::PARTITION_NONE,
       );
       let mut alpha_cost = |alpha: i16| -> u64 {
         let mut rec_region =
@@ -1959,6 +1985,10 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
     let mut wr = WriterCounter::new();
     let tell = wr.tell_frac();
+    // Rolled back below (`cw.rollback(...)`) after each candidate -- tx-type
+    // RDO trials, never the persisted commit. `PARTITION_NONE` is a
+    // documented placeholder (see `encode_tx_block`'s doc comment,
+    // zenrav1e#27).
     let (_, tx_dist) = if is_inter {
       write_tx_tree(
         fi,
@@ -1977,6 +2007,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         need_recon_pixel,
         false,
         FilterIntraMode::FILTER_DC_PRED,
+        PartitionType::PARTITION_NONE,
       )
     } else {
       write_tx_blocks(
@@ -1998,6 +2029,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         need_recon_pixel,
         use_filter_intra,
         filter_intra_mode,
+        PartitionType::PARTITION_NONE,
       )
     };
 
@@ -2083,9 +2115,11 @@ fn rdo_partition_none<T: Pixel>(
 /// leaf as the incumbent) and usually does better -- a systematically
 /// *pessimistic* SPLIT estimate. The competing candidates are all evaluated
 /// exactly (NONE is a true leaf; HORZ/VERT/HORZ_4/VERT_4 children are
-/// non-square, so the final encode never re-searches them), so the bias
-/// mis-ranks SPLIT specifically. libaom's `rd_pick_partition` evaluates
-/// SPLIT recursively and has no such bias.
+/// non-square, so the final encode never re-searches them; HORZ_A/HORZ_B/
+/// VERT_A/VERT_B children -- square quarters included -- are unconditional
+/// leaves per spec, zenrav1e#27), so the bias mis-ranks SPLIT specifically.
+/// libaom's `rd_pick_partition` evaluates SPLIT recursively and has no such
+/// bias.
 ///
 /// This replicates, inside the trial, exactly the first comparison the
 /// child's own future search will make: its cached NONE incumbent
@@ -2174,6 +2208,12 @@ fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       cw.write_partition(w, g_bo, PartitionType::PARTITION_NONE, quarter);
     }
+    // Each quarter is produced by the child's hypothetical SPLIT, so
+    // `PARTITION_SPLIT` is its exact immediate-parent tag (libaom's
+    // `mbmi->partition` semantics; zenrav1e#27) -- matching what the final
+    // encode would record if the child's own search confirms this split.
+    // (Only VERT_A/VERT_B parents select different traversal-order tables,
+    // so this is also behaviorally identical to any other non-VERT_A/B tag.)
     encode_block_with_modes(
       fi,
       ts,
@@ -2185,6 +2225,7 @@ fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
       &g_mode,
       rdo_type,
       None,
+      PartitionType::PARTITION_SPLIT,
     );
   }
 
@@ -2198,7 +2239,8 @@ fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
   }
 }
 
-// VERTICAL, HORIZONTAL, simple SPLIT, or uniform 4-way HORZ_4/VERT_4
+// VERTICAL, HORIZONTAL, simple SPLIT, or uniform 4-way HORZ_4/VERT_4, or mixed
+// 3-way HORZ_A/HORZ_B/VERT_A/VERT_B
 #[inline(always)]
 fn rdo_partition_simple<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
@@ -2210,6 +2252,13 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
   let subsize = bsize.subsize(partition).unwrap();
   let is_4way = partition == PARTITION_HORZ_4 || partition == PARTITION_VERT_4;
+  // HORZ_A/HORZ_B/VERT_A/VERT_B (zenrav1e#27): a fundamentally different
+  // shape from every other case here -- 3 children with TWO different
+  // sizes, not N children sharing one uniform size.
+  let is_mixed_3way = matches!(
+    partition,
+    PARTITION_HORZ_A | PARTITION_HORZ_B | PARTITION_VERT_A | PARTITION_VERT_B
+  );
 
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
@@ -2220,13 +2269,61 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     0.0
   };
 
-  let four_partitions = if is_4way {
+  // (child block size, child offset) pairs, in AV1 spec decode order.
+  let children: ArrayVec<(BlockSize, TileBlockOffset), 4> = if is_mixed_3way {
+    // `bsize2` is the quarter -- the same size PARTITION_SPLIT's own subsize
+    // would be -- for the "split again" side; `subsize` (HORZ's or VERT's
+    // own half) is for the side that stays whole. Both children sit on the
+    // same half-spaced 2x2 quadrant grid SPLIT/HORZ/VERT use below (`bsize2`
+    // IS that grid's step), never the quarter-spaced grid HORZ_4/VERT_4
+    // use -- there is no 4th (bottom-right) position: one "whole" child
+    // covers what would otherwise be two adjacent quadrant cells. Matches
+    // libaom's `decode_partition` PARTITION_HORZ_A/HORZ_B/VERT_A/VERT_B arms
+    // exactly (`bsize2`/`subsize` there are literally named the same
+    // things).
+    let bsize2 = bsize.subsize(PARTITION_SPLIT).unwrap();
+    let hbs = bsize2.width_mi(); // == bsize2.height_mi(): bsize2 is square
+    let tl = tile_bo;
+    let tr =
+      TileBlockOffset(BlockOffset { x: tile_bo.0.x + hbs, y: tile_bo.0.y });
+    let bl =
+      TileBlockOffset(BlockOffset { x: tile_bo.0.x, y: tile_bo.0.y + hbs });
+    let br = TileBlockOffset(BlockOffset {
+      x: tile_bo.0.x + hbs,
+      y: tile_bo.0.y + hbs,
+    });
+    let mut c = ArrayVec::new();
+    match partition {
+      PARTITION_HORZ_A => {
+        c.push((bsize2, tl)); // top-left quarter
+        c.push((bsize2, tr)); // top-right quarter
+        c.push((subsize, bl)); // bottom half (full width)
+      }
+      PARTITION_HORZ_B => {
+        c.push((subsize, tl)); // top half (full width)
+        c.push((bsize2, bl)); // bottom-left quarter
+        c.push((bsize2, br)); // bottom-right quarter
+      }
+      PARTITION_VERT_A => {
+        c.push((bsize2, tl)); // top-left quarter
+        c.push((bsize2, bl)); // bottom-left quarter
+        c.push((subsize, tr)); // right half (full height)
+      }
+      PARTITION_VERT_B => {
+        c.push((subsize, tl)); // left half (full height)
+        c.push((bsize2, tr)); // top-right quarter
+        c.push((bsize2, br)); // bottom-right quarter
+      }
+      _ => unreachable!(),
+    }
+    c
+  } else if is_4way {
     // Uniform 4-way split: `subsize` (BLOCK_16X4/32X8/64X16 for HORZ_4;
     // BLOCK_4X16/8X32/16X64 for VERT_4) IS already the quarter-sliver itself
     // (unlike HORZ/VERT/SPLIT below, where `subsize` is a half-sized child), so
     // a single subsize-derived step applied 0..4 times along the split axis
     // gives the four sliver origins directly -- there is no 2x2 quadrant grid.
-    if partition == PARTITION_HORZ_4 {
+    let offsets: [TileBlockOffset; 4] = if partition == PARTITION_HORZ_4 {
       let step = subsize.height_mi();
       std::array::from_fn(|i| {
         TileBlockOffset(BlockOffset {
@@ -2242,11 +2339,12 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
           y: tile_bo.0.y,
         })
       })
-    }
+    };
+    offsets.into_iter().map(|o| (subsize, o)).collect()
   } else {
     let hbsw = subsize.width_mi(); // Half the block size width in blocks
     let hbsh = subsize.height_mi(); // Half the block size height in blocks
-    [
+    let four_partitions = [
       tile_bo,
       TileBlockOffset(BlockOffset { x: tile_bo.0.x + hbsw, y: tile_bo.0.y }),
       TileBlockOffset(BlockOffset { x: tile_bo.0.x, y: tile_bo.0.y + hbsh }),
@@ -2254,31 +2352,33 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
         x: tile_bo.0.x + hbsw,
         y: tile_bo.0.y + hbsh,
       }),
-    ]
+    ];
+    get_sub_partitions(&four_partitions, partition)
+      .into_iter()
+      .map(|o| (subsize, o))
+      .collect()
   };
-
-  let partitions = get_sub_partitions(&four_partitions, partition);
 
   let mut rd_cost_sum = 0.0;
 
-  for offset in partitions {
-    // HORZ_4/VERT_4 are only ever offered as RDO candidates when the *whole*
-    // parent block (not just its half-point) is verified within frame bounds
-    // (see the candidate-list gate in `encode_partition_topdown`), so every
-    // quarter-sliver offset is unconditionally in-bounds here. The half-point
-    // formula below (calibrated for HORZ/VERT/SPLIT's half-sized children)
-    // would wrongly reject an in-bounds sliver near the frame edge if reused
-    // for a quarter-sliver's genuinely different, per-axis extent.
-    let (has_cols, has_rows) = if is_4way {
+  for (child_bsize, offset) in children {
+    // HORZ_4/VERT_4/HORZ_A/HORZ_B/VERT_A/VERT_B are only ever offered as RDO
+    // candidates when the *whole* parent block (not just its half-point) is
+    // verified within frame bounds (see the candidate-list gate in
+    // `encode_partition_topdown`), so every child offset is unconditionally
+    // in-bounds here. The half-point formula below (calibrated for
+    // HORZ/VERT/SPLIT's half-sized children) would wrongly reject an
+    // in-bounds child near the frame edge if reused for these.
+    let (has_cols, has_rows) = if is_4way || is_mixed_3way {
       (true, true)
     } else {
-      let hbs = subsize.width_mi() >> 1;
+      let hbs = child_bsize.width_mi() >> 1;
       (offset.0.x + hbs < ts.mi_width, offset.0.y + hbs < ts.mi_height)
     };
 
     if has_cols && has_rows {
       let mode_decision =
-        rdo_mode_decision(fi, ts, cw, subsize, offset, inter_cfg);
+        rdo_mode_decision(fi, ts, cw, child_bsize, offset, inter_cfg);
 
       // SPLIT children are the only ones the final encode re-searches
       // (deeper recursion), so their NONE-leaf trial cost is systematically
@@ -2286,6 +2386,14 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       // `rdo_split_child_deeper_cost`. Attempted even when the NONE leaf
       // alone would already trip the early exit below: rescuing exactly
       // those SPLITs is the point of the refinement.
+      //
+      // The `partition == PARTITION_SPLIT` gate structurally excludes the
+      // mixed-3-way types' children (their trial `partition` is
+      // HORZ_A/HORZ_B/VERT_A/VERT_B, never SPLIT) -- which is required, not
+      // incidental: every child of those types is an unconditional leaf per
+      // spec (no deeper recursion exists for it in the final encode), so its
+      // NONE-leaf trial cost is already exact and a deeper estimate would
+      // credit it a split the bitstream cannot express (zenrav1e#27).
       let deeper_cost = if partition == PARTITION_SPLIT {
         rdo_split_child_deeper_cost(
           fi,
@@ -2293,7 +2401,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
           cw,
           w_pre_cdef,
           w_post_cdef,
-          subsize,
+          child_bsize,
           offset,
           inter_cfg,
           rdo_type,
@@ -2311,27 +2419,45 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       // When the deeper estimate won, the context was already left in the
       // deeper-encoded state; otherwise apply the NONE leaf as before.
       if deeper_cost.is_none() {
-        if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+        // "Square child gets its own NONE partition symbol" was only ever
+        // true for SPLIT (whose children DO carry their own read_partition
+        // per spec). HORZ_A/HORZ_B/VERT_A/VERT_B's square quarters are
+        // unconditional leaves -- no partition syntax at all -- so writing a
+        // NONE symbol here would overestimate their rate in this trial and
+        // desync the estimate from the final encode (which correctly writes
+        // none; see `is_forced_leaf_child` in `encode_partition_topdown`).
+        if child_bsize >= BlockSize::BLOCK_8X8
+          && child_bsize.is_sqr()
+          && !is_mixed_3way
+        {
           let w: &mut W =
             if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           cw.write_partition(
             w,
             offset,
             PartitionType::PARTITION_NONE,
-            subsize,
+            child_bsize,
           );
         }
+        // `partition` (this trial's own split, e.g. HORZ_A) is every child's
+        // immediate-parent tag here -- exactly libaom's `mbmi->partition`
+        // semantics (zenrav1e#27). This call is itself an RDO trial (rolled
+        // back one level up in `rdo_partition_decision`, win or lose), but
+        // passing the correct value is free and keeps its own has_top_right/
+        // has_bottom_left-driven cost estimate consistent with the actual
+        // commit's behavior.
         encode_block_with_modes(
           fi,
           ts,
           cw,
           w_pre_cdef,
           w_post_cdef,
-          subsize,
+          child_bsize,
           offset,
           &mode_decision,
           rdo_type,
           None,
+          partition,
         );
       }
       child_modes.push(mode_decision);
@@ -2387,7 +2513,8 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         ))
       }
       PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT | PARTITION_HORZ_4
-      | PARTITION_VERT_4 => rdo_partition_simple(
+      | PARTITION_VERT_4 | PARTITION_HORZ_A | PARTITION_HORZ_B
+      | PARTITION_VERT_A | PARTITION_VERT_B => rdo_partition_simple(
         fi,
         ts,
         cw,

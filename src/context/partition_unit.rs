@@ -474,14 +474,18 @@ impl BlockContext<'_> {
     above_skip as usize + left_skip as usize
   }
 
-  /// # Panics
-  ///
-  /// - If called with a non-square `bsize`
   pub fn update_partition_context(
     &mut self, bo: TileBlockOffset, subsize: BlockSize, bsize: BlockSize,
   ) {
-    assert!(bsize.is_sqr());
-
+    // `bsize` (the covered region) does NOT need to be square: every
+    // pre-existing caller happened to pass the square parent block, but the
+    // width/height context updates below are already independent per-axis
+    // operations (matching libaom's `update_partition_context`,
+    // `av1/common/av1_common_int.h`, which has no such constraint either).
+    // HORZ_A/HORZ_B/VERT_A/VERT_B's `update_ext_partition_context`-style
+    // dispatch (zenrav1e#27, in `encode_partition_topdown`) calls this twice
+    // per block with `subsize` (e.g. BLOCK_16X8) as the region -- a
+    // deliberately non-square rectangle, not a mistake.
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 

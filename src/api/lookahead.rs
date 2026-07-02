@@ -9,7 +9,7 @@ use crate::encoder::{
 };
 use crate::frame::{AsRegion, PlaneOffset};
 use crate::me::{RefMEStats, estimate_tile_motion};
-use crate::partition::{BlockSize, get_intra_edges};
+use crate::partition::{BlockSize, PartitionType, get_intra_edges};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
@@ -54,6 +54,11 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       });
 
       // TODO: other intra prediction modes.
+      // This is lookahead scene-analysis on the source frame -- there is no
+      // partition tree here at all, and DC_PRED is never directional (so
+      // has_top_right/has_bottom_left are provably unreached regardless of
+      // `partition`; see `get_intra_edges`). `PARTITION_NONE` is exact, not
+      // an approximation (zenrav1e#27).
       let mut edge_buf = Aligned::uninit_array();
       let edge_buf = get_intra_edges(
         &mut edge_buf,
@@ -71,6 +76,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         Some(PredictionMode::DC_PRED),
         false,
         IntraParam::None,
+        PartitionType::PARTITION_NONE,
       );
 
       let mut plane_after_prediction_region = plane_after_prediction

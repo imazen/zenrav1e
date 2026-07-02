@@ -693,6 +693,13 @@ pub fn get_intra_edges<'a, T: Pixel>(
   opt_mode: Option<PredictionMode>,
   enable_intra_edge_filter: bool,
   intra_param: IntraParam,
+  // The `PartitionType` that produced `partition_bo`/`partition_size` from
+  // its immediate parent (mirrors libaom's `mbmi->partition`) -- only
+  // affects has_top_right/has_bottom_left's VERT_A/VERT_B traversal-order
+  // table selection (zenrav1e#27). Any value other than VERT_A/VERT_B is
+  // equivalent, so callers that don't track it precisely (RDO trials that
+  // always get rolled back) may pass `PARTITION_NONE`.
+  partition: PartitionType,
 ) -> IntraEdge<'a, T> {
   let mut init_left: usize = 0;
   let mut init_above: usize = 0;
@@ -835,6 +842,7 @@ pub fn get_intra_edges<'a, T: Pixel>(
 
       let num_avail = if y != 0
         && has_top_right(
+          partition,
           scaled_partition_size,
           partition_bo,
           have_top,
@@ -880,6 +888,7 @@ pub fn get_intra_edges<'a, T: Pixel>(
 
       let num_avail = if x != 0
         && has_bottom_left(
+          partition,
           scaled_partition_size,
           partition_bo,
           bottom_available,
