@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- **`Tune::Ssimulacra2`** (a37faea8): SSIMULACRA2-tuned still-image mode
+  porting the two libaom `--tune=ssimulacra2` mechanisms that measured as
+  wins on top of the Psychovisual pipeline — aom-parity chroma delta-q by
+  subsampling, and the SSIMULACRA2 QM level curves with QM always on.
+  Composed: −4.28% median ssim2 BD-rate vs tune-off at cavif s2 on the
+  22-image rd_gap corpus (butteraugli agrees: 3-norm −2.53%); flips the
+  gap to aom cpu0-default from +1.47% to −3.43% median. aom's all-intra
+  rdmult weight, sharpness-7 trellis, and Variance Boost delta-q measured
+  as regressions on this encoder and are deliberately excluded (full A/B
+  record: zenavif docs/TUNE_SSIMULACRA2_PLAN.md). Tune-off output is
+  byte-identical to previous behavior.
+
 ### Fixed
 - **`qm_v` omitted whenever a QM frame's u/v delta-qs coincided** (9a8eaf61).
   AV1 5.9.12 codes `qm_v` iff the sequence header's `separate_uv_delta_q`
