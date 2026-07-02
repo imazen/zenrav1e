@@ -288,7 +288,7 @@ impl Arbitrary<'_> for ArbitraryEncoder {
       level_idx: Some(31),
       enable_timing_info: Arbitrary::arbitrary(u)?,
       switch_frame_interval: u.int_in_range(0..=3)?,
-      tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,
+      tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual, Tune::Ssimulacra2])?,
       film_grain_params: None,
       ..Default::default()
     };

@@ -12,6 +12,7 @@ use std::cmp;
 use crate::api::ContextInner;
 use crate::api::color::ChromaSampling;
 use crate::encoder::TEMPORAL_DELIMITER;
+use crate::encoder::Tune;
 use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{
   Pixel, bexp_q24, bexp64, blog64, clamp, q24_to_q57, q57, q57_to_q24,
@@ -554,7 +555,7 @@ impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
     chroma_sampling: ChromaSampling, is_intra: bool,
-    log_isqrt_mean_scale: i64,
+    log_isqrt_mean_scale: i64, tune: Tune,
   ) -> QuantizerParameters {
     let scale = log_isqrt_mean_scale + q57(QSCALE + bit_depth as i32 - 8);
 
@@ -566,20 +567,11 @@ impl QuantizerParameters {
     }
 
     let quantizer = bexp64(log_q_y + scale);
-    let (offset_u, offset_v) =
-      chroma_offset(log_q_y + log_isqrt_mean_scale, chroma_sampling);
     let mono = chroma_sampling == ChromaSampling::Cs400;
-    let log_q_u = log_q_y + offset_u;
-    let log_q_v = log_q_y + offset_v;
-    let quantizer_u = bexp64(log_q_u + scale);
-    let quantizer_v = bexp64(log_q_v + scale);
     let lambda = (::std::f64::consts::LN_2 / 6.0)
       * (((log_target_q + log_isqrt_mean_scale) as f64)
         * Q57_SQUARE_EXP_SCALE)
         .exp();
-
-    let scale = |q| bexp64((log_target_q - q) * 2 + q57(16)) as f64 / 65536.;
-    let dist_scale = [scale(log_q_y), scale(log_q_u), scale(log_q_v)];
 
     // In the rate controller, prevent accidental lossless (qi=0) which would
     // change transform and filter semantics. Lossless is only entered through
@@ -590,6 +582,73 @@ impl QuantizerParameters {
     let min_qi = base_q_idx.saturating_sub(63).max(1);
     let max_qi = base_q_idx.saturating_add(63);
     let clamp_qi = |qi: u8| qi.clamp(min_qi, max_qi);
+
+    let dist_scale_from = |log_q: i64| {
+      bexp64((log_target_q - log_q) * 2 + q57(16)) as f64 / 65536.
+    };
+
+    if tune == Tune::Ssimulacra2 && !mono {
+      // aom `--tune=ssimulacra2` chroma delta-q, in qindex domain
+      // (av1_quantize.c `av1_set_quantizer` at rev 632172a4). The chroma
+      // quantizer indices are the base index plus a subsampling-dependent
+      // offset; the DC/AC quantizer *tables* then supply the actual step
+      // sizes, exactly as in libaom (aom keeps y_dc_delta_q = 0; we keep
+      // rav1e's luma DC selection to stay comparable with the other tunes).
+      let base = base_q_idx as i32;
+      let (chroma_dc_delta_q, chroma_ac_delta_q) = match chroma_sampling {
+        // 4:2:0: boost chroma quality (lower qindex). The 20 offset is
+        // ssimulacra2-specific (TUNE_IQ uses 16).
+        ChromaSampling::Cs420 => {
+          let d = -((base / 2) - 14).clamp(0, 20);
+          (d, d)
+        }
+        // 4:2:2: starve chroma AC slightly to feed luma.
+        ChromaSampling::Cs422 => (0, (base / 2).clamp(0, 6)),
+        // 4:4:4: starve chroma AC to feed luma (full-res chroma is
+        // over-allocated by default relative to its perceptual weight).
+        ChromaSampling::Cs444 => (0, (base / 2).clamp(0, 24)),
+        ChromaSampling::Cs400 => unreachable!(),
+      };
+      let chroma_dc_qi =
+        clamp_qi((base + chroma_dc_delta_q).clamp(1, 255) as u8);
+      let chroma_ac_qi =
+        clamp_qi((base + chroma_ac_delta_q).clamp(1, 255) as u8);
+      // Feed the RDO chroma distortion weights from the actual chroma AC
+      // quantizers so rate allocation follows the new step sizes.
+      let log_q_u =
+        blog64(ac_q(chroma_ac_qi, 0, bit_depth).get() as i64) - scale;
+      let dist_scale = [
+        dist_scale_from(log_q_y),
+        dist_scale_from(log_q_u),
+        dist_scale_from(log_q_u),
+      ];
+
+      return QuantizerParameters {
+        log_base_q,
+        log_target_q,
+        dc_qi: [
+          clamp_qi(select_dc_qi(quantizer, bit_depth)),
+          chroma_dc_qi,
+          chroma_dc_qi,
+        ],
+        ac_qi: [base_q_idx, chroma_ac_qi, chroma_ac_qi],
+        lambda,
+        dist_scale,
+      };
+    }
+
+    let (offset_u, offset_v) =
+      chroma_offset(log_q_y + log_isqrt_mean_scale, chroma_sampling);
+    let log_q_u = log_q_y + offset_u;
+    let log_q_v = log_q_y + offset_v;
+    let quantizer_u = bexp64(log_q_u + scale);
+    let quantizer_v = bexp64(log_q_v + scale);
+
+    let dist_scale = [
+      dist_scale_from(log_q_y),
+      dist_scale_from(log_q_u),
+      dist_scale_from(log_q_v),
+    ];
 
     QuantizerParameters {
       log_base_q,
@@ -735,6 +794,7 @@ impl RCState {
 
   pub(crate) fn select_first_pass_qi(
     &self, bit_depth: usize, fti: usize, chroma_sampling: ChromaSampling,
+    tune: Tune,
   ) -> QuantizerParameters {
     // Adjust the quantizer for the frame type, result is Q57:
     let log_q = ((self.pass1_log_base_q + (1i64 << 11)) >> 12)
@@ -747,6 +807,7 @@ impl RCState {
       chroma_sampling,
       fti == 0,
       0,
+      tune,
     )
   }
 
@@ -781,6 +842,7 @@ impl RCState {
         chroma_sampling,
         fti == 0,
         log_isqrt_mean_scale,
+        ctx.config.tune,
       )
     } else {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
@@ -795,6 +857,7 @@ impl RCState {
             ctx.config.bit_depth,
             fti,
             ctx.config.chroma_sampling,
+            ctx.config.tune,
           );
         }
         // Second pass of 2-pass mode: we know exactly how much of each frame
@@ -1080,6 +1143,7 @@ impl RCState {
         chroma_sampling,
         fti == 0,
         log_isqrt_mean_scale,
+        ctx.config.tune,
       )
     }
   }

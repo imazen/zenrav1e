@@ -114,6 +114,20 @@ pub enum Tune {
   /// Uses perceptual distortion metric with activity masking (like Psychovisual),
   /// plus reduced CDEF/deblock strength to preserve detail in stills.
   StillImage,
+  /// Optimized for SSIMULACRA2 scores on still images, modeled on libaom's
+  /// `--tune=ssimulacra2` (aomenc 3.14.1, rev 632172a4). Uses the perceptual
+  /// distortion metric with activity masking (like Psychovisual), plus the
+  /// two mechanisms that measured as wins on top of it: aom-style chroma
+  /// delta-q by subsampling, and the SSIMULACRA2-tuned quantization-matrix
+  /// level curves (QM is always on for this tune).
+  ///
+  /// Every ported libaom mechanism was A/B-measured with ssim2 AND
+  /// butteraugli (metric-gaming guard); aom's all-intra rdmult weight,
+  /// sharpness-7 trellis, and Variance Boost delta-q measured as regressions
+  /// on top of zenrav1e's Daala-lineage rate control / activity masking and
+  /// are deliberately not part of this tune (measured 2026-07-02, zenavif
+  /// docs/TUNE_SSIMULACRA2_PLAN.md).
+  Ssimulacra2,
 }
 
 const FRAME_ID_LENGTH: u32 = 15;
@@ -142,6 +156,69 @@ fn qm_level_for_qindex(qindex: u8) -> u8 {
   level.min(QM_MAX as u32) as u8
 }
 
+/// Luma QM level curve for `Tune::Ssimulacra2`, a port of libaom's
+/// `aom_get_qmlevel_luma_ssimulacra2` (quant_common.h at rev 632172a4) with
+/// its default `[qm_min, qm_max] = [2, 10]` clamp baked in. Piecewise
+/// decreasing in qindex; empirically derived upstream by convex-hulling
+/// SSIMULACRA2 scores over QP/QM tuples on Daala subset1.
+///
+/// qindex 0 maps to 15 (identity) as a near-lossless guard: at qindex 0 the
+/// unweighted quantizer step is 1-4 and *any* non-flat QM inflates the
+/// effective step size multiplicatively (see `qm_level_for_qindex` above) —
+/// in practice qindex 0 takes the dedicated lossless path where QM signaling
+/// is forbidden anyway (AV1 spec 6.8.11).
+fn qm_level_for_qindex_luma_ssimulacra2(qindex: u8) -> u8 {
+  match qindex {
+    0 => 15,
+    1..=40 => 10,
+    41..=60 => 9,
+    61..=90 => 8,
+    91..=120 => 7,
+    121..=130 => 6,
+    131..=140 => 5,
+    141..=160 => 4,
+    161..=200 => 3,
+    _ => 2,
+  }
+}
+
+/// Chroma QM level curve for 4:4:4 subsampling under `Tune::Ssimulacra2`,
+/// a port of libaom's `aom_get_qmlevel_444_chroma` (quant_common.h at rev
+/// 632172a4) with the `[2, 10]` clamp baked in. The input is the *chroma*
+/// qindex (base + chroma AC delta-q), matching libaom's call site
+/// (av1_quantize.c `av1_set_quantizer`). qindex 0 → identity, as above.
+fn qm_level_for_qindex_444_chroma_ssimulacra2(qindex: u8) -> u8 {
+  match qindex {
+    0 => 15,
+    1..=12 => 10,
+    13..=24 => 9,
+    25..=32 => 8,
+    33..=36 => 7,
+    37..=44 => 6,
+    45..=48 => 5,
+    49..=56 => 4,
+    57..=88 => 3,
+    _ => 2,
+  }
+}
+
+/// All-intra QM level curve, a port of libaom's `aom_get_qmlevel_allintra`
+/// (quant_common.h at rev 632172a4) with the `[2, 10]` clamp baked in. Used
+/// for chroma planes of non-4:4:4 subsampling under `Tune::Ssimulacra2`,
+/// again fed the chroma qindex. qindex 0 → identity, as above.
+fn qm_level_for_qindex_allintra(qindex: u8) -> u8 {
+  match qindex {
+    0 => 15,
+    1..=40 => 10,
+    41..=100 => 9,
+    101..=160 => 8,
+    161..=200 => 7,
+    201..=220 => 6,
+    221..=240 => 5,
+    _ => 4,
+  }
+}
+
 #[cfg(test)]
 mod qm_level_tests {
   use super::qm_level_for_qindex;
@@ -168,6 +245,114 @@ mod qm_level_tests {
         "qm_level must be non-increasing in qindex: qi={qi} cur={cur} prev={prev}"
       );
       prev = cur;
+    }
+  }
+}
+
+#[cfg(test)]
+mod ss2_tune_tests {
+  use super::*;
+
+  // Breakpoint tables transcribed from libaom quant_common.h at rev 632172a4
+  // (aom_get_qmlevel_luma_ssimulacra2 / _444_chroma / _allintra with the
+  // default [2,10] clamp). qindex 0 is the fork's identity guard.
+  #[test]
+  fn luma_ss2_curve_matches_libaom_breakpoints() {
+    let expect = [
+      (0u8, 15u8),
+      (1, 10),
+      (40, 10),
+      (41, 9),
+      (60, 9),
+      (61, 8),
+      (90, 8),
+      (91, 7),
+      (120, 7),
+      (121, 6),
+      (130, 6),
+      (131, 5),
+      (140, 5),
+      (141, 4),
+      (160, 4),
+      (161, 3),
+      (200, 3),
+      (201, 2),
+      (255, 2),
+    ];
+    for (qi, level) in expect {
+      assert_eq!(qm_level_for_qindex_luma_ssimulacra2(qi), level, "qi={qi}");
+    }
+  }
+
+  #[test]
+  fn chroma_444_ss2_curve_matches_libaom_breakpoints() {
+    let expect = [
+      (0u8, 15u8),
+      (1, 10),
+      (12, 10),
+      (13, 9),
+      (24, 9),
+      (25, 8),
+      (32, 8),
+      (33, 7),
+      (36, 7),
+      (37, 6),
+      (44, 6),
+      (45, 5),
+      (48, 5),
+      (49, 4),
+      (56, 4),
+      (57, 3),
+      (88, 3),
+      (89, 2),
+      (255, 2),
+    ];
+    for (qi, level) in expect {
+      assert_eq!(
+        qm_level_for_qindex_444_chroma_ssimulacra2(qi),
+        level,
+        "qi={qi}"
+      );
+    }
+  }
+
+  #[test]
+  fn allintra_curve_matches_libaom_breakpoints() {
+    let expect = [
+      (0u8, 15u8),
+      (1, 10),
+      (40, 10),
+      (41, 9),
+      (100, 9),
+      (101, 8),
+      (160, 8),
+      (161, 7),
+      (200, 7),
+      (201, 6),
+      (220, 6),
+      (221, 5),
+      (240, 5),
+      (241, 4),
+      (255, 4),
+    ];
+    for (qi, level) in expect {
+      assert_eq!(qm_level_for_qindex_allintra(qi), level, "qi={qi}");
+    }
+  }
+
+  #[test]
+  fn ss2_curves_monotone_non_increasing_past_lossless_guard() {
+    for f in [
+      qm_level_for_qindex_luma_ssimulacra2 as fn(u8) -> u8,
+      qm_level_for_qindex_444_chroma_ssimulacra2,
+      qm_level_for_qindex_allintra,
+    ] {
+      let mut prev = f(1);
+      for qi in 2u8..=255 {
+        let cur = f(qi);
+        assert!(cur <= prev, "qi={qi} cur={cur} prev={prev}");
+        prev = cur;
+      }
     }
   }
 }
@@ -1099,7 +1284,9 @@ impl<T: Pixel> FrameInvariants<T> {
       base_q_idx: config.quantizer as u8,
       dc_delta_q: [0; 3],
       ac_delta_q: [0; 3],
-      using_qmatrix: config.enable_qm,
+      // Tune::Ssimulacra2 implies QM (with its own level curves), mirroring
+      // libaom's handle_tuning() which forces enable_qm=1 for this tune.
+      using_qmatrix: config.enable_qm || config.tune == Tune::Ssimulacra2,
       qm_level: [15; 3], // flat by default, set in set_quantizers()
       lambda: 0.0,
       dist_scale: Default::default(),
@@ -1461,6 +1648,15 @@ impl<T: Pixel> FrameInvariants<T> {
     }
     self.lambda =
       qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
+    // NOTE (measured 2026-07-02, dropped): aom's `av1_compute_rd_mult`
+    // all-intra weight for TUNE_SSIMULACRA2/TUNE_IQ (rd.c at rev 632172a4;
+    // λ × up to 200/128 at qindex ≤ 159, ramping to 1 at 255) was ported
+    // here and A/B-measured on the zenavif rd_gap harness: BD-rate
+    // +4.41% median ssim2 (worse on 22/22 images), +3.36% butteraugli
+    // 3-norm. aom's rdmult is calibrated against its own distortion
+    // pipeline; zenrav1e's λ is Daala-derived and already balanced against
+    // the activity-masked cdef_dist metric, so the extra rate penalty only
+    // starves quality. Not part of Tune::Ssimulacra2.
     self.me_lambda = self.lambda.sqrt();
     self.dist_scale = qps.dist_scale.map(DistortionScale::from);
 
@@ -1472,6 +1668,26 @@ impl<T: Pixel> FrameInvariants<T> {
         // Lossless cannot signal QM per spec.
         self.using_qmatrix = false;
         self.qm_level = [15; 3];
+      } else if self.config.tune == Tune::Ssimulacra2 {
+        // libaom TUNE_SSIMULACRA2 QM curves (av1_quantize.c
+        // `av1_set_quantizer` at rev 632172a4): luma follows the
+        // ssimulacra2-specific curve on the base qindex; chroma follows the
+        // 4:4:4 curve (Cs444) or the all-intra curve (other subsampling),
+        // evaluated at the *chroma* qindex (base + chroma AC delta-q).
+        let luma_level = qm_level_for_qindex_luma_ssimulacra2(self.base_q_idx);
+        let chroma_qi = |pi: usize| {
+          (self.base_q_idx as i32 + self.ac_delta_q[pi] as i32).clamp(0, 255)
+            as u8
+        };
+        let chroma_level = |qi: u8| {
+          if self.sequence.chroma_sampling == ChromaSampling::Cs444 {
+            qm_level_for_qindex_444_chroma_ssimulacra2(qi)
+          } else {
+            qm_level_for_qindex_allintra(qi)
+          }
+        };
+        self.qm_level =
+          [luma_level, chroma_level(chroma_qi(1)), chroma_level(chroma_qi(2))];
       } else {
         let qi = self.base_q_idx;
         let luma_level = qm_level_for_qindex(qi);
@@ -1829,6 +2045,11 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     None
   };
   let eob = ts.qc.quantize_with_qm(coeffs, qcoeffs, tx_size, tx_type, qm);
+  // NOTE (measured 2026-07-02): forcing the trellis on for Tune::Ssimulacra2
+  // (libaom's tune runs it with rdmult/32 via sharpness=7) was A/B-measured
+  // at lambda x0.25 and x1.0 on the zenavif rd_gap harness: +0.01% and
+  // +0.21% median ssim2 BD-rate respectively, with butteraugli agreeing.
+  // Not part of the tune; `enable_trellis` stays a plain user opt-in.
   let eob = if fi.config.enable_trellis && eob > 1 {
     let plane_type = if p == 0 { 0 } else { 1 };
     crate::quantize::trellis::optimize(
