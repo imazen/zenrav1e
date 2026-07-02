@@ -2176,28 +2176,43 @@ pub fn qm_table(
   }
   let l = level as usize;
   let p = plane_type;
-  // rav1e TxSize uses WxH naming: TX_32X16 = 32 wide, 16 tall.
-  // Our tables use the same convention: qm_tbl_{W}x{H} = W cols, H rows.
+  // rav1e coefficient buffers are stored TRANSPOSED, exactly like dav1d:
+  // the coefficient of a W-wide x H-high transform at spatial column x /
+  // row y lives at index `x * H + y` (verify against any rect entry of
+  // `av1_scan_orders`, e.g. default_scan_4x8 = 0, 8, 1, 16, ... — an
+  // anti-diagonal scan only under this layout). The qm_tbl_{a}x{b} data
+  // (ported verbatim from rav1d-safe src/qm.rs, i.e. the spec matrices)
+  // is stored to be indexed the same way, so a WxH transform must use
+  // qm_tbl_{H}x{W} — the SWAPPED table — matching rav1d-safe's
+  // dav1d_qm_tbl mapping ("the w/h in the assignment is inverted, this
+  // is on purpose because we store coefficients transposed").
+  //
+  // The pre-2026-07-02 version of this match used the unswapped tables,
+  // which quantized every rectangular transform with transposed weights:
+  // self-consistent inside the encoder (dequant used the same table) but
+  // diverging from every conforming decoder's reconstruction — invisible
+  // at the near-flat levels 12..15 the old QM curve used at photo
+  // qindexes, catastrophic (~8 dB luma) at the steeper ss2-curve levels.
   match tx_size {
     TX_4X4 => Some(&qm_tbl_4x4[l][p]),
     TX_8X8 => Some(&qm_tbl_8x8[l][p]),
     TX_16X16 => Some(&qm_tbl_16x16[l][p]),
     TX_32X32 => Some(&qm_tbl_32x32[l][p]),
     TX_64X64 => Some(&qm_tbl_32x32[l][p]),
-    TX_4X8 => Some(&qm_tbl_4x8[l][p]),
-    TX_8X4 => Some(&qm_tbl_8x4[l][p]),
-    TX_8X16 => Some(&qm_tbl_8x16[l][p]),
-    TX_16X8 => Some(&qm_tbl_16x8[l][p]),
-    TX_16X32 => Some(&qm_tbl_16x32[l][p]),
-    TX_32X16 => Some(&qm_tbl_32x16[l][p]),
+    TX_4X8 => Some(&qm_tbl_8x4[l][p]),
+    TX_8X4 => Some(&qm_tbl_4x8[l][p]),
+    TX_8X16 => Some(&qm_tbl_16x8[l][p]),
+    TX_16X8 => Some(&qm_tbl_8x16[l][p]),
+    TX_16X32 => Some(&qm_tbl_32x16[l][p]),
+    TX_32X16 => Some(&qm_tbl_16x32[l][p]),
     TX_32X64 => Some(&qm_tbl_32x32[l][p]),
     TX_64X32 => Some(&qm_tbl_32x32[l][p]),
-    TX_4X16 => Some(&qm_tbl_4x16[l][p]),
-    TX_16X4 => Some(&qm_tbl_16x4[l][p]),
-    TX_8X32 => Some(&qm_tbl_8x32[l][p]),
-    TX_32X8 => Some(&qm_tbl_32x8[l][p]),
-    TX_16X64 => Some(&qm_tbl_16x32[l][p]),
-    TX_64X16 => Some(&qm_tbl_32x16[l][p]),
+    TX_4X16 => Some(&qm_tbl_16x4[l][p]),
+    TX_16X4 => Some(&qm_tbl_4x16[l][p]),
+    TX_8X32 => Some(&qm_tbl_32x8[l][p]),
+    TX_32X8 => Some(&qm_tbl_8x32[l][p]),
+    TX_16X64 => Some(&qm_tbl_32x16[l][p]),
+    TX_64X16 => Some(&qm_tbl_16x32[l][p]),
   }
 }
 
@@ -2295,5 +2310,50 @@ mod tests {
     // At level 0, the DC coefficient (top-left) should be 32 (= 1.0 at QM_BITS=5)
     let table = qm_table(0, 0, TX_4X4).unwrap();
     assert_eq!(table[0], 32);
+  }
+
+  #[test]
+  fn test_rect_tables_are_mutual_transposes_in_coeff_space() {
+    // Coefficient (x, y) of a WxH transform lives at `x * H + y` (rav1e
+    // stores coefficients transposed, like dav1d). The table returned for
+    // TX_WxH and the one for TX_HxW describe the same spec matrix, so they
+    // must be exact transposes of each other under that indexing.
+    let pairs: &[(TxSize, usize, usize, TxSize)] = &[
+      (TX_4X8, 4, 8, TX_8X4),
+      (TX_8X16, 8, 16, TX_16X8),
+      (TX_16X32, 16, 32, TX_32X16),
+      (TX_4X16, 4, 16, TX_16X4),
+      (TX_8X32, 8, 32, TX_32X8),
+    ];
+    for level in 0..15u8 {
+      for plane in 0..2usize {
+        for &(tx_a, w, h, tx_b) in pairs {
+          let a = qm_table(level, plane, tx_a).unwrap();
+          let b = qm_table(level, plane, tx_b).unwrap();
+          for x in 0..w {
+            for y in 0..h {
+              assert_eq!(
+                a[x * h + y],
+                b[y * w + x],
+                "transpose mismatch {tx_a:?}({x},{y}) level={level} plane={plane}"
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn test_rect_orientation_matches_rav1d_reference() {
+    // Spot values computed independently from rav1d-safe's fundamental
+    // tables + derivation helpers (level 8 luma, 4-wide x 8-high TX,
+    // coefficient index x*8 + y). The pre-fix unswapped mapping returned a
+    // scrambled grid here (e.g. 52 at (3, 0) was misplaced mid-column).
+    let t = qm_table(8, 0, TX_4X8).unwrap();
+    assert_eq!(t[0], 32); // (x=0, y=0) DC
+    assert_eq!(t[3 * 8], 52); // (x=3, y=0)
+    assert_eq!(t[7], 52); // (x=0, y=7)
+    assert_eq!(t[3 * 8 + 7], 83); // (x=3, y=7) highest frequency
   }
 }
