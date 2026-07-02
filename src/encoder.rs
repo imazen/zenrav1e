@@ -927,6 +927,10 @@ pub struct FrameInvariants<T: Pixel> {
   pub cdef_y_strengths: [u8; 8],
   pub cdef_uv_strengths: [u8; 8],
   pub delta_q_present: bool,
+  /// `delta_q_res` from the frame header (AV1 spec 5.9.17), as a log2.
+  /// Per-superblock qindex deltas are coded in units of
+  /// `1 << delta_q_res_log2`. Only meaningful when `delta_q_present`.
+  pub delta_q_res_log2: u8,
   pub ref_frames: [u8; INTER_REFS_PER_FRAME],
   pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
   pub rec_buffer: ReferenceFramesSet<T>,
@@ -997,6 +1001,17 @@ pub struct CodedFrameData<T: Pixel> {
   /// Boosted scores for segmentation (wider dynamic range).
   /// When seg_boost > 1.0, these have amplified range for wider QP deltas.
   pub segmentation_scores: Box<[DistortionScale]>,
+  /// Per-superblock target qindex for per-SB delta-q coding, in frame
+  /// superblock raster order (`sb_qindex_cols()` per row). Empty when the
+  /// frame codes no delta-q. Values are targets; the coded qindex is
+  /// re-derived per SB against the running predictor at `delta_q_res`
+  /// granularity (see `select_sb_delta_q`).
+  pub sb_qindex: Box<[u8]>,
+  /// Per-superblock RDO distortion multiplier accompanying `sb_qindex`:
+  /// `(ac_q(base) / ac_q(sb))²` so that boosted (lower-qindex) superblocks
+  /// weight distortion more, mirroring libaom's per-SB rdmult follow.
+  /// Same indexing as `sb_qindex`; empty when the frame codes no delta-q.
+  pub sb_dist_scales: Box<[DistortionScale]>,
 }
 
 impl<T: Pixel> CodedFrameData<T> {
@@ -1026,7 +1041,16 @@ impl<T: Pixel> CodedFrameData<T> {
       activity_mask: Default::default(),
       spatiotemporal_scores: Default::default(),
       segmentation_scores: Default::default(),
+      sb_qindex: Default::default(),
+      sb_dist_scales: Default::default(),
     }
+  }
+
+  /// Number of 64×64 superblock columns covered by the importance-block
+  /// grid (the indexing pitch of `sb_qindex` / `sb_dist_scales`).
+  #[inline]
+  pub fn sb_qindex_cols(&self) -> usize {
+    self.w_in_imp_b.div_ceil(8)
   }
 
   // Assumes that we have already computed activity scales and distortion scales
@@ -1278,6 +1302,7 @@ impl<T: Pixel> FrameInvariants<T> {
         13 * 4 + 3,
       ],
       delta_q_present: false,
+      delta_q_res_log2: 0,
       ref_frames: [0; INTER_REFS_PER_FRAME],
       ref_frame_sign_bias: [false; INTER_REFS_PER_FRAME],
       rec_buffer: ReferenceFramesSet::new(),
@@ -1544,6 +1569,7 @@ impl<T: Pixel> FrameInvariants<T> {
       cdef_y_strengths: self.cdef_y_strengths,
       cdef_uv_strengths: self.cdef_uv_strengths,
       delta_q_present: self.delta_q_present,
+      delta_q_res_log2: self.delta_q_res_log2,
       ref_frames: self.ref_frames,
       ref_frame_sign_bias: self.ref_frame_sign_bias,
       rec_buffer: self.rec_buffer.clone(),
@@ -1836,13 +1862,43 @@ fn get_qidx<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter,
   tile_bo: TileBlockOffset,
 ) -> u8 {
-  let mut qidx = fi.base_q_idx;
+  // With per-SB delta-q, the superblock's reconstructed qindex replaces the
+  // frame base as the starting point; the decoder composes exactly the same
+  // way (`CurrentQIndex`, then the segment ALT_Q delta on top — AV1 spec
+  // 7.12.2 / dav1d `init_quant_tables`).
+  let mut qidx = if fi.delta_q_present { ts.sb_qindex } else { fi.base_q_idx };
   let sidx = cw.bc.blocks[tile_bo].segmentation_idx as usize;
   if ts.segmentation.features[sidx][SegLvl::SEG_LVL_ALT_Q as usize] {
     let delta = ts.segmentation.data[sidx][SegLvl::SEG_LVL_ALT_Q as usize];
     qidx = clamp((qidx as i16) + delta, 0, 255) as u8;
   }
   qidx
+}
+
+/// Chooses the coded per-SB delta-q for one superblock: quantizes
+/// `target_qidx − predictor` to `delta_q_res` granularity (libaom's
+/// deadzone rounding, `av1_adjust_q_from_delta_q_res`) and returns
+/// `(delta_units, reconstructed_qindex)`, where `reconstructed_qindex` is
+/// exactly what a decoder computes from the coded `delta_units` — always
+/// in `[1, 255]` without relying on the decoder's clamp.
+fn select_sb_delta_q(
+  target_qidx: u8, predictor: u8, res_log2: u8,
+) -> (i32, u8) {
+  let step = 1i32 << res_log2;
+  let raw = target_qidx.max(1) as i32 - predictor as i32;
+  let sign = if raw < 0 { -1 } else { 1 };
+  // Deadzone-rounded magnitude, in whole steps (matches libaom).
+  let mut units = ((raw.abs() + step / 4) & !(step - 1)) / step;
+  let mut qidx = predictor as i32 + sign * units * step;
+  // The rounding can overshoot past the valid range by at most one step;
+  // shrink rather than letting the decoder clamp (which would desync the
+  // encoder's predictor bookkeeping from the decoder's).
+  while !(1..=255).contains(&qidx) && units > 0 {
+    units -= 1;
+    qidx = predictor as i32 + sign * units * step;
+  }
+  debug_assert!((1..=255).contains(&qidx));
+  (sign * units, qidx as u8)
 }
 
 /// For a transform block,
@@ -2499,17 +2555,32 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   cw.bc.blocks.set_ref_frames(tile_bo, bsize, ref_frames);
   cw.bc.blocks.set_motion_vectors(tile_bo, bsize, mvs);
 
-  //write_q_deltas();
-  if cw.bc.code_deltas
-    && ts.deblock.block_deltas_enabled
-    && (bsize < sb_size || !skip)
-  {
-    cw.write_block_deblock_deltas(
-      w,
-      tile_bo,
-      ts.deblock.block_delta_multi,
-      planes,
-    );
+  // Per-SB delta symbols, coded once at the first block of each superblock
+  // (AV1 spec 5.11.28: after cdef, before mode info). The spec omits them
+  // when that block spans the whole superblock AND is skipped; the decoder
+  // then keeps its previous qindex predictor for this SB. NOTE: the size
+  // check must be `!=`, not `<` — `BlockSize`'s `PartialOrd` is
+  // width/height-based, under which e.g. `BLOCK_64X16 < BLOCK_64X64` and
+  // `BLOCK_64X64 == BLOCK_64X64` agree here, but `!=` matches the spec text
+  // (`MiSize != sbSize`) with no ordering subtleties.
+  if cw.bc.code_deltas && (bsize != sb_size || !skip) {
+    if fi.delta_q_present {
+      let step = 1i32 << fi.delta_q_res_log2;
+      let delta_units = (ts.sb_qindex as i32 - ts.last_qidx as i32) / step;
+      debug_assert_eq!(
+        ts.last_qidx as i32 + delta_units * step,
+        ts.sb_qindex as i32
+      );
+      cw.write_delta_q_index(w, delta_units);
+    }
+    if ts.deblock.block_deltas_enabled {
+      cw.write_block_deblock_deltas(
+        w,
+        tile_bo,
+        ts.deblock.block_delta_multi,
+        planes,
+      );
+    }
   }
   cw.bc.code_deltas = false;
 
@@ -4346,6 +4417,11 @@ fn encode_tile<'a, T: Pixel>(
   let mut last_lru_rdoed = [-1; 3];
   let mut last_lru_coded = [-1; 3];
 
+  // Delta-q predictor resets to the frame base qindex at each tile start
+  // (AV1 spec 7.11.2: `CurrentQIndex = base_q_idx` in `init_symbol`).
+  ts.last_qidx = fi.base_q_idx;
+  ts.sb_qindex = fi.base_q_idx;
+
   // main loop
   for sby in 0..ts.sb_height {
     cw.bc.reset_left_contexts(planes);
@@ -4366,6 +4442,25 @@ fn encode_tile<'a, T: Pixel>(
       let tile_bo = tile_sbo.block_offset(0, 0);
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
+
+      if fi.delta_q_present {
+        // Fix this superblock's coded qindex before any partition search:
+        // the delta is coded against the running per-tile predictor, which
+        // only advances between superblocks, so trials and the final encode
+        // all see one consistent (delta, qindex) pair.
+        let target = fi
+          .coded_frame_data
+          .as_ref()
+          .filter(|cfd| !cfd.sb_qindex.is_empty())
+          .map(|cfd| {
+            let frame_sbo = ts.to_frame_super_block_offset(tile_sbo).0;
+            cfd.sb_qindex[frame_sbo.y * cfd.sb_qindex_cols() + frame_sbo.x]
+          })
+          .unwrap_or(fi.base_q_idx);
+        let (_, sb_qindex) =
+          select_sb_delta_q(target, ts.last_qidx, fi.delta_q_res_log2);
+        ts.sb_qindex = sb_qindex;
+      }
 
       let is_straddle_sbx =
         tile_bo.0.x + BlockSize::BLOCK_64X64.width_mi() > ts.mi_width;
@@ -4404,6 +4499,22 @@ fn encode_tile<'a, T: Pixel>(
           // Top of the superblock: no enclosing split.
           PartitionType::PARTITION_NONE,
         );
+      }
+
+      if fi.delta_q_present {
+        // Advance the delta-q predictor exactly like a decoder: only if the
+        // superblock actually coded a `delta_q_index` symbol. The one case
+        // it didn't: the final encode chose a single SB-sized skip block
+        // (spec: `MiSize == sbSize && skip` omits the element), in which
+        // case the decoder keeps its previous qindex. The corner block's
+        // final size/skip state is authoritative here — the final encode
+        // was the last writer.
+        let corner = &cw.bc.blocks[tile_bo];
+        let delta_q_coded =
+          corner.bsize != BlockSize::BLOCK_64X64 || !corner.skip;
+        if delta_q_coded {
+          ts.last_qidx = ts.sb_qindex;
+        }
       }
 
       {
@@ -4735,5 +4846,62 @@ mod test {
       RAV1E_PARTITION_TYPES[RAV1E_PARTITION_TYPES.len() - 1],
       PartitionType::PARTITION_SPLIT
     );
+  }
+
+  /// Decoder mirror of the per-SB `delta_q_index` reconstruction
+  /// (dav1d/rav1d `decode_b`): `clip(prev + units << res_log2, 1, 255)`.
+  fn decoder_qindex(prev: u8, units: i32, res_log2: u8) -> u8 {
+    (prev as i32 + (units << res_log2)).clamp(1, 255) as u8
+  }
+
+  #[test]
+  fn select_sb_delta_q_roundtrips_against_decoder() {
+    // Every (target, predictor, resolution) must reconstruct on the decoder
+    // side to exactly the qindex the encoder plans to quantize with, and
+    // the delta must be representable without relying on the decoder clamp.
+    for res_log2 in 0..=3u8 {
+      for prev in [1u8, 2, 5, 80, 128, 200, 254, 255] {
+        for target in [1u8, 2, 3, 40, 79, 80, 81, 128, 160, 254, 255] {
+          let (units, qidx) = select_sb_delta_q(target, prev, res_log2);
+          assert_eq!(
+            decoder_qindex(prev, units, res_log2),
+            qidx,
+            "target={target} prev={prev} res_log2={res_log2}"
+          );
+          assert!((1..=255).contains(&(qidx as i32)));
+          // The reconstruction must land within one step of the target
+          // (deadzone rounding), except when the range clamp binds.
+          let step = 1i32 << res_log2;
+          assert!(
+            (qidx as i32 - target as i32).abs() <= step,
+            "target={target} prev={prev} res_log2={res_log2} qidx={qidx}"
+          );
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn select_sb_delta_q_zero_delta_when_target_equals_predictor() {
+    for res_log2 in 0..=3u8 {
+      for q in [1u8, 33, 128, 255] {
+        let (units, qidx) = select_sb_delta_q(q, q, res_log2);
+        assert_eq!(units, 0);
+        assert_eq!(qidx, q);
+      }
+    }
+  }
+
+  #[test]
+  fn select_sb_delta_q_matches_aom_deadzone_rounding() {
+    // libaom `av1_adjust_q_from_delta_q_res`: abs delta is rounded with a
+    // res/4 deadzone: (abs + res/4) & ~(res-1). Spot-check a few values.
+    // res 8: raw 5 -> (5+2)&~7 = 0; raw 6 -> (6+2)&~7 = 8.
+    assert_eq!(select_sb_delta_q(105, 100, 3), (0, 100));
+    assert_eq!(select_sb_delta_q(106, 100, 3), (1, 108));
+    assert_eq!(select_sb_delta_q(94, 100, 3), (-1, 92));
+    assert_eq!(select_sb_delta_q(95, 100, 3), (0, 100));
+    // res 1: exact.
+    assert_eq!(select_sb_delta_q(93, 100, 0), (-7, 93));
   }
 }

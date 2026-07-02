@@ -68,6 +68,18 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub coded_block_info: MiTileState,
   pub integral_buffer: IntegralImageBuffer,
   pub inter_compound_buffers: InterCompoundBuffers,
+  /// Per-tile delta-q predictor, mirroring the decoder's running qindex
+  /// (AV1 `CurrentQIndex`): reset to the frame base qindex at tile start,
+  /// updated after each superblock's final encode iff that SB actually
+  /// coded a `delta_q_index` symbol. Only meaningful when the frame codes
+  /// delta-q (`fi.delta_q_present`).
+  pub last_qidx: u8,
+  /// Reconstructed qindex of the superblock currently being encoded (the
+  /// value a decoder derives from the coded delta), set at SB start by
+  /// `encode_tile`. All quantization, dequantization, and rate estimation
+  /// inside the SB uses this via `get_qidx`. Only meaningful when
+  /// `fi.delta_q_present`.
+  pub sb_qindex: u8,
 }
 
 /// Contains information for a coded block that is
@@ -191,6 +203,10 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       ),
       integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       inter_compound_buffers: InterCompoundBuffers::default(),
+      // Initialized properly by `encode_tile` (needs `fi.base_q_idx`,
+      // which isn't available here); unused until then.
+      last_qidx: 0,
+      sb_qindex: 0,
     }
   }
 

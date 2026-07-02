@@ -766,7 +766,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // delta_q (spec 5.9.17): delta_q_present is only coded when
     // base_q_idx > 0 — a lossless frame codes nothing here.
     if fi.base_q_idx > 0 {
-      self.write_bit(false)?; // delta_q_present_flag: no delta q
+      self.write_bit(fi.delta_q_present)?; // delta_q_present_flag
+      if fi.delta_q_present {
+        self.write::<2, u8>(fi.delta_q_res_log2)?; // delta_q_res
+      }
+    } else {
+      debug_assert!(!fi.delta_q_present);
     }
 
     // delta_lf_params in the spec

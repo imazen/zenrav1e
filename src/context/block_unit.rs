@@ -216,6 +216,12 @@ pub struct BlockContextCheckpoint {
   x: usize,
   chroma_sampling: ChromaSampling,
   cdef_coded: bool,
+  // Whether the current superblock still owes its per-SB delta symbols
+  // (delta_q / delta_lf). Must be checkpointed: the first block coded in
+  // an SB consumes the flag, so an RDO trial that gets rolled back would
+  // otherwise leave it cleared and the final encode would never write the
+  // delta_q symbol the frame header promised (bitstream desync).
+  code_deltas: bool,
   above_partition_context: [u8; MIB_SIZE >> 1],
   // left context is also at 8x8 granularity
   left_partition_context: [u8; MIB_SIZE >> 1],
@@ -268,6 +274,7 @@ impl<'a> BlockContext<'a> {
       x,
       chroma_sampling,
       cdef_coded: self.cdef_coded,
+      code_deltas: self.code_deltas,
       above_partition_context: [0; MIB_SIZE >> 1],
       left_partition_context: self.left_partition_context,
       above_tx_context: [0; MIB_SIZE],
@@ -299,6 +306,7 @@ impl<'a> BlockContext<'a> {
   pub fn rollback(&mut self, checkpoint: &BlockContextCheckpoint) {
     let x = checkpoint.x & (COEFF_CONTEXT_MAX_WIDTH - MIB_SIZE);
     self.cdef_coded = checkpoint.cdef_coded;
+    self.code_deltas = checkpoint.code_deltas;
     self.above_partition_context[(x >> 1)..][..(MIB_SIZE >> 1)]
       .copy_from_slice(&checkpoint.above_partition_context);
     self.left_partition_context = checkpoint.left_partition_context;
@@ -1734,6 +1742,37 @@ impl ContextWriter<'_> {
     }
     if mv_joint_horizontal(j) {
       self.encode_mv_component(w, diff.col as i32, 1, mv_precision);
+    }
+  }
+
+  /// Writes the per-superblock `delta_q_index` syntax element (AV1 spec
+  /// 5.11.35 `read_delta_qindex`), coded at the first block of each
+  /// superblock when the frame header signals `delta_q_present`.
+  ///
+  /// `delta_units` is the qindex delta already divided by
+  /// `1 << delta_q_res_log2` — the decoder multiplies it back and adds it
+  /// to its running per-tile qindex predictor. Syntax mirrors the
+  /// deblock-delta element: a 4-symbol CDF for `min(abs, 3)`, an
+  /// exp-golomb-style escape for `abs >= 3`, and an equiprobable sign bit.
+  pub fn write_delta_q_index<W: Writer>(
+    &mut self, w: &mut W, delta_units: i32,
+  ) {
+    let abs = delta_units.unsigned_abs();
+
+    symbol_with_update!(
+      self,
+      w,
+      cmp::min(abs, DELTA_Q_SMALL),
+      &self.fc.delta_q_cdf
+    );
+
+    if abs >= DELTA_Q_SMALL {
+      let bits = msb(abs as i32 - 1) as u32;
+      w.literal(3, bits - 1);
+      w.literal(bits as u8, abs - (1 << bits) - 1);
+    }
+    if abs > 0 {
+      w.bool(delta_units < 0, 16384);
     }
   }
 

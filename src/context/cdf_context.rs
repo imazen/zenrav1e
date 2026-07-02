@@ -60,6 +60,7 @@ pub struct CDFContext {
     [[[[u16; BR_CDF_SIZE]; LEVEL_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1],
   pub deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1]; FRAME_LF_COUNT],
+  pub delta_q_cdf: [u16; DELTA_Q_PROBS + 1],
   pub partition_w8_cdf: [[u16; 4]; PARTITION_TYPES],
 
   pub eob_flag_cdf16: [[[u16; 5]; 2]; PLANE_TYPES],
@@ -149,6 +150,7 @@ impl CDFContext {
       nmv_context: default_nmv_context,
       deblock_delta_multi_cdf: default_delta_lf_multi_cdf,
       deblock_delta_cdf: default_delta_lf_cdf,
+      delta_q_cdf: default_delta_q_cdf,
       spatial_segmentation_cdfs: default_spatial_pred_seg_tree_cdf,
       lrf_switchable_cdf: default_switchable_restore_cdf,
       lrf_sgrproj_cdf: default_sgrproj_restore_cdf,
@@ -245,6 +247,7 @@ impl CDFContext {
     reset_2d!(self.compound_mode_cdf);
     reset_2d!(self.deblock_delta_multi_cdf);
     reset_1d!(self.deblock_delta_cdf);
+    reset_1d!(self.delta_q_cdf);
     reset_2d!(self.spatial_segmentation_cdfs);
     reset_1d!(self.lrf_switchable_cdf);
     reset_1d!(self.lrf_sgrproj_cdf);
@@ -411,6 +414,8 @@ impl CDFContext {
     let deblock_delta_cdf_start = self.deblock_delta_cdf.as_ptr() as usize;
     let deblock_delta_cdf_end =
       deblock_delta_cdf_start + size_of_val(&self.deblock_delta_cdf);
+    let delta_q_cdf_start = self.delta_q_cdf.as_ptr() as usize;
+    let delta_q_cdf_end = delta_q_cdf_start + size_of_val(&self.delta_q_cdf);
     let spatial_segmentation_cdfs_start =
       self.spatial_segmentation_cdfs.first().unwrap().as_ptr() as usize;
     let spatial_segmentation_cdfs_end = spatial_segmentation_cdfs_start
@@ -526,6 +531,7 @@ impl CDFContext {
         deblock_delta_multi_cdf_end,
       ),
       ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
+      ("delta_q_cdf", delta_q_cdf_start, delta_q_cdf_end),
       (
         "spatial_segmentation_cdfs",
         spatial_segmentation_cdfs_start,

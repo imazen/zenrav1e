@@ -1041,7 +1041,6 @@ pub static default_wiener_restore_cdf: [u16; 2] = cdf([11570]);
 
 pub static default_sgrproj_restore_cdf: [u16; 2] = cdf([16855]);
 
-#[allow(unused)]
 pub static default_delta_q_cdf: [u16; DELTA_Q_PROBS + 1] =
   cdf([28160, 32120, 32677]);
 
