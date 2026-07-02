@@ -672,7 +672,14 @@ impl ContextWriter<'_> {
     let max_depths = bsize_to_max_depth(bsize);
     let tx_size_cat = bsize_to_tx_size_cat(bsize);
 
-    debug_assert!(depth <= max_depths);
+    // Hard assert in ALL builds: a depth beyond `max_depths` is an
+    // out-of-alphabet symbol -- the decoder cannot parse it and the bitstream
+    // silently corrupts (exactly how the 2026-07-02 sliver-tx bug shipped
+    // past a release-only debug_assert). Cheap: once per block.
+    assert!(
+      depth <= max_depths,
+      "intra tx depth {depth} exceeds max {max_depths} for {bsize:?} (tx {tx_size:?})"
+    );
     debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());
 
     if tx_size_cat > 0 {

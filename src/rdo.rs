@@ -803,6 +803,22 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
     tx_size = sub_tx_size_map[tx_size as usize]; // Always choose one level split size
   }
 
+  // TX_64X16/TX_16X64 -- reachable only for the 4:1 sliver blocks that
+  // HORZ_4/VERT_4 produce at BLOCK_64X64 parents -- have an unvalidated
+  // coefficient path: upstream rav1e can never emit those block sizes, and
+  // encodes using these transforms desync every conforming decoder (aomdec
+  // reports "Corrupted segment_ids"; bisected 2026-07-02). Cap to the
+  // one-level-split size (TX_32X16/TX_16X32), which the decoder follows via
+  // the written intra tx-size depth, until that path is validated. Inter
+  // slivers are prevented upstream in `encode_partition_topdown` instead
+  // (`write_tx_size_inter` could not signal this cap when
+  // `enable_inter_txfm_split` is off).
+  let sliver_cap =
+    !is_inter && matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64);
+  if sliver_cap {
+    tx_size = sub_tx_size_map[tx_size as usize];
+  }
+
   let mut best_tx_type = TxType::DCT_DCT;
   let mut best_tx_size = tx_size;
   let mut best_rd = f64::MAX;
@@ -810,7 +826,12 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
   let do_rdo_tx_size = fi.tx_mode_select
     && fi.config.speed_settings.transform.rdo_tx_decision
     && !is_inter;
-  let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
+  // The written intra tx-size symbol is a DEPTH from
+  // `max_txsize_rect_lookup[bsize]` with alphabet 0..=MAX_TX_DEPTH; the cap
+  // above already consumed one level, so shrink the search accordingly or the
+  // deepest candidate would encode depth 3 -- an out-of-alphabet symbol.
+  let rdo_tx_depth =
+    if do_rdo_tx_size { if sliver_cap { 1 } else { 2 } } else { 0 };
   let mut cw_checkpoint: Option<ContextWriterCheckpoint> = None;
 
   for _ in 0..=rdo_tx_depth {

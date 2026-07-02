@@ -3329,7 +3329,20 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // frame bounds, so there is never a partial 4th sub-block to special-case.
       let fully_contained = tile_bo.0.x + bsize.width_mi() <= ts.mi_width
         && tile_bo.0.y + bsize.height_mi() <= ts.mi_height;
+      // At BLOCK_64X64 parents the quarter-slivers are BLOCK_64X16/16X64, whose
+      // max rect transforms (TX_64X16/TX_16X64) have an unvalidated coefficient
+      // path (dead code upstream; bisected to bitstream corruption 2026-07-02).
+      // Intra coding caps those slivers to TX_32X16/TX_16X32 in
+      // `rdo_tx_size_type` -- a choice the decoder follows via the written
+      // tx-size depth. Inter blocks cannot signal that cap when
+      // `enable_inter_txfm_split` is off (`write_tx_size_inter`'s split flag
+      // would contradict the coded size), so only offer 64X64-parent 4-way
+      // types when every resulting sliver is safely codable.
+      let sliver_tx_safe = bsize != BlockSize::BLOCK_64X64
+        || !fi.frame_type.has_inter()
+        || fi.enable_inter_txfm_split;
       if fully_contained
+        && sliver_tx_safe
         && matches!(
           bsize,
           BlockSize::BLOCK_16X16
