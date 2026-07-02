@@ -182,6 +182,21 @@
   `src/test_8bit_u16.rs` (9a72bc3d).
 
 ### Added
+- **One-level-deeper SPLIT child estimate in the topdown partition trial
+  (#27)** — `rdo_partition_simple` historically scored each SPLIT child as a
+  single NONE-leaf while the final encode re-searches every SPLIT child
+  recursively and usually does better, making SPLIT's trial cost
+  systematically pessimistic vs the exactly-evaluated NONE/HORZ/VERT/
+  HORZ_4/VERT_4 candidates. Each SPLIT child's trial cost is now
+  `min(NONE-leaf, tell-metered child-SPLIT symbol + 4 quarter NONE-leaves)`
+  (`rdo_split_child_deeper_cost`, b073182c) — exactly the first comparison
+  the child's own future search will make — with winning deeper state kept
+  for sibling estimation and losing state fully rolled back. Measured
+  (22-image photo corpus × 12-Q grid, cavif -s2): BD-rate vs libaom-slow
+  cpu-used=2 median +0.0695% → **−0.6487%** (mean +2.1734% → +0.2373%),
+  improved on 16/19 images, encode time 1.057× median — RD parity crossed
+  at matched speed. Full data in the `zenavif` sibling repo's
+  `docs/RD_GAP_VS_LIBAOM.md` "Fixed 2026-07-02".
 - **`PARTITION_HORZ_4`/`PARTITION_VERT_4` in the RDO search (#26, Phase 1 of
   extended AV1 partition types)** — `encode_partition_topdown` can now choose
   the two uniform 4-way splits for `BLOCK_16X16`/`32X32`/`64X64` blocks fully
