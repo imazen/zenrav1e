@@ -2054,6 +2054,129 @@ fn rdo_partition_none<T: Pixel>(
   cost
 }
 
+/// One-level-deeper refinement of a SPLIT child's trial cost (zenrav1e#27).
+///
+/// The topdown SPLIT trial historically scored each child as a single
+/// NONE-leaf (`rdo_mode_decision`), while the final encode re-searches every
+/// SPLIT child (`encode_partition_topdown` recursion, seeded with that NONE
+/// leaf as the incumbent) and usually does better -- a systematically
+/// *pessimistic* SPLIT estimate. The competing candidates are all evaluated
+/// exactly (NONE is a true leaf; HORZ/VERT/HORZ_4/VERT_4 children are
+/// non-square, so the final encode never re-searches them), so the bias
+/// mis-ranks SPLIT specifically. libaom's `rd_pick_partition` evaluates
+/// SPLIT recursively and has no such bias.
+///
+/// This replicates, inside the trial, exactly the first comparison the
+/// child's own future search will make: its cached NONE incumbent
+/// (`child_none.rd_cost`, partition symbol uncosted) against a further 4-way
+/// split into NONE leaves (tell-metered SPLIT symbol + 4 quarter NONE-leaf
+/// mode costs, quarter NONE symbols written to context but uncosted --
+/// `rdo_partition_simple`'s own accounting). Returns `Some(deeper_cost)`,
+/// leaving the context in the deeper-encoded state so subsequent siblings
+/// are estimated against it, when the deeper split is the better estimate;
+/// returns `None` with all context rolled back when the NONE leaf stands (or
+/// the child cannot split further). The caller's `child_modes` entry is
+/// unaffected either way: the final encode always re-searches the child from
+/// the NONE incumbent, so this only sharpens the parent-level ranking.
+///
+/// Every `BlockSize` comparison below is square-vs-square (`child_size` is a
+/// SPLIT child; `quarter` its SPLIT child), so `PartialOrd` is total here --
+/// no extreme-aspect ordinal hazard (see `BlockSize::ge_8x8_ordinal`).
+fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  child_size: BlockSize, child_bo: TileBlockOffset, inter_cfg: &InterConfig,
+  rdo_type: RDOType, child_none: &PartitionParameters,
+) -> Option<f64> {
+  debug_assert!(child_size.is_sqr());
+  // Mirror `encode_partition_topdown`'s `can_split` gate for the child: the
+  // deeper estimate is only meaningful if the final encode would actually
+  // re-search this child. `must_split` cannot force anything extra here: the
+  // caller already verified the child's half-point is inside the tile, and
+  // `child_size` is strictly below `partition_range.max` because its parent
+  // was searchable.
+  let child_can_split = if fi.frame_type.has_inter()
+    && fi.sequence.chroma_sampling != ChromaSampling::Cs420
+    && child_size <= BlockSize::BLOCK_8X8
+  {
+    false
+  } else {
+    child_size > fi.partition_range.min
+  };
+  if !child_can_split {
+    return None;
+  }
+
+  let quarter = child_size.subsize(PartitionType::PARTITION_SPLIT).unwrap();
+  let qw = quarter.width_mi();
+  let qh = quarter.height_mi();
+  let grandchildren = [
+    child_bo,
+    TileBlockOffset(BlockOffset { x: child_bo.0.x + qw, y: child_bo.0.y }),
+    TileBlockOffset(BlockOffset { x: child_bo.0.x, y: child_bo.0.y + qh }),
+    TileBlockOffset(BlockOffset {
+      x: child_bo.0.x + qw,
+      y: child_bo.0.y + qh,
+    }),
+  ];
+  // The child's own future search only offers SPLIT when every quarter's
+  // half-point is inside the tile (`rdo_partition_simple`'s per-child gate);
+  // replicate it so the estimate never assumes a split the final encode
+  // cannot choose. This also keeps `write_partition`'s full-choice branch
+  // reachable for every symbol written below (its edge branches assert the
+  // written symbol is SPLIT/HORZ/VERT, never NONE).
+  let q_hbs = qw >> 1;
+  if grandchildren
+    .iter()
+    .any(|g| g.0.x + q_hbs >= ts.mi_width || g.0.y + q_hbs >= ts.mi_height)
+  {
+    return None;
+  }
+
+  let cw_checkpoint = cw.checkpoint(&child_bo, fi.sequence.chroma_sampling);
+  let w_pre_checkpoint = w_pre_cdef.checkpoint();
+  let w_post_checkpoint = w_post_cdef.checkpoint();
+
+  let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+  let tell = w.tell_frac();
+  cw.write_partition(w, child_bo, PartitionType::PARTITION_SPLIT, child_size);
+  let mut deeper_cost =
+    compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
+
+  for &g_bo in &grandchildren {
+    if deeper_cost >= child_none.rd_cost {
+      break; // cannot beat the NONE leaf; abandon the deeper estimate
+    }
+    let g_mode = rdo_mode_decision(fi, ts, cw, quarter, g_bo, inter_cfg);
+    deeper_cost += g_mode.rd_cost;
+    if quarter >= BlockSize::BLOCK_8X8 && quarter.is_sqr() {
+      let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+      cw.write_partition(w, g_bo, PartitionType::PARTITION_NONE, quarter);
+    }
+    encode_block_with_modes(
+      fi,
+      ts,
+      cw,
+      w_pre_cdef,
+      w_post_cdef,
+      quarter,
+      g_bo,
+      &g_mode,
+      rdo_type,
+      None,
+    );
+  }
+
+  if deeper_cost < child_none.rd_cost {
+    Some(deeper_cost)
+  } else {
+    cw.rollback(&cw_checkpoint);
+    w_pre_cdef.rollback(&w_pre_checkpoint);
+    w_post_cdef.rollback(&w_post_checkpoint);
+    None
+  }
+}
+
 // VERTICAL, HORIZONTAL, simple SPLIT, or uniform 4-way HORZ_4/VERT_4
 #[inline(always)]
 fn rdo_partition_simple<T: Pixel, W: Writer>(
@@ -2136,28 +2259,60 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       let mode_decision =
         rdo_mode_decision(fi, ts, cw, subsize, offset, inter_cfg);
 
-      rd_cost_sum += mode_decision.rd_cost;
+      // SPLIT children are the only ones the final encode re-searches
+      // (deeper recursion), so their NONE-leaf trial cost is systematically
+      // pessimistic; refine it with a one-level-deeper estimate. See
+      // `rdo_split_child_deeper_cost`. Attempted even when the NONE leaf
+      // alone would already trip the early exit below: rescuing exactly
+      // those SPLITs is the point of the refinement.
+      let deeper_cost = if partition == PARTITION_SPLIT {
+        rdo_split_child_deeper_cost(
+          fi,
+          ts,
+          cw,
+          w_pre_cdef,
+          w_post_cdef,
+          subsize,
+          offset,
+          inter_cfg,
+          rdo_type,
+          &mode_decision,
+        )
+      } else {
+        None
+      };
+
+      rd_cost_sum += deeper_cost.unwrap_or(mode_decision.rd_cost);
 
       if fi.enable_early_exit && rd_cost_sum > best_rd {
         return None;
       }
-      if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-        let w: &mut W =
-          if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-        cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+      // When the deeper estimate won, the context was already left in the
+      // deeper-encoded state; otherwise apply the NONE leaf as before.
+      if deeper_cost.is_none() {
+        if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+          let w: &mut W =
+            if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+          cw.write_partition(
+            w,
+            offset,
+            PartitionType::PARTITION_NONE,
+            subsize,
+          );
+        }
+        encode_block_with_modes(
+          fi,
+          ts,
+          cw,
+          w_pre_cdef,
+          w_post_cdef,
+          subsize,
+          offset,
+          &mode_decision,
+          rdo_type,
+          None,
+        );
       }
-      encode_block_with_modes(
-        fi,
-        ts,
-        cw,
-        w_pre_cdef,
-        w_post_cdef,
-        subsize,
-        offset,
-        &mode_decision,
-        rdo_type,
-        None,
-      );
       child_modes.push(mode_decision);
     } else {
       //rd_cost_sum += f64::MAX;
