@@ -18,7 +18,7 @@ use crate::util::*;
 pub const PALETTE_BSIZE_CTXS: usize = 7;
 pub const PALETTE_Y_MODE_CONTEXTS: usize = 3;
 pub const PALETTE_UV_MODE_CONTEXTS: usize = 2;
-const PALETTE_COLOR_INDEX_CONTEXTS: usize = 5;
+pub const PALETTE_COLOR_INDEX_CONTEXTS: usize = 5;
 const RESTORE_SWITCHABLE_TYPES: usize = 3;
 pub const TX_SIZE_CONTEXTS: usize = 3;
 
@@ -820,7 +820,6 @@ pub static default_comp_ref_cdf: [[[u16; 2]; FWD_REFS - 1]; REF_CONTEXTS] =
 pub static default_comp_bwdref_cdf: [[[u16; 2]; BWD_REFS - 1]; REF_CONTEXTS] =
   cdf_3d([[[2235], [1423]], [[17182], [15175]], [[30606], [30489]]]);
 
-#[allow(unused)]
 pub static default_palette_y_size_cdf: [[u16;
   PaletteSize::PALETTE_SIZES as usize];
   PALETTE_BSIZE_CTXS] = cdf_2d([
@@ -833,7 +832,6 @@ pub static default_palette_y_size_cdf: [[u16;
   [14940, 20797, 21678, 24186, 27033, 28999],
 ]);
 
-#[allow(unused)]
 pub static default_palette_uv_size_cdf: [[u16;
   PaletteSize::PALETTE_SIZES as usize];
   PALETTE_BSIZE_CTXS] = cdf_2d([
@@ -860,7 +858,6 @@ pub static default_palette_y_mode_cdfs: [[[u16; 2]; PALETTE_Y_MODE_CONTEXTS];
 pub static default_palette_uv_mode_cdfs: [[u16; 2]; PALETTE_UV_MODE_CONTEXTS] =
   cdf_2d([[32461], [21488]]);
 
-#[allow(unused)]
 pub static default_palette_y_color_index_cdf: [[[u16;
   PaletteColor::PALETTE_COLORS as usize];
   PALETTE_COLOR_INDEX_CONTEXTS];
@@ -910,7 +907,6 @@ pub static default_palette_y_color_index_cdf: [[[u16;
   ]),
 ];
 
-#[allow(unused)]
 pub static default_palette_uv_color_index_cdf: [[[u16;
   PaletteColor::PALETTE_COLORS as usize];
   PALETTE_COLOR_INDEX_CONTEXTS];

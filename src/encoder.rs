@@ -2908,7 +2908,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
     {
       cw.write_use_palette_mode(
         w,
-        false,
+        None,
         bsize,
         tile_bo,
         luma_mode,
@@ -2916,6 +2916,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         xdec,
         ydec,
         fi.sequence.chroma_sampling,
+        fi.sequence.bit_depth,
       );
     }
 

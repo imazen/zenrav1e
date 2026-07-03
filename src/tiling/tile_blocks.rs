@@ -255,6 +255,21 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
+  /// Records the block's luma palette (or clears it: `pal_sz == 0`) for the
+  /// palette-flag context and neighbor color cache of later blocks. Must be
+  /// kept in sync for every coded block, exactly like rav1d maintains its
+  /// `pal_sz`/`al_pal` above+left state.
+  #[inline(always)]
+  pub fn set_palette_info(
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, pal_sz: u8,
+    palette: &[u16; crate::palette::PALETTE_MAX_SIZE],
+  ) {
+    self.for_each(bo, bsize, |block| {
+      block.pal_sz = pal_sz;
+      block.palette = *palette;
+    });
+  }
+
   #[inline(always)]
   pub fn set_segmentation_idx(
     &mut self, bo: TileBlockOffset, bsize: BlockSize, idx: u8,

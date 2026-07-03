@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use crate::predict::FilterIntraMode;
+use crate::predict::{FilterIntraMode, PaletteColor, PaletteSize};
 use std::marker::PhantomData;
 
 pub const CDF_LEN_MAX: usize = 16;
@@ -71,6 +71,20 @@ pub struct CDFContext {
   pub angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1]; DIRECTIONAL_MODES],
   pub eob_flag_cdf64: [[[u16; 7]; 2]; PLANE_TYPES],
   pub intra_tx_1_cdf: [[[u16; 7]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS],
+  pub palette_y_size_cdf:
+    [[u16; PaletteSize::PALETTE_SIZES as usize]; PALETTE_BSIZE_CTXS],
+  pub palette_uv_size_cdf:
+    [[u16; PaletteSize::PALETTE_SIZES as usize]; PALETTE_BSIZE_CTXS],
+
+  // Color-index CDFs: the used alphabet is the palette size (2..=8), i.e.
+  // only the first `size` entries of each row (count slot at `size - 1`);
+  // the writers take fixed-size sub-array views per palette size.
+  pub palette_y_color_index_cdf: [[[u16; PaletteColor::PALETTE_COLORS as usize];
+    PALETTE_COLOR_INDEX_CONTEXTS];
+    PaletteSize::PALETTE_SIZES as usize],
+  pub palette_uv_color_index_cdf:
+    [[[u16; PaletteColor::PALETTE_COLORS as usize];
+      PALETTE_COLOR_INDEX_CONTEXTS]; PaletteSize::PALETTE_SIZES as usize],
 
   pub cfl_sign_cdf: [u16; CFL_JOINT_SIGNS],
   pub compound_mode_cdf: [[u16; INTER_COMPOUND_MODES]; INTER_MODE_CONTEXTS],
@@ -140,6 +154,10 @@ impl CDFContext {
       filter_intra_mode_cdf: default_filter_intra_mode_cdf,
       palette_y_mode_cdfs: default_palette_y_mode_cdfs,
       palette_uv_mode_cdfs: default_palette_uv_mode_cdfs,
+      palette_y_size_cdf: default_palette_y_size_cdf,
+      palette_uv_size_cdf: default_palette_uv_size_cdf,
+      palette_y_color_index_cdf: default_palette_y_color_index_cdf,
+      palette_uv_color_index_cdf: default_palette_uv_color_index_cdf,
       comp_mode_cdf: default_comp_mode_cdf,
       comp_ref_type_cdf: default_comp_ref_type_cdf,
       comp_ref_cdf: default_comp_ref_cdf,
@@ -238,6 +256,24 @@ impl CDFContext {
     reset_1d!(self.filter_intra_mode_cdf);
     reset_3d!(self.palette_y_mode_cdfs);
     reset_2d!(self.palette_uv_mode_cdfs);
+    reset_2d!(self.palette_y_size_cdf);
+    reset_2d!(self.palette_uv_size_cdf);
+    // The color-index CDFs use a per-palette-size partial alphabet: for
+    // palette size index `i` (palette size `i + 2`) the adaptation count
+    // lives at `[i + 1]`, not at the row's last slot. Mirrors rav1d's
+    // frame-end `update_cdf_2d!(5, k + 1, color_map[l][k])`.
+    for (i, per_size) in self.palette_y_color_index_cdf.iter_mut().enumerate()
+    {
+      for cdf in per_size.iter_mut() {
+        cdf[i + 1] = 0;
+      }
+    }
+    for (i, per_size) in self.palette_uv_color_index_cdf.iter_mut().enumerate()
+    {
+      for cdf in per_size.iter_mut() {
+        cdf[i + 1] = 0;
+      }
+    }
     reset_2d!(self.comp_mode_cdf);
     reset_2d!(self.comp_ref_type_cdf);
     reset_3d!(self.comp_ref_cdf);
@@ -379,6 +415,22 @@ impl CDFContext {
       self.palette_uv_mode_cdfs.first().unwrap().as_ptr() as usize;
     let palette_uv_mode_cdfs_end =
       palette_uv_mode_cdfs_start + size_of_val(&self.palette_uv_mode_cdfs);
+    let palette_y_size_cdf_start =
+      self.palette_y_size_cdf.first().unwrap().as_ptr() as usize;
+    let palette_y_size_cdf_end =
+      palette_y_size_cdf_start + size_of_val(&self.palette_y_size_cdf);
+    let palette_uv_size_cdf_start =
+      self.palette_uv_size_cdf.first().unwrap().as_ptr() as usize;
+    let palette_uv_size_cdf_end =
+      palette_uv_size_cdf_start + size_of_val(&self.palette_uv_size_cdf);
+    let palette_y_color_index_cdf_start =
+      self.palette_y_color_index_cdf.first().unwrap().as_ptr() as usize;
+    let palette_y_color_index_cdf_end = palette_y_color_index_cdf_start
+      + size_of_val(&self.palette_y_color_index_cdf);
+    let palette_uv_color_index_cdf_start =
+      self.palette_uv_color_index_cdf.first().unwrap().as_ptr() as usize;
+    let palette_uv_color_index_cdf_end = palette_uv_color_index_cdf_start
+      + size_of_val(&self.palette_uv_color_index_cdf);
     let comp_mode_cdf_start =
       self.comp_mode_cdf.first().unwrap().as_ptr() as usize;
     let comp_mode_cdf_end =
@@ -516,6 +568,22 @@ impl CDFContext {
         "palette_uv_mode_cdfs",
         palette_uv_mode_cdfs_start,
         palette_uv_mode_cdfs_end,
+      ),
+      ("palette_y_size_cdf", palette_y_size_cdf_start, palette_y_size_cdf_end),
+      (
+        "palette_uv_size_cdf",
+        palette_uv_size_cdf_start,
+        palette_uv_size_cdf_end,
+      ),
+      (
+        "palette_y_color_index_cdf",
+        palette_y_color_index_cdf_start,
+        palette_y_color_index_cdf_end,
+      ),
+      (
+        "palette_uv_color_index_cdf",
+        palette_uv_color_index_cdf_start,
+        palette_uv_color_index_cdf_end,
       ),
       ("comp_mode_cdf", comp_mode_cdf_start, comp_mode_cdf_end),
       ("comp_ref_type_cdf", comp_ref_type_cdf_start, comp_ref_type_cdf_end),
