@@ -178,6 +178,12 @@ pub struct CliOptions {
   /// Still picture mode
   #[clap(long, help_heading = "ENCODE SETTINGS")]
   pub still_picture: bool,
+  /// Palette mode search for intra blocks (AV1 screen content tool):
+  /// off, auto (per-frame screen-content detection), or always.
+  /// Only effective when the sequence allows screen content tools
+  /// (always the case in still picture mode).
+  #[clap(long, value_parser, default_value_t = PaletteMode::Off, help_heading = "ENCODE SETTINGS")]
+  pub palette: PaletteMode,
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
   #[clap(
@@ -672,6 +678,7 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
     });
 
   cfg.still_picture = matches.still_picture;
+  cfg.speed_settings.prediction.palette = matches.palette;
 
   cfg.quantizer = quantizer;
   cfg.min_quantizer = matches.min_quantizer.unwrap_or(0);

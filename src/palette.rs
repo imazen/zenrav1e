@@ -837,3 +837,275 @@ mod test {
     }));
   }
 }
+
+/// Frame-level screen-content estimate: is this content palette/intraBC
+/// friendly? Port of libaom's `estimate_screen_content_antialiasing_aware`
+/// (`av1/encoder/encoder.c:2209-2440` at the pinned rev 632172a4; the
+/// all-intra default detection since aom 3.14.0).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ScreenContentEstimate {
+  /// Frame-level `allow_screen_content_tools` decision (the palette gate).
+  pub allow_screen_content_tools: bool,
+  /// Stricter intraBC decision (loop filters go off, so high-variance
+  /// palettizable blocks are additionally required). Unused until intraBC
+  /// exists; computed because it falls out of the same pass.
+  pub allow_intrabc: bool,
+}
+
+/// Number of distinct values in an 8-bit block, with an early-exit
+/// threshold (libaom `av1_count_colors_with_threshold`): returns
+/// `(colors_seen, under_threshold)` where counting stops as soon as the
+/// threshold is exceeded.
+fn count_colors_u8_threshold(blk: &[u8], threshold: usize) -> (usize, bool) {
+  let mut seen = [false; 256];
+  let mut colors = 0usize;
+  for &v in blk {
+    if !std::mem::replace(&mut seen[v as usize], true) {
+      colors += 1;
+      if colors > threshold {
+        return (colors, false);
+      }
+    }
+  }
+  (colors, true)
+}
+
+/// The most frequent value of an 8-bit block; on ties the value that
+/// reached the winning count first is kept (libaom `av1_find_dominant_value`
+/// iteration order, replicated exactly for determinism).
+fn find_dominant_value(blk: &[u8]) -> u8 {
+  let mut count = [0u32; 256];
+  let mut dominant = 0u8;
+  let mut dominant_count = 0u32;
+  for &v in blk {
+    count[v as usize] += 1;
+    if count[v as usize] > dominant_count {
+      dominant = v;
+      dominant_count = count[v as usize];
+    }
+  }
+  dominant
+}
+
+/// One round of 8-neighborhood dilation of the dominant value (libaom
+/// `av1_dilate_block`): anti-aliased edge pixels adjacent to the dominant
+/// value are absorbed by it, so the re-count below sees through AA text.
+fn dilate_block(src: &[u8], dst: &mut [u8], w: usize, h: usize) {
+  let dominant = find_dominant_value(src);
+  dst[..w * h].copy_from_slice(&src[..w * h]);
+  for r in 0..h {
+    for c in 0..w {
+      if src[r * w + c] == dominant {
+        let r0 = r.saturating_sub(1);
+        let r1 = (r + 1).min(h - 1);
+        let c0 = c.saturating_sub(1);
+        let c1 = (c + 1).min(w - 1);
+        for rr in r0..=r1 {
+          for cc in c0..=c1 {
+            dst[rr * w + cc] = dominant;
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Runs the anti-aliasing-aware screen-content detection over a luma plane.
+///
+/// Per 16x16 block (partial edge blocks skipped, matching libaom):
+/// - <= 4 distinct 8-bit values: palettizable ("simple"); high variance
+///   additionally marks it intraBC-friendly.
+/// - 5..=40 values: dilate the dominant value to absorb anti-aliased
+///   pixels, re-count; <= 6 values *and* variance > 5 -> palettizable +
+///   intraBC-friendly ("complex", the AA-aware part).
+/// - > 40 values: photo-like (penalizes the frame decision at 1/16 weight).
+///
+/// Frame decision: `allow_screen_content_tools` when the palettizable area
+/// (minus the photo penalty) exceeds ~10% of the frame.
+pub fn estimate_screen_content<T: Pixel>(
+  luma: &crate::frame::Plane<T>, bit_depth: usize,
+) -> ScreenContentEstimate {
+  use crate::util::CastFromPrimitive;
+  const BLK: usize = 16;
+  const AREA: usize = BLK * BLK;
+  const SIMPLE_COLOR_THRESH: usize = 4;
+  const COMPLEX_INITIAL_COLOR_THRESH: usize = 40;
+  const COMPLEX_FINAL_COLOR_THRESH: usize = 6;
+  const VAR_THRESH: u64 = 5;
+
+  let width = luma.cfg.width;
+  let height = luma.cfg.height;
+  let frame_area = (width as i64) * (height as i64);
+  let shift = bit_depth.saturating_sub(8);
+
+  let mut count_palette: i64 = 0;
+  let mut count_intrabc: i64 = 0;
+  let mut count_photo: i64 = 0;
+
+  let mut blk8 = [0u8; AREA];
+  let mut dilated = [0u8; AREA];
+
+  let mut r = 0usize;
+  while r + BLK <= height {
+    let mut c = 0usize;
+    while c + BLK <= width {
+      let mut sum = 0u64;
+      let mut sum_sq = 0u64;
+      for y in 0..BLK {
+        let row = luma.row((r + y) as isize);
+        for x in 0..BLK {
+          let v = u64::from(u32::cast_from(row[c + x]));
+          sum += v;
+          sum_sq += v * v;
+          blk8[y * BLK + x] = (v >> shift) as u8;
+        }
+      }
+      // libaom `av1_get_perpixel_variance`: (SSE - sum^2/n) >> log2(n),
+      // on the original bit depth.
+      let var = (sum_sq - ((sum * sum) >> 8)) >> 8;
+
+      let (colors, under_initial) =
+        count_colors_u8_threshold(&blk8, COMPLEX_INITIAL_COLOR_THRESH);
+      if colors > 1 && under_initial {
+        if colors <= SIMPLE_COLOR_THRESH {
+          count_palette += 1;
+          if var > VAR_THRESH {
+            count_intrabc += 1;
+          }
+        } else {
+          dilate_block(&blk8, &mut dilated, BLK, BLK);
+          let (_, under_final) =
+            count_colors_u8_threshold(&dilated, COMPLEX_FINAL_COLOR_THRESH);
+          if under_final && var > VAR_THRESH {
+            count_palette += 1;
+            count_intrabc += 1;
+          }
+        }
+      } else if colors > COMPLEX_INITIAL_COLOR_THRESH {
+        count_photo += 1;
+      }
+      c += BLK;
+    }
+    r += BLK;
+  }
+
+  // Photo-like blocks penalize at 1/16 the weight of a palettizable block;
+  // thresholds are libaom's experimentally chosen 10/12 area ratios.
+  let allow_scc =
+    (count_palette - count_photo / 16) * (AREA as i64) * 10 > frame_area;
+  let allow_intrabc = allow_scc
+    && (count_intrabc - count_photo / 16) * (AREA as i64) * 12 > frame_area;
+  ScreenContentEstimate {
+    allow_screen_content_tools: allow_scc,
+    allow_intrabc,
+  }
+}
+
+#[cfg(test)]
+mod detect_test {
+  use super::*;
+  use crate::frame::Plane;
+
+  fn plane_from(data: &[u8], w: usize) -> Plane<u8> {
+    Plane::from_slice(data, w)
+  }
+
+  /// Few-color blocky content with hard edges -> screen content.
+  #[test]
+  fn detects_synthetic_screen_content() {
+    let (w, h) = (128usize, 128usize);
+    let mut data = vec![0u8; w * h];
+    for j in 0..h {
+      for i in 0..w {
+        // 2-color checkerboard of 8x8 cells (high variance, 2 colors).
+        data[j * w + i] = if (i / 8 + j / 8) % 2 == 0 { 30 } else { 220 };
+      }
+    }
+    let est = estimate_screen_content(&plane_from(&data, w), 8);
+    assert!(est.allow_screen_content_tools);
+    assert!(est.allow_intrabc);
+  }
+
+  /// Anti-aliased text: strokes with a 1-pixel gradient edge. The naive
+  /// color count exceeds the simple threshold, but dominant-value dilation
+  /// absorbs the AA pixels (this is the case classic detection misses).
+  #[test]
+  fn detects_antialiased_text_via_dilation() {
+    let (w, h) = (128usize, 128usize);
+    let mut data = vec![235u8; w * h];
+    for j in 0..h {
+      for i in 0..w {
+        // Vertical strokes every 6 px with AA edges of varying intensity.
+        match i % 6 {
+          0 => data[j * w + i] = 16,
+          1 => data[j * w + i] = 60 + ((i + j) % 8) as u8, // AA edge noise
+          5 => data[j * w + i] = 140 + ((i * 7 + j) % 8) as u8, // AA edge
+          _ => {}
+        }
+      }
+    }
+    // Sanity: a block has more than 4 distinct values (naive count fails)...
+    let (colors, _) = count_colors_u8_threshold(&data[..16 * 16], 40);
+    assert!(colors > 4, "test content must exceed the simple threshold");
+    // ...but the AA-aware pass still detects it.
+    let est = estimate_screen_content(&plane_from(&data, w), 8);
+    assert!(est.allow_screen_content_tools);
+  }
+
+  /// Photo-like noise: every block has far more than 40 distinct values.
+  #[test]
+  fn rejects_photo_like_noise() {
+    let (w, h) = (128usize, 128usize);
+    let mut s: u32 = 0xdead_beef;
+    let mut data = vec![0u8; w * h];
+    for px in data.iter_mut() {
+      s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+      *px = (s >> 24) as u8;
+    }
+    let est = estimate_screen_content(&plane_from(&data, w), 8);
+    assert!(!est.allow_screen_content_tools);
+    assert!(!est.allow_intrabc);
+  }
+
+  /// Smooth gradient: blocks stay under the color threshold only via the
+  /// 8-bit domain, but variance is low and dilation doesn't collapse a
+  /// gradient to <= 6 values -> not screen content. (The near-flat
+  /// photographic gradient is exactly libaom's b:421196988 overuse case.)
+  #[test]
+  fn rejects_smooth_gradient() {
+    let (w, h) = (128usize, 128usize);
+    let mut data = vec![0u8; w * h];
+    for j in 0..h {
+      for i in 0..w {
+        data[j * w + i] = ((i + j) * 255 / (w + h)) as u8;
+      }
+    }
+    let est = estimate_screen_content(&plane_from(&data, w), 8);
+    assert!(!est.allow_screen_content_tools);
+  }
+
+  /// Solid frames have nothing to gain (1 color -> neither palette nor
+  /// photo) -> detection false.
+  #[test]
+  fn rejects_solid_frame() {
+    let data = vec![128u8; 64 * 64];
+    let est = estimate_screen_content(&plane_from(&data, 64), 8);
+    assert!(!est.allow_screen_content_tools);
+  }
+
+  /// 10-bit input down-converts to the 8-bit domain for counting but uses
+  /// native values for variance, matching libaom's HBD path.
+  #[test]
+  fn hbd_downconverts_for_counting() {
+    let (w, h) = (64usize, 64usize);
+    let mut data = vec![0u16; w * h];
+    for j in 0..h {
+      for i in 0..w {
+        data[j * w + i] = if (i / 8 + j / 8) % 2 == 0 { 120 } else { 880 };
+      }
+    }
+    let plane: Plane<u16> = Plane::from_slice(&data, w);
+    let est = estimate_screen_content(&plane, 10);
+    assert!(est.allow_screen_content_tools);
+  }
+}

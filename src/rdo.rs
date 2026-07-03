@@ -1823,7 +1823,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   // pays the full palette header cost (flag + size + colors + index map)
   // -- libaom's `discount_color_cost` bias (their overuse bug b:421196988)
   // is deliberately not ported.
-  if fi.config.speed_settings.prediction.palette
+  if fi.config.speed_settings.prediction.palette != PaletteMode::Off
     && fi.allow_screen_content_tools > 0
     && !fi.frame_type.has_inter()
     && bsize.ge_8x8_ordinal()

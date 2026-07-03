@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use arg_enum_proc_macro::ArgEnum;
 use num_derive::*;
 
 use crate::partition::BlockSize;
@@ -104,7 +105,7 @@ impl Default for SpeedSettings {
         fine_directional_intra: true,
         // Default off pending RD measurement; enable per-encode for screen
         // content.
-        palette: false,
+        palette: PaletteMode::Off,
       },
       motion: MotionSpeedSettings {
         include_near_mvs: true,
@@ -300,10 +301,28 @@ pub struct PredictionSpeedSettings {
 
   /// Search palette mode for intra blocks (AV1 screen content tool).
   ///
-  /// Only takes effect when screen content tools are signaled for the frame
-  /// (always the case for still pictures). Slower; helps screen content
-  /// (text, plots, UI) and is wasted work on photographic content.
-  pub palette: bool,
+  /// Only takes effect when the sequence allows screen content tools
+  /// (always the case for still pictures). Helps screen content (text,
+  /// plots, UI); wasted work on photographic content — `Auto` runs a
+  /// per-frame detection pass to decide.
+  pub palette: PaletteMode,
+}
+
+/// Palette mode search policy (AV1 screen content tool).
+#[derive(
+  ArgEnum, Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize,
+)]
+pub enum PaletteMode {
+  /// Never search palette mode.
+  #[default]
+  Off,
+  /// Decide per frame with the anti-aliasing-aware screen-content
+  /// detection (libaom's `estimate_screen_content_antialiasing_aware`):
+  /// photographic frames skip the search (and don't signal screen content
+  /// tools), screen-like frames get it.
+  Auto,
+  /// Always search palette mode on intra frames.
+  Always,
 }
 
 /// Range of block sizes to use.

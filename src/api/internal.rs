@@ -629,6 +629,23 @@ impl<T: Pixel> ContextInner<T> {
         self.gop_input_frameno_start[&output_frameno],
         t35_metadata,
       );
+      // Palette `Auto`: the per-frame anti-aliasing-aware screen-content
+      // detection decides `allow_screen_content_tools` (the frame-header
+      // bit AND the palette-search gate). Photographic frames drop the
+      // screen-content signaling entirely; screen-like frames keep it.
+      // Only meaningful when the sequence leaves the choice open
+      // (`force_screen_content_tools == 2`, e.g. still pictures).
+      if self.config.speed_settings.prediction.palette
+        == crate::api::config::PaletteMode::Auto
+        && self.seq.force_screen_content_tools == 2
+        && let Some(Some(frame)) = self.frame_q.get(&input_frameno)
+      {
+        let est = crate::palette::estimate_screen_content(
+          &frame.planes[0],
+          self.config.bit_depth,
+        );
+        fi.allow_screen_content_tools = est.allow_screen_content_tools as u32;
+      }
       #[cfg(feature = "stop")]
       {
         fi.stop = crate::encoder::StopToken::new(self.stop.clone());

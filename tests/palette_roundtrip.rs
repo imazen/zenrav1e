@@ -60,7 +60,7 @@ fn psnr(a: &[u8], b: &[u8]) -> f64 {
 
 fn encode(
   sy: &[u8], su: &[u8], sv: &[u8], w: usize, h: usize, q: usize, speed: u8,
-  palette: bool,
+  palette: PaletteMode,
 ) -> Vec<u8> {
   let mut ss = SpeedSettings::from_preset(speed);
   ss.prediction.palette = palette;
@@ -154,8 +154,8 @@ fn palette_on_output_is_decodable_and_beats_off_on_screen_content() {
   // Speed 6 uses the topdown partition path, speed 2 exercises bottomup
   // (both reach the palette RDO through different encode_block callers).
   for (q, speed) in [(80usize, 6u8), (140, 6), (80, 2)] {
-    let off = encode(&sy, &su, &sv, w, h, q, speed, false);
-    let on = encode(&sy, &su, &sv, w, h, q, speed, true);
+    let off = encode(&sy, &su, &sv, w, h, q, speed, PaletteMode::Off);
+    let on = encode(&sy, &su, &sv, w, h, q, speed, PaletteMode::Always);
     // The palette search must actually fire on this content: byte-equal
     // streams would mean the tool was never chosen and this test proves
     // nothing.
@@ -229,5 +229,48 @@ fn palette_on_output_is_decodable_and_beats_off_on_screen_content() {
     any_diff,
     "palette-on and palette-off produced identical streams at every q — \
      the palette search never chose palette mode on synthetic screen content"
+  );
+}
+
+#[test]
+fn palette_auto_mode_follows_screen_content_detection() {
+  let (w, h) = (256usize, 256usize);
+
+  // Screen content: Auto must behave like Always (detection fires).
+  let (sy, su, sv) = synth_screen(w, h);
+  let always = encode(&sy, &su, &sv, w, h, 100, 6, PaletteMode::Always);
+  let auto = encode(&sy, &su, &sv, w, h, 100, 6, PaletteMode::Auto);
+  assert_eq!(
+    auto, always,
+    "Auto must equal Always on screen content (detection should fire)"
+  );
+
+  // Photo-like noise: Auto must disable screen content tools entirely; the
+  // stream then differs from Off (which still signals scc for still
+  // pictures and writes per-block palette=false flags) but must stay
+  // decodable and quality-equivalent.
+  let mut s: u32 = 0x1234_5678;
+  let mut rng = move || {
+    s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+    (s >> 24) as u8
+  };
+  let ny: Vec<u8> = (0..w * h).map(|_| rng()).collect();
+  let nu: Vec<u8> = (0..w * h / 4).map(|_| rng()).collect();
+  let nv: Vec<u8> = (0..w * h / 4).map(|_| rng()).collect();
+  let off = encode(&ny, &nu, &nv, w, h, 100, 6, PaletteMode::Off);
+  let auto = encode(&ny, &nu, &nv, w, h, 100, 6, PaletteMode::Auto);
+  // scc=0 saves the per-DC-block false flags, so auto <= off in bytes.
+  assert!(
+    auto.len() <= off.len(),
+    "photo Auto ({}) should not exceed Off ({}): scc=0 drops flag bits",
+    auto.len(),
+    off.len()
+  );
+  let (dy, _, _) = decode(&auto, w, h);
+  let (oy, _, _) = decode(&off, w, h);
+  let (pa, po) = (psnr(&ny, &dy), psnr(&ny, &oy));
+  assert!(
+    (pa - po).abs() < 0.35,
+    "photo Auto vs Off quality diverged: {pa:.2} vs {po:.2}"
   );
 }
