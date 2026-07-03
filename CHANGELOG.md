@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Skipped intra blocks now write their prediction into the recon**
+  (b30dd752): `write_tx_blocks` early-returned on skip, so any intra block
+  whose residual quantized to zero (coded skip=1) left stale RDO-trial
+  pixels in the recon buffer; every later intra prediction chained off
+  them — valid bitstreams whose decoded image drifts from the encoder's
+  intent (measured luma RMSE 67.7 -> 45.6 end-to-end on a smooth gray
+  photo at s2 q100; the remainder is zenrav1e#32/#33). Not byte-identical
+  to previous encodes wherever a forced-skip intra block occurred.
+
+### Known Issues
+- **LRF (loop restoration) desyncs encoder recon from conforming decoders**
+  on smooth content at speeds <= 7 (zenrav1e#32): aomdec and rav1d-safe
+  agree with each other and both differ from the encoder recon by up to
+  ~50 luma RMSE. `--lrf false` isolates it (added, b30dd752).
+- **filter-intra predictor desyncs encoder recon from conforming decoders**
+  at speeds <= 6 (zenrav1e#33; sequence-enabled when prediction_modes >=
+  ComplexKeyframes). `--filter-intra false` isolates it (added, 49982460).
+  Both desyncs systematically depress decoded-quality measurements of
+  zenrav1e output (rd_gap, tune sweeps) wherever the tools fire.
+
 ### Added
 - **QM-weighted RD distortion for `Tune::Ssimulacra2`** (the
   `dist_metric=AOM_DIST_METRIC_QM_PSNR` analog, adapted): the tune's luma
