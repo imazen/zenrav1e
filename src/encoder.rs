@@ -29,6 +29,7 @@ use crate::header::*;
 use crate::lrf::*;
 use crate::mc::{FilterMode, MotionVector};
 use crate::me::*;
+use crate::palette::PaletteData;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
@@ -2093,6 +2094,24 @@ fn select_sb_delta_q(
   (sign * units, qidx as u8)
 }
 
+/// Fills a rectangular region of the luma recon from a palette color index
+/// map (rav1d: `pal_pred`): each destination pixel becomes the palette color
+/// selected by the co-located map entry. `(x0, y0)` locate the region inside
+/// the map, whose row stride is `map_stride`.
+fn fill_palette_prediction<T: Pixel>(
+  dst: &mut PlaneRegionMut<'_, T>, pal: &PaletteData, map_stride: usize,
+  x0: usize, y0: usize, w: usize, h: usize,
+) {
+  debug_assert!(x0 + w <= map_stride);
+  debug_assert!(pal.map.len() >= (y0 + h) * map_stride);
+  for (y, dst_row) in dst.rows_iter_mut().take(h).enumerate() {
+    let map_row = &pal.map[(y0 + y) * map_stride + x0..][..w];
+    for (dst_px, &idx) in dst_row.iter_mut().zip(map_row.iter()) {
+      *dst_px = T::cast_from(pal.colors[idx as usize]);
+    }
+  }
+}
+
 /// For a transform block,
 /// predict, transform, quantize, write coefficients to a bitstream,
 /// dequantize, inverse-transform.
@@ -2131,6 +2150,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   need_recon_pixel: bool,
   use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  // Luma palette for the enclosing partition: plane 0 predicts by palette
+  // lookup (no intra edges) and the residual path is unchanged.
+  palette: Option<&PaletteData>,
   // The `PartitionType` that produced this block from its immediate parent
   // (mirrors libaom's `mbmi->partition`; zenrav1e#27) -- selects the
   // VERT_A/VERT_B traversal-order tables in has_top_right/has_bottom_left.
@@ -2191,7 +2213,25 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   let frame_bo = ts.to_frame_block_offset(tx_bo);
   let rec = &mut ts.rec.planes[p];
 
-  if mode.is_intra() {
+  if mode.is_intra()
+    && p == 0
+    && let Some(pal) = palette
+  {
+    // Palette prediction replaces intra prediction for luma: fill this tx
+    // block's region from the color index map (rav1d: `pal_pred`). No
+    // intra edges are involved, and the residual path below is unchanged.
+    let x0 = (tx_bo.0.x - tile_partition_bo.0.x) << MI_SIZE_LOG2;
+    let y0 = (tx_bo.0.y - tile_partition_bo.0.y) << MI_SIZE_LOG2;
+    fill_palette_prediction(
+      &mut rec.subregion_mut(area),
+      pal,
+      bsize.width(),
+      x0,
+      y0,
+      tx_size.width(),
+      tx_size.height(),
+    );
+  } else if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
     let mut edge_buf = Aligned::uninit_array();
     let edge_buf = get_intra_edges(
@@ -2713,6 +2753,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   enc_stats: Option<&mut EncoderStats>,
   use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  // Luma palette when palette mode was chosen for this (intra) block.
+  palette: Option<&PaletteData>,
   // The `PartitionType` that produced `tile_bo`/`bsize` from its immediate
   // parent (mirrors libaom's `mbmi->partition`; zenrav1e#27), threaded down
   // to `encode_tx_block` for has_top_right/has_bottom_left. Only ever
@@ -2746,6 +2788,17 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   cw.bc.blocks.set_tx_size(tile_bo, bsize, tx_size);
   cw.bc.blocks.set_ref_frames(tile_bo, bsize, ref_frames);
   cw.bc.blocks.set_motion_vectors(tile_bo, bsize, mvs);
+  // Palette state must be written for every block (cleared when unused):
+  // it feeds the palette-flag context and neighbor color cache of later
+  // blocks, mirroring rav1d's pal_sz/al_pal above+left state.
+  {
+    let mut colors = [0u16; crate::palette::PALETTE_MAX_SIZE];
+    let pal_sz = palette.map_or(0, |pal| {
+      colors[..pal.size()].copy_from_slice(&pal.colors);
+      pal.size() as u8
+    });
+    cw.bc.blocks.set_palette_info(tile_bo, bsize, pal_sz, &colors);
+  }
 
   // Per-SB delta symbols, coded once at the first block of each superblock
   // (AV1 spec 5.11.28: after cdef, before mode info). The spec omits them
@@ -2908,7 +2961,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
     {
       cw.write_use_palette_mode(
         w,
-        None,
+        palette,
         bsize,
         tile_bo,
         luma_mode,
@@ -2920,7 +2973,12 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       );
     }
 
+    // The decoder reads the filter-intra flag only for non-palette DC
+    // blocks (rav1d gates it on `pal_sz[0] == 0`), so it must not be
+    // written when a palette is in use.
+    debug_assert!(palette.is_none() || !use_filter_intra);
     if fi.sequence.enable_filter_intra
+      && palette.is_none()
       && luma_mode == PredictionMode::DC_PRED
       && bsize.width() <= 32
       && bsize.height() <= 32
@@ -2929,6 +2987,27 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       if use_filter_intra {
         cw.write_filter_intra_mode(w, filter_intra_mode);
       }
+    }
+
+    // The color index map is coded after the (suppressed) filter-intra
+    // flag and before the tx size, exactly where rav1d reads it.
+    if let Some(pal) = palette {
+      debug_assert!(luma_mode == PredictionMode::DC_PRED);
+      let frame_bo = ts.to_frame_block_offset(tile_bo);
+      // Visible dimensions, clipped to the frame edge (the map itself
+      // always spans the full block; only visible samples are coded).
+      let cols = bsize.width().min((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2);
+      let rows =
+        bsize.height().min((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2);
+      debug_assert_eq!(pal.map.len(), bsize.width() * bsize.height());
+      cw.write_palette_y_color_index_map(
+        w,
+        &pal.map,
+        bsize.width(),
+        rows,
+        cols,
+        pal.size(),
+      );
     }
   }
 
@@ -3057,6 +3136,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       need_recon_pixel,
       use_filter_intra,
       filter_intra_mode,
+      palette,
       partition,
     )
   }
@@ -3084,11 +3164,32 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   need_recon_pixel: bool,
   use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
+  palette: Option<&PaletteData>,
   // See `encode_tx_block`'s doc comment (zenrav1e#27). RDO-trial call
   // sites that are rolled back regardless may pass `PARTITION_NONE`.
   partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
   if skip {
+    // A skipped palette block still reconstructs by palette lookup on the
+    // decoder (rav1d runs `pal_pred` before it looks at skip), so the luma
+    // recon must be filled here or later intra predictions diverge from
+    // the decoder. All-zero residual is the *common* case for palette.
+    if let Some(pal) = palette {
+      let area = Area::BlockRect {
+        bo: tile_bo.0,
+        width: bsize.width(),
+        height: bsize.height(),
+      };
+      fill_palette_prediction(
+        &mut ts.rec.planes[0].subregion_mut(area),
+        pal,
+        bsize.width(),
+        0,
+        0,
+        bsize.width(),
+        bsize.height(),
+      );
+    }
     return (false, ScaledDistortion::zero());
   }
   let bw = bsize.width_mi() / tx_size.width_mi();
@@ -3146,6 +3247,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         need_recon_pixel,
         use_filter_intra,
         filter_intra_mode,
+        palette,
         partition,
       );
       partition_has_coeff |= has_coeff;
@@ -3251,6 +3353,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
           need_recon_pixel,
           false, // filter intra is luma-only
           FilterIntraMode::FILTER_DC_PRED,
+          None, // palette is luma-only
           partition,
         );
         partition_has_coeff |= has_coeff;
@@ -3340,6 +3443,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
         need_recon_pixel,
         use_filter_intra,
         filter_intra_mode,
+        None, // write_tx_tree is the inter path; palette is intra-only
         partition,
       );
       partition_has_coeff |= has_coeff;
@@ -3436,6 +3540,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
           need_recon_pixel,
           false, // filter intra is luma-only
           FilterIntraMode::FILTER_DC_PRED,
+          None, // palette is luma-only (and this is the inter path)
           partition,
         );
         partition_has_coeff |= has_coeff;
@@ -3464,6 +3569,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
 ) {
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
+  let palette = mode_decision.palette.as_deref();
   let cfl = mode_decision.pred_cfl_params;
   let ref_frames = mode_decision.ref_frames;
   let mvs = mode_decision.mvs;
@@ -3520,6 +3626,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     enc_stats,
     mode_decision.use_filter_intra,
     mode_decision.filter_intra_mode,
+    palette,
     partition,
   );
 }
@@ -4179,6 +4286,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         Some(enc_stats),
         part_decision.use_filter_intra,
         part_decision.filter_intra_mode,
+        part_decision.palette.as_deref(),
         parent_partition,
       );
     }

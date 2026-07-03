@@ -102,6 +102,9 @@ impl Default for SpeedSettings {
       prediction: PredictionSpeedSettings {
         prediction_modes: PredictionModesSetting::ComplexAll,
         fine_directional_intra: true,
+        // Default off pending RD measurement; enable per-encode for screen
+        // content.
+        palette: false,
       },
       motion: MotionSpeedSettings {
         include_near_mvs: true,
@@ -294,6 +297,13 @@ pub struct PredictionSpeedSettings {
 
   /// Use fine directional intra prediction
   pub fine_directional_intra: bool,
+
+  /// Search palette mode for intra blocks (AV1 screen content tool).
+  ///
+  /// Only takes effect when screen content tools are signaled for the frame
+  /// (always the case for still pictures). Slower; helps screen content
+  /// (text, plots, UI) and is wasted work on photographic content.
+  pub palette: bool,
 }
 
 /// Range of block sizes to use.

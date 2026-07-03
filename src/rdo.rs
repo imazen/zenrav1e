@@ -12,6 +12,7 @@
 
 use std::fmt;
 use std::mem::MaybeUninit;
+use std::sync::Arc;
 
 use arrayvec::*;
 use itertools::izip;
@@ -34,6 +35,10 @@ use crate::me::MVSamplingMode;
 use crate::me::MotionSearchResult;
 use crate::me::estimate_motion;
 use crate::motion_compensate;
+use crate::palette::{
+  MAX_PALETTE_BLOCK_SIZE, PALETTE_COLOR_COUNT_THRESH, PaletteData,
+  build_index_map, flatten_block, palette_candidates_y,
+};
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
@@ -104,6 +109,9 @@ pub struct PartitionParameters {
   pub sidx: u8,
   pub use_filter_intra: bool,
   pub filter_intra_mode: FilterIntraMode,
+  /// Luma palette (colors + index map) when palette mode won the RDO;
+  /// `Arc` keeps the per-mode clones cheap.
+  pub palette: Option<Arc<PaletteData>>,
 }
 
 impl Default for PartitionParameters {
@@ -125,6 +133,7 @@ impl Default for PartitionParameters {
       sidx: 0,
       use_filter_intra: false,
       filter_intra_mode: FilterIntraMode::FILTER_DC_PRED,
+      palette: None,
     }
   }
 }
@@ -1028,6 +1037,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           None,
           false,
           FilterIntraMode::FILTER_DC_PRED,
+          None,
           PartitionType::PARTITION_NONE,
         );
 
@@ -1062,6 +1072,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           best.tx_type = tx_type;
           best.sidx = sidx;
           best.use_filter_intra = false;
+          best.palette = None;
           zero_distortion = is_zero_dist;
         }
 
@@ -1171,6 +1182,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
       best.use_filter_intra,
       best.filter_intra_mode,
+      best.palette.as_deref(),
       PartitionType::PARTITION_NONE,
     );
     cw.rollback(&cw_checkpoint);
@@ -1214,6 +1226,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         None,
         false,
         FilterIntraMode::FILTER_DC_PRED,
+        best.palette.as_deref(),
         PartitionType::PARTITION_NONE,
       );
 
@@ -1258,6 +1271,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     sidx: best.sidx,
     use_filter_intra: best.use_filter_intra,
     filter_intra_mode: best.filter_intra_mode,
+    palette: best.palette,
   }
 }
 
@@ -1758,6 +1772,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           None,
           true,
           fi_mode,
+          None,
           PartitionType::PARTITION_NONE,
         );
 
@@ -1791,9 +1806,176 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           best.sidx = sidx;
           best.use_filter_intra = true;
           best.filter_intra_mode = fi_mode;
+          best.palette = None;
         }
 
         cw.rollback(cw_checkpoint);
+      }
+    }
+  }
+
+  // Try palette mode (AV1 screen content tool): DC_PRED with the predictor
+  // replaced by a small color table + per-pixel index map. The block gate
+  // mirrors libaom's `av1_allow_palette` (and the write-side gate in
+  // `encode_block_post_cdef`); candidate palettes come from
+  // `crate::palette` (top-color + k-means families, libaom's RD-path
+  // search). Trials run the real bitstream writers, so the RD comparison
+  // pays the full palette header cost (flag + size + colors + index map)
+  // -- libaom's `discount_color_cost` bias (their overuse bug b:421196988)
+  // is deliberately not ported.
+  if fi.config.speed_settings.prediction.palette
+    && fi.allow_screen_content_tools > 0
+    && !fi.frame_type.has_inter()
+    && bsize.ge_8x8_ordinal()
+    && bsize.width() <= MAX_PALETTE_BLOCK_SIZE
+    && bsize.height() <= MAX_PALETTE_BLOCK_SIZE
+    && !fi.is_lossless()
+  {
+    // Only fully-visible blocks are searched: the cropped-map coding of
+    // frame-edge blocks is not wired up (the writers take visible dims,
+    // but the search/recon assume the full block is coded).
+    let frame_bo = ts.to_frame_block_offset(tile_bo);
+    let fully_visible = frame_bo.0.x + bsize.width_mi() <= fi.w_in_b
+      && frame_bo.0.y + bsize.height_mi() <= fi.h_in_b;
+    if fully_visible {
+      use crate::segmentation::select_segment;
+
+      let rows = bsize.height();
+      let cols = bsize.width();
+      let src = ts.input_tile.planes[0]
+        .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+      let data = flatten_block(&src, rows, cols);
+      let cache = cw.palette_cache_y(tile_bo);
+      let mut histogram = vec![0u32; 1 << fi.sequence.bit_depth];
+      let candidates = palette_candidates_y(
+        &data,
+        fi.sequence.bit_depth,
+        &cache,
+        &mut histogram,
+      );
+      debug_assert!(
+        candidates.iter().all(|c| c.len() <= PALETTE_COLOR_COUNT_THRESH)
+      );
+
+      if !candidates.is_empty() {
+        // Fixed transform for palette candidates: the residual after
+        // palette prediction is sparse/near-zero, so the largest legal
+        // transform with DCT_DCT stands in for a per-candidate tx search
+        // at a fraction of the cost.
+        let mut tx_size = max_txsize_rect_lookup[bsize as usize];
+        if matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64) {
+          // Same unvalidated-sliver-transform cap as `rdo_tx_size_type`.
+          tx_size = sub_tx_size_map[tx_size as usize];
+        }
+        let tx_type = TxType::DCT_DCT;
+
+        let luma_mode = PredictionMode::DC_PRED;
+        let chroma_mode = PredictionMode::DC_PRED;
+        let mvs = [MotionVector::default(); 2];
+        let ref_frames = [RefType::INTRA_FRAME, RefType::NONE_FRAME];
+        let angle_delta = AngleDelta::default();
+
+        for cand in candidates {
+          let map = build_index_map(&data, &cand);
+          let pal = Arc::new(PaletteData { colors: cand, map });
+          for sidx in select_segment(fi, ts, tile_bo, bsize, false) {
+            cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
+
+            let wr = &mut WriterCounter::new();
+            let tell = wr.tell_frac();
+            if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+              cw.write_partition(
+                wr,
+                tile_bo,
+                PartitionType::PARTITION_NONE,
+                bsize,
+              );
+            }
+            let need_recon_pixel = tx_size.block_size() != bsize;
+
+            encode_block_pre_cdef(
+              &fi.sequence,
+              ts,
+              cw,
+              wr,
+              bsize,
+              tile_bo,
+              false,
+            );
+            // Rolled back below (`cw.rollback(cw_checkpoint)`) regardless
+            // of outcome -- an RDO trial, never the persisted commit
+            // (zenrav1e#27).
+            let (has_coeff, tx_dist) = encode_block_post_cdef(
+              fi,
+              ts,
+              cw,
+              wr,
+              luma_mode,
+              chroma_mode,
+              angle_delta,
+              ref_frames,
+              mvs,
+              bsize,
+              tile_bo,
+              false,
+              CFLParams::default(),
+              tx_size,
+              tx_type,
+              0,
+              &[],
+              rdo_type,
+              need_recon_pixel,
+              None,
+              false,
+              FilterIntraMode::FILTER_DC_PRED,
+              Some(&pal),
+              PartitionType::PARTITION_NONE,
+            );
+
+            let rate = wr.tell_frac() - tell;
+            let distortion =
+              if fi.use_tx_domain_distortion && !need_recon_pixel {
+                compute_tx_distortion(
+                  fi,
+                  ts,
+                  bsize,
+                  is_chroma_block,
+                  tile_bo,
+                  tx_dist,
+                  false,
+                  false,
+                )
+              } else {
+                compute_distortion(
+                  fi,
+                  ts,
+                  bsize,
+                  is_chroma_block,
+                  tile_bo,
+                  false,
+                )
+              };
+            let rd = compute_rd_cost(fi, rate, distortion);
+            if rd < best.rd_cost {
+              best.rd_cost = rd;
+              best.pred_mode_luma = luma_mode;
+              best.pred_mode_chroma = chroma_mode;
+              best.angle_delta = angle_delta;
+              best.ref_frames = ref_frames;
+              best.mvs = mvs;
+              best.skip = false;
+              best.has_coeff = has_coeff;
+              best.tx_size = tx_size;
+              best.tx_type = tx_type;
+              best.sidx = sidx;
+              best.use_filter_intra = false;
+              best.filter_intra_mode = FilterIntraMode::FILTER_DC_PRED;
+              best.palette = Some(Arc::clone(&pal));
+            }
+
+            cw.rollback(cw_checkpoint);
+          }
+        }
       }
     }
   }
@@ -2059,6 +2241,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         need_recon_pixel,
         use_filter_intra,
         filter_intra_mode,
+        None, // palette candidates use a fixed tx, never tx-type RDO
         PartitionType::PARTITION_NONE,
       )
     };

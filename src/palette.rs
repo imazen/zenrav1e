@@ -36,19 +36,16 @@ pub const PALETTE_CACHE_SIZE: usize = 2 * PALETTE_MAX_SIZE;
 
 /// Largest block edge that palette mode applies to (AV1 spec: both
 /// dimensions must be <= 64).
-#[allow(dead_code)] // used by the RDO palette search (landing next)
 pub const MAX_PALETTE_BLOCK_SIZE: usize = 64;
 
 /// Upper bound on candidates returned by [`palette_candidates_y`]:
 /// 7 top-color sizes + 7 k-means sizes.
-#[allow(dead_code)] // used by the RDO palette search (landing next)
 pub const MAX_PALETTE_CANDIDATES: usize = 14;
 
 /// Encoder-side gate on the number of distinct colors in a block for the
 /// palette search to run at all, mirroring libaom's RD-path default
 /// (`x->color_palette_thresh = 64`). Blocks with more distinct (8-bit
 /// domain) colors than this are photographic, not palettizable.
-#[allow(dead_code)] // used by the RDO palette search (landing next)
 pub const PALETTE_COLOR_COUNT_THRESH: usize = 64;
 
 /// A sorted, deduplicated set of palette colors for one plane.
@@ -452,7 +449,6 @@ fn finish_candidate(
 
 /// Flattens a block's source pixels into row-major `i16` data (libaom's
 /// `fill_data_and_get_bounds` shape; bounds come from [`count_colors`]).
-#[allow(dead_code)] // used by the RDO palette search (landing next)
 pub fn flatten_block<T: Pixel>(
   src: &crate::tiling::PlaneRegion<'_, T>, rows: usize, cols: usize,
 ) -> Vec<i16> {
@@ -475,7 +471,6 @@ pub fn flatten_block<T: Pixel>(
 ///
 /// Returns an empty list when the block is not palettizable
 /// (`colors <= 1 || colors > PALETTE_COLOR_COUNT_THRESH`).
-#[allow(dead_code)] // used by the RDO palette search (landing next)
 pub fn palette_candidates_y(
   data: &[i16], bit_depth: usize, cache: &[u16], histogram: &mut [u32],
 ) -> ArrayVec<PaletteColors, MAX_PALETTE_CANDIDATES> {
@@ -556,7 +551,6 @@ pub fn palette_candidates_y(
 /// Builds the color index map for a block given its final palette: nearest
 /// color, lowest index winning ties (libaom's `av1_calc_indices` on the
 /// final integer palette).
-#[allow(dead_code)] // used by the RDO palette search (landing next)
 pub fn build_index_map(data: &[i16], colors: &[u16]) -> Vec<u8> {
   let cents: ArrayVec<i16, PALETTE_MAX_SIZE> =
     colors.iter().map(|&c| c as i16).collect();
