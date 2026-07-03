@@ -20,6 +20,25 @@
   `docs/RD_GAP_VS_LIBAOM.md` "Size-decay isolation A/B".
 
 ### Fixed
+- **4:2:0 chroma TU grid truncated to zero for 4:1 slivers** (#35): the
+  chroma TU-loop bounds in `write_tx_blocks`/`write_tx_tree` shifted each
+  mi dimension by the subsampling and patched zeros with a 1x1 fallback --
+  correct for the classic 4x4..8x8 pairing shapes, but for BLOCK_16X4 in
+  4:2:0 the fallback clobbered the 2x1-mi coded-chroma extent and the
+  division by TX_8X4's 2-mi width truncated the loop to ZERO iterations:
+  no chroma TUs written (nor predicted into the recon) while conforming
+  decoders parse a TX_8X4 TU there (`Subsampled_Size[16X4][1][1] = 8X4`,
+  spec 5.11.38). Every 4:2:0 encode choosing HORZ_4/VERT_4 with coded
+  chroma desynced (found as zenavif#29: ravif's `--yuv 420` output was
+  100% aomdec-rejected; 4:4:4 unaffected, which is why 7d254289's
+  110-cell conformance sweep -- run at cavif's default 4:4:4 -- missed
+  it). The grid is now derived from `BlockSize::subsampled_size` (the
+  spec's paired chroma block size), byte-identical for every
+  previously-working shape (36/36 4:4:4 corpus cells md5-equal pre/post).
+  Verified 258/258 4:2:0 corpus cells aomdec-clean + aomdec/rav1d-safe
+  raw md5 agreement; regression gate `tests/sliver_chroma_roundtrip.rs`
+  fails pre-fix (rav1d-safe `InvalidData`) and is liveness-checked.
+  Master-only: crates.io 0.1.4 predates the topdown 4-way types.
 - **Intra 64x64-parent 4-way slivers now require TX_MODE_SELECT** (1dabba91,
   #34): the 3fa735dc sliver TX cap (TX_64X16/16X64 -> TX_32X16/16X32) is
   decoder-followable only via the written intra tx-size depth -- a

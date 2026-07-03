@@ -3498,16 +3498,27 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
     bsize.largest_chroma_tx_size(xdec, ydec)
   };
 
-  let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
-  let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
-
-  if bw_uv == 0 || bh_uv == 0 {
-    bw_uv = 1;
-    bh_uv = 1;
-  }
-
-  bw_uv /= uv_tx_size.width_mi();
-  bh_uv /= uv_tx_size.height_mi();
+  // Chroma TU grid: how many `uv_tx_size` TUs tile this block's CODED
+  // chroma. `subsampled_size` is the paired chroma block size (AV1
+  // `Subsampled_Size`, spec 5.11.38): for a sub-8px dimension under
+  // subsampling, the 4:2:0 pairing rule keeps the coded chroma block's
+  // span in that axis (e.g. BLOCK_16X4 -> BLOCK_8X4, height NOT halved),
+  // so a plain division by the TU dimensions is the decoder's TU count.
+  //
+  // The previous per-axis mi-shift (`width_mi >> xdec`) with a 1x1
+  // fallback was only correct while every reachable sliver was at most
+  // 8px in its long dimension: for BLOCK_16X4 in 4:2:0 it truncated the
+  // 2x1-mi coded chroma to 1x1, and the subsequent division by TX_8X4's
+  // 2-mi width truncated the TU loop bound to ZERO (1/2 == 0) -- no
+  // chroma TUs were written (nor predicted into the recon) for a block
+  // conforming decoders parse a TX_8X4 TU for, desyncing every 4:2:0
+  // encode that picked a HORZ_4/VERT_4 partition on a 16x16 parent
+  // (zenrav1e#35 / zenavif#29).
+  let plane_bsize = bsize
+    .subsampled_size(xdec, ydec)
+    .expect("chroma TU grid requires a subsampable block size");
+  let bw_uv = plane_bsize.width_mi() / uv_tx_size.width_mi();
+  let bh_uv = plane_bsize.height_mi() / uv_tx_size.height_mi();
 
   let ac_data = if chroma_mode.is_cfl() {
     luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi)
@@ -3696,16 +3707,15 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
     bsize.largest_chroma_tx_size(xdec, ydec)
   };
 
-  let mut bw_uv = max_tx_size.width_mi() >> xdec;
-  let mut bh_uv = max_tx_size.height_mi() >> ydec;
-
-  if bw_uv == 0 || bh_uv == 0 {
-    bw_uv = 1;
-    bh_uv = 1;
-  }
-
-  bw_uv /= uv_tx_size.width_mi();
-  bh_uv /= uv_tx_size.height_mi();
+  // Chroma TU grid from the paired chroma block size -- see the
+  // identical derivation in `write_tx_blocks` (the old per-axis
+  // mi-shift + 1x1 fallback truncated BLOCK_16X4/4X16's 4:2:0 TU loop
+  // to zero iterations; zenrav1e#35 / zenavif#29).
+  let plane_bsize = bsize
+    .subsampled_size(xdec, ydec)
+    .expect("chroma TU grid requires a subsampable block size");
+  let bw_uv = plane_bsize.width_mi() / uv_tx_size.width_mi();
+  let bh_uv = plane_bsize.height_mi() / uv_tx_size.height_mi();
 
   let uv_tx_type = if fi.is_lossless() {
     // Lossless chroma is WHT 4x4 (decoder-derived, never signaled).
