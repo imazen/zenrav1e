@@ -3,6 +3,34 @@
 ## [Unreleased]
 
 ### Added
+- **QM-weighted RD distortion for `Tune::Ssimulacra2`** (the
+  `dist_metric=AOM_DIST_METRIC_QM_PSNR` analog, adapted): the tune's luma
+  RDO distortion is now scaled by the per-block QM-weighted / unweighted
+  transform-domain error ratio — the frequency-dependent error forgiveness
+  QM dequantization actually applies, composed with (not replacing) the
+  Psychovisual activity-masked pixel metric. Forward weights derive from
+  the ported inverse tables (`QM_FWD_WEIGHT[iwt] = round(1024/iwt)`,
+  verified equal to libaom's stored `wt_matrix_ref`); the lookup shares
+  `dequantize_with_qm`'s storage-order indexing so the zenrav1e#29
+  orientation fix carries over by construction. Measured (zenavif train26,
+  cavif s2+tune, 12-pt grid): **ssim2 BD −1.78% median / −1.45% mean
+  (better 15/24), butteraugli 3n −1.46% / max −0.37%, ~1.01× encode
+  time**; s1 −1.71%/−1.52% with all butteraugli norms agreeing. Legacy
+  tier-2 confirm: gap vs aom cpu0 --tune=ssimulacra2 +5.63% → +2.12% (s2)
+  and +5.02% → **−1.94% (s1) — the tier-2 median crosses**; o_6629 (the
+  residual coefficient-RD outlier) −13.5/−15.3% direct. libaom's literal
+  routing — force tx-domain distortion and weight it — measured +4.47%
+  median WORSE here (the domain switch alone +6.07%: cdef_dist's activity
+  masking is worth more than tx-domain SSE; the weighting itself −2.57%
+  inside that frame, which motivated the ratio composition). Running the
+  trellis unconditionally under the tune re-measured as a regression
+  (+0.3..0.6%, 1.66× time) and stays out; when the user-opt-in trellis
+  runs under the tune its coefficient distortion now uses the same
+  forward-QM weighting (`get_coeff_dist` analog, ≈0 ssim2 vs unweighted,
+  softer butteraugli max). Byte-identity for every non-`Ssimulacra2`
+  config and for tune-off verified against the previous master binary.
+  Record: zenavif benchmarks/rd_gap_qmdist_2026-07-03.tsv +
+  docs/RD_GAP_VS_LIBAOM.md "QM-weighted RD distortion".
 - **AV1 palette mode** (68a8d81f, 5f82e2d4, cda831e7): full encoder-side
   implementation of the screen-content palette tool, default OFF behind
   `SpeedSettings.prediction.palette` (`PaletteMode::{Off, Auto, Always}`,

@@ -384,13 +384,7 @@ fn compute_tx_distortion<T: Pixel>(
   is_chroma_block: bool, tile_bo: TileBlockOffset, tx_dist: ScaledDistortion,
   skip: bool, luma_only: bool,
 ) -> ScaledDistortion {
-  // Psnr opts into tx-domain distortion via speed settings; Ssimulacra2
-  // force-enables it for the QM-weighted distortion metric (see
-  // `FrameInvariants::new`), mirroring libaom's AOM_DIST_METRIC_QM_PSNR
-  // which is only computable in transform space. Skip blocks fall back to
-  // plain pixel SSE below — commensurate with (QM-weighted) tx-domain SSE,
-  // which equals it at the flat weight.
-  assert!(matches!(fi.config.tune, Tune::Psnr | Tune::Ssimulacra2));
+  assert!(fi.config.tune == Tune::Psnr);
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
