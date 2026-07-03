@@ -184,6 +184,9 @@ pub struct CliOptions {
   /// (always the case in still picture mode).
   #[clap(long, value_parser, default_value_t = PaletteMode::Off, help_heading = "ENCODE SETTINGS")]
   pub palette: PaletteMode,
+  /// Override the speed preset's loop-restoration filter (LRF) setting.
+  #[clap(long, value_parser, help_heading = "ENCODE SETTINGS")]
+  pub lrf: Option<bool>,
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
   #[clap(
@@ -679,6 +682,9 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
 
   cfg.still_picture = matches.still_picture;
   cfg.speed_settings.prediction.palette = matches.palette;
+  if let Some(lrf) = matches.lrf {
+    cfg.speed_settings.lrf = lrf;
+  }
 
   cfg.quantizer = quantizer;
   cfg.min_quantizer = matches.min_quantizer.unwrap_or(0);

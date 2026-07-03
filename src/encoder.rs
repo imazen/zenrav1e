@@ -3169,29 +3169,18 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   // sites that are rolled back regardless may pass `PARTITION_NONE`.
   partition: PartitionType,
 ) -> (bool, ScaledDistortion) {
-  if skip {
-    // A skipped palette block still reconstructs by palette lookup on the
-    // decoder (rav1d runs `pal_pred` before it looks at skip), so the luma
-    // recon must be filled here or later intra predictions diverge from
-    // the decoder. All-zero residual is the *common* case for palette.
-    if let Some(pal) = palette {
-      let area = Area::BlockRect {
-        bo: tile_bo.0,
-        width: bsize.width(),
-        height: bsize.height(),
-      };
-      fill_palette_prediction(
-        &mut ts.rec.planes[0].subregion_mut(area),
-        pal,
-        bsize.width(),
-        0,
-        0,
-        bsize.width(),
-        bsize.height(),
-      );
-    }
-    return (false, ScaledDistortion::zero());
-  }
+  // NOTE on skip == true: an intra block whose residual quantized to zero
+  // everywhere is coded with skip=1, but its PREDICTION is still the
+  // decoder's reconstruction (palette blocks likewise still run pal_pred).
+  // The loops below must therefore run even when skip: `encode_tx_block`
+  // predicts into the recon and returns before writing any coefficient
+  // symbols (its own `if skip` guard), so no bits are emitted. An earlier
+  // top-of-function `return` here (2d0ae25c, fixing a txb_skip desync by
+  // skipping the whole body) left the recon holding the last RDO trial's
+  // pixels for every forced-skip intra block; every later intra prediction
+  // chained off those stale rows — a valid bitstream whose image drifts
+  // (measured: luma RMSE 67 with a −72 mean shift below the first
+  // forced-skip block on a smooth gray 1 MP photo at s2 q100).
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
