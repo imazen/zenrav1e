@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Added
+- **`FrameHints` — external per-superblock AC-quantizer-scale input**
+  (c4047cec): `FrameParameters.frame_hints` carries an optional
+  `FrameHints { sb_q_scale: Option<Box<[f32]>> }` per frame (keyframe /
+  intra-only scoped); the per-SB scale composes onto any tune-driven map
+  (Variance Boost) and is coded through the real per-SB `delta_q` syntax
+  with the `(ac_q(base)/ac_q(sb))²` RDO distortion follow. Metric-free by
+  design — the first consumer is zenavif's butteraugli-diffmap-guided
+  second pass (zenavif `docs/DIFFMAP_TWO_PASS.md`). Absent, all-neutral,
+  or grid-mismatched maps are byte-identical to a plain encode
+  (api::test contract).
 - **Chroma (UV) palette search** (a3b72033): the previously-"off"-coded UV
   palette flag now carries a real joint (U,V) palette — libaom
   `av1_rd_pick_palette_intra_sbuv` 2-D k-means candidates plus a
