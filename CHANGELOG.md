@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- **Size-conditional strength for the Tune::Ssimulacra2 QM-dist ratio**:
+  `qm_dist_ratio_m = clamp((log2(long_edge) - 8) / 2, 0.5, 1.0)` — full
+  strength at >= 1024 long edge (bit-identical to the previous encoder
+  there, md5-gated), log2-linear ramp down to half strength at <= 256.
+  The zenavif wedge-#3 size-decay isolation A/B convicted the ratio as
+  the only tune mechanism whose win decays on small renditions (leave-
+  one-out −3.48% -> −0.96% median ssim2 BD 1024->256, high-q band
+  flipping positive at <= 512), and strength trials measured an
+  inverted-U: half strength BEATS full at small sizes (train +0.87%
+  @512 / +1.03% @256 median vs full, val +1.00 / +1.12, 9-11/12 origins,
+  butteraugli agreeing +1.1..+3.3%) while removing the ratio loses.
+  Tune-off output byte-identical; conformance-swept (aomdec + rav1d-safe
+  raw md5 agreement) across the 36-file x 5-q size ladder. Record:
+  zenavif `benchmarks/hyperparam_size_decay_ab_2026-07-03.tsv` +
+  `docs/RD_GAP_VS_LIBAOM.md` "Size-decay isolation A/B".
+
 ### Fixed
 - **Deblock filter + level optimizer honor frame-header `sharpness`**
   (aba01be7): nonzero sharpness (previously only Tune::StillImage's

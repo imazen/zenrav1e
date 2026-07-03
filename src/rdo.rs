@@ -333,10 +333,22 @@ fn compute_distortion<T: Pixel>(
   // distortion untouched, mirroring how the tx-domain path prices skip
   // with plain SSE.
   if fi.qm_dist_ratio && ts.qm_ratio_u > 0 {
-    distortion = ScaledDistortion(
-      (u128::from(distortion.0) * u128::from(ts.qm_ratio_w)
-        / u128::from(ts.qm_ratio_u)) as u64,
-    );
+    let m = fi.qm_dist_ratio_m;
+    if m >= 1.0 {
+      distortion = ScaledDistortion(
+        (u128::from(distortion.0) * u128::from(ts.qm_ratio_w)
+          / u128::from(ts.qm_ratio_u)) as u64,
+      );
+    } else if m > 0.0 {
+      // Size-conditional strength (`ss2_qmdist_ratio_strength`): blend the
+      // weighted error toward the unweighted one — w_eff = u + (w - u) * m.
+      // The m == 1.0 branch above keeps the exact u128 path so full-strength
+      // frames stay bit-identical to the pre-ramp encoder.
+      let u = ts.qm_ratio_u as f64;
+      let w_eff = u + (ts.qm_ratio_w as f64 - u) * m;
+      distortion =
+        ScaledDistortion((distortion.0 as f64 * (w_eff / u)).round() as u64);
+    }
   }
 
   if is_chroma_block

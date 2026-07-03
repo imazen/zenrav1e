@@ -143,6 +143,30 @@ pub enum Tune {
 const FRAME_ID_LENGTH: u32 = 15;
 const DELTA_FRAME_ID_LENGTH: u32 = 14;
 
+/// Size-conditional strength for the `Tune::Ssimulacra2` QM-dist ratio:
+/// full strength at >= 1024 long edge, log2-linear ramp down to 0.5 at
+/// <= 256 long edge — `m = clamp((log2(maxdim) - 8) / 2, 0.5, 1.0)`.
+///
+/// The 2026-07-03 size-decay isolation A/B (zenavif wedge #3 program;
+/// zenavif `benchmarks/hyperparam_size_decay_ab_2026-07-03.tsv`) measured
+/// the ratio's leave-one-out contribution decaying from −3.48% median ssim2
+/// BD-rate at the 1024 rendition class to −0.96% at 256 (decaying on 8/12
+/// photo-like origins, its high-quality band flipping positive at <= 512,
+/// butteraugli-adverse at 256) — the only Tune::Ssimulacra2 mechanism the
+/// pre-registered rule convicted for the small-rendition advantage decay
+/// (the QM level curves, chroma delta-q, variance boost, and LF sharpness
+/// all keep or grow their wins at small sizes). Strength trials measured an
+/// inverted-U response: HALF strength beats full at both small sizes (train
+/// medians +0.87% @512 / +1.03% @256 ssim2 BD vs full, 9-11/12 origins
+/// better, butteraugli agreeing at +1.2..+3.3%), while removing the ratio
+/// outright loses (−0.96% @256). Long edge — not pixel area — is the basis
+/// so non-square 1024-class renditions (e.g. 1024x576) keep m = 1.0:
+/// byte-identity with the pre-ramp encoder at the scale every tune constant
+/// was fit at.
+fn ss2_qmdist_ratio_strength(maxdim: usize) -> f64 {
+  (((maxdim.max(1) as f64).log2() - 8.0) / 2.0).clamp(0.5, 1.0)
+}
+
 /// Select QM level from quantizer index for still images.
 /// Lower qindex (higher quality) → higher QM level (flatter matrix; level
 /// 15 = identity / no QM applied).
@@ -226,6 +250,46 @@ fn qm_level_for_qindex_allintra(qindex: u8) -> u8 {
     201..=220 => 6,
     221..=240 => 5,
     _ => 4,
+  }
+}
+
+#[cfg(test)]
+mod qmdist_strength_tests {
+  use super::ss2_qmdist_ratio_strength;
+
+  #[test]
+  fn full_strength_at_1024_long_edge_and_above() {
+    // Byte-identity anchor: every rendition class the tune was fit at
+    // (long edge >= 1024) must stay at exactly 1.0 — including non-square
+    // 1024-class frames (the long-edge basis exists for this).
+    assert_eq!(ss2_qmdist_ratio_strength(1024), 1.0);
+    assert_eq!(ss2_qmdist_ratio_strength(1920), 1.0);
+    assert_eq!(ss2_qmdist_ratio_strength(4096), 1.0);
+  }
+
+  #[test]
+  fn half_strength_at_512_and_floor_below_256() {
+    // log2(512) = 9 exactly -> (9 - 8) / 2 = 0.5 exactly.
+    assert_eq!(ss2_qmdist_ratio_strength(512), 0.5);
+    // 256 and below clamp to the fitted floor 0.5.
+    assert_eq!(ss2_qmdist_ratio_strength(256), 0.5);
+    assert_eq!(ss2_qmdist_ratio_strength(64), 0.5);
+    assert_eq!(ss2_qmdist_ratio_strength(1), 0.5);
+    assert_eq!(ss2_qmdist_ratio_strength(0), 0.5);
+  }
+
+  #[test]
+  fn monotone_between_512_and_1024() {
+    let mut prev = ss2_qmdist_ratio_strength(512);
+    for d in (512..=1024).step_by(32) {
+      let m = ss2_qmdist_ratio_strength(d);
+      assert!(m >= prev, "strength must be non-decreasing in long edge");
+      assert!((0.5..=1.0).contains(&m));
+      prev = m;
+    }
+    // A 724-long-edge frame (between the knees) sits strictly inside.
+    let mid = ss2_qmdist_ratio_strength(724);
+    assert!(mid > 0.5 && mid < 1.0, "mid ramp value: {mid}");
   }
 }
 
@@ -978,6 +1042,11 @@ pub struct FrameInvariants<T: Pixel> {
   /// pixel metric's activity masking is worth more than the tx-domain
   /// discount). No-op when QM is off for the frame (identity ratio).
   pub qm_dist_ratio: bool,
+  /// Size-conditional strength for the QM-dist ratio, in `0.0..=1.0`:
+  /// `compute_distortion` blends the QM-weighted transform error toward the
+  /// unweighted one by this factor (`w_eff = u + (w - u) * m`); `1.0` is the
+  /// exact full-strength ratio. See [`ss2_qmdist_ratio_strength`].
+  pub qm_dist_ratio_m: f64,
   pub idx_in_group_output: u64,
   pub pyramid_level: u64,
   pub enable_early_exit: bool,
@@ -1439,6 +1508,11 @@ impl<T: Pixel> FrameInvariants<T> {
     //   the trellis unconditionally under the tune measured +0.3..0.6%
     //   median and 1.66x encode time — NOT part of the tune.
     let qm_dist_ratio = config.tune == Tune::Ssimulacra2;
+    let qm_dist_ratio_m = if qm_dist_ratio {
+      ss2_qmdist_ratio_strength(config.width.max(config.height))
+    } else {
+      1.0
+    };
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
@@ -1525,6 +1599,7 @@ impl<T: Pixel> FrameInvariants<T> {
       use_tx_domain_rate,
       qm_weighted_trellis: qm_dist_ratio,
       qm_dist_ratio,
+      qm_dist_ratio_m,
       idx_in_group_output: 0,
       pyramid_level: 0,
       enable_early_exit: true,
@@ -1792,6 +1867,7 @@ impl<T: Pixel> FrameInvariants<T> {
       use_tx_domain_rate: self.use_tx_domain_rate,
       qm_weighted_trellis: self.qm_weighted_trellis,
       qm_dist_ratio: self.qm_dist_ratio,
+      qm_dist_ratio_m: self.qm_dist_ratio_m,
       idx_in_group_output: self.idx_in_group_output,
       pyramid_level: self.pyramid_level,
       enable_early_exit: self.enable_early_exit,
