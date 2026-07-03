@@ -29,7 +29,7 @@ use crate::header::*;
 use crate::lrf::*;
 use crate::mc::{FilterMode, MotionVector};
 use crate::me::*;
-use crate::palette::PaletteData;
+use crate::palette::{PaletteData, PaletteUvData};
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
@@ -2246,20 +2246,22 @@ fn select_sb_delta_q(
   (sign * units, qidx as u8)
 }
 
-/// Fills a rectangular region of the luma recon from a palette color index
+/// Fills a rectangular region of a recon plane from a palette color index
 /// map (rav1d: `pal_pred`): each destination pixel becomes the palette color
 /// selected by the co-located map entry. `(x0, y0)` locate the region inside
-/// the map, whose row stride is `map_stride`.
+/// the map, whose row stride is `map_stride`. Used for the luma plane with
+/// the luma palette, and for each chroma plane with its channel of the joint
+/// UV palette (the two chroma planes share one map).
 fn fill_palette_prediction<T: Pixel>(
-  dst: &mut PlaneRegionMut<'_, T>, pal: &PaletteData, map_stride: usize,
-  x0: usize, y0: usize, w: usize, h: usize,
+  dst: &mut PlaneRegionMut<'_, T>, colors: &[u16], map: &[u8],
+  map_stride: usize, x0: usize, y0: usize, w: usize, h: usize,
 ) {
   debug_assert!(x0 + w <= map_stride);
-  debug_assert!(pal.map.len() >= (y0 + h) * map_stride);
+  debug_assert!(map.len() >= (y0 + h) * map_stride);
   for (y, dst_row) in dst.rows_iter_mut().take(h).enumerate() {
-    let map_row = &pal.map[(y0 + y) * map_stride + x0..][..w];
+    let map_row = &map[(y0 + y) * map_stride + x0..][..w];
     for (dst_px, &idx) in dst_row.iter_mut().zip(map_row.iter()) {
-      *dst_px = T::cast_from(pal.colors[idx as usize]);
+      *dst_px = T::cast_from(colors[idx as usize]);
     }
   }
 }
@@ -2305,6 +2307,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   // Luma palette for the enclosing partition: plane 0 predicts by palette
   // lookup (no intra edges) and the residual path is unchanged.
   palette: Option<&PaletteData>,
+  // Chroma (UV) palette for the enclosing partition: planes 1 and 2
+  // predict from their channel of the joint palette via the shared map.
+  palette_uv: Option<&PaletteUvData>,
   // The `PartitionType` that produced this block from its immediate parent
   // (mirrors libaom's `mbmi->partition`; zenrav1e#27) -- selects the
   // VERT_A/VERT_B traversal-order tables in has_top_right/has_bottom_left.
@@ -2376,8 +2381,36 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     let y0 = (tx_bo.0.y - tile_partition_bo.0.y) << MI_SIZE_LOG2;
     fill_palette_prediction(
       &mut rec.subregion_mut(area),
-      pal,
+      &pal.colors,
+      &pal.map,
       bsize.width(),
+      x0,
+      y0,
+      tx_size.width(),
+      tx_size.height(),
+    );
+  } else if mode.is_intra()
+    && p > 0
+    && let Some(pal_uv) = palette_uv
+  {
+    // Chroma palette prediction: both chroma planes share one index map
+    // over the chroma block; plane 1 takes the U colors, plane 2 the V
+    // colors (rav1d: `pal_pred` per plane with `pal[1]` / `pal[2]`). The
+    // tx block's position inside the chroma block comes from the plane
+    // offsets, which already carry the 4:2:0 merged-block rounding.
+    let plane_bsize = bsize
+      .subsampled_size(xdec, ydec)
+      .expect("chroma palette requires a subsampable block size");
+    let partition_po = tile_partition_bo.plane_offset(&ts.input.planes[p].cfg);
+    debug_assert!(po.x >= partition_po.x && po.y >= partition_po.y);
+    let x0 = (po.x - partition_po.x) as usize;
+    let y0 = (po.y - partition_po.y) as usize;
+    let colors = if p == 1 { &pal_uv.colors_u } else { &pal_uv.colors_v };
+    fill_palette_prediction(
+      &mut rec.subregion_mut(area),
+      colors,
+      &pal_uv.map,
+      plane_bsize.width(),
       x0,
       y0,
       tx_size.width(),
@@ -2979,6 +3012,9 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   filter_intra_mode: FilterIntraMode,
   // Luma palette when palette mode was chosen for this (intra) block.
   palette: Option<&PaletteData>,
+  // Chroma (UV) palette when chosen for this (intra) block; requires
+  // chroma DC_PRED and a chroma-bearing block.
+  palette_uv: Option<&PaletteUvData>,
   // The `PartitionType` that produced `tile_bo`/`bsize` from its immediate
   // parent (mirrors libaom's `mbmi->partition`; zenrav1e#27), threaded down
   // to `encode_tx_block` for has_top_right/has_bottom_left. Only ever
@@ -3021,15 +3057,23 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   cw.bc.blocks.set_ref_frames(tile_bo, bsize, ref_frames);
   cw.bc.blocks.set_motion_vectors(tile_bo, bsize, mvs);
   // Palette state must be written for every block (cleared when unused):
-  // it feeds the palette-flag context and neighbor color cache of later
-  // blocks, mirroring rav1d's pal_sz/al_pal above+left state.
+  // it feeds the palette-flag contexts and neighbor color caches of later
+  // blocks, mirroring rav1d's pal_sz/pal_sz_uv/al_pal above+left state
+  // (both tracked over the luma block region; aomedia bug 2183).
   {
     let mut colors = [0u16; crate::palette::PALETTE_MAX_SIZE];
     let pal_sz = palette.map_or(0, |pal| {
       colors[..pal.size()].copy_from_slice(&pal.colors);
       pal.size() as u8
     });
-    cw.bc.blocks.set_palette_info(tile_bo, bsize, pal_sz, &colors);
+    let mut colors_uv = [0u16; crate::palette::PALETTE_MAX_SIZE];
+    let pal_sz_uv = palette_uv.map_or(0, |pal| {
+      colors_uv[..pal.size()].copy_from_slice(&pal.colors_u);
+      pal.size() as u8
+    });
+    cw.bc.blocks.set_palette_info(
+      tile_bo, bsize, pal_sz, &colors, pal_sz_uv, &colors_uv,
+    );
   }
 
   // Per-SB delta symbols, coded once at the first block of each superblock
@@ -3194,6 +3238,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       cw.write_use_palette_mode(
         w,
         palette,
+        palette_uv,
         bsize,
         tile_bo,
         luma_mode,
@@ -3203,6 +3248,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         fi.sequence.chroma_sampling,
         fi.sequence.bit_depth,
       );
+    } else {
+      debug_assert!(palette_uv.is_none());
     }
 
     // The decoder reads the filter-intra flag only for non-palette DC
@@ -3221,8 +3268,9 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       }
     }
 
-    // The color index map is coded after the (suppressed) filter-intra
-    // flag and before the tx size, exactly where rav1d reads it.
+    // The color index maps are coded after the (suppressed) filter-intra
+    // flag and before the tx size — luma first, then chroma — exactly
+    // where rav1d reads them.
     if let Some(pal) = palette {
       debug_assert!(luma_mode == PredictionMode::DC_PRED);
       let frame_bo = ts.to_frame_block_offset(tile_bo);
@@ -3239,6 +3287,37 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         rows,
         cols,
         pal.size(),
+      );
+    }
+    if let Some(pal_uv) = palette_uv {
+      debug_assert!(chroma_mode == PredictionMode::DC_PRED);
+      let plane_bsize = bsize
+        .subsampled_size(xdec, ydec)
+        .expect("chroma palette requires a subsampable block size");
+      let frame_bo = ts.to_frame_block_offset(tile_bo);
+      // Visible chroma dimensions from the visible luma dimensions in b4
+      // units, matching rav1d's `cw4 = (w4 + ss_hor) >> ss_hor` (the
+      // frame-edge case; palette search is restricted to fully-visible
+      // blocks so these normally equal the full chroma block).
+      let cols = bsize.width().min((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2);
+      let rows =
+        bsize.height().min((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2);
+      let cols_c = (((cols >> MI_SIZE_LOG2) + xdec) >> xdec) << MI_SIZE_LOG2;
+      let rows_c = (((rows >> MI_SIZE_LOG2) + ydec) >> ydec) << MI_SIZE_LOG2;
+      debug_assert_eq!(
+        pal_uv.map.len(),
+        plane_bsize.width() * plane_bsize.height()
+      );
+      debug_assert!(
+        cols_c <= plane_bsize.width() && rows_c <= plane_bsize.height()
+      );
+      cw.write_palette_uv_color_index_map(
+        w,
+        &pal_uv.map,
+        plane_bsize.width(),
+        rows_c,
+        cols_c,
+        pal_uv.size(),
       );
     }
   }
@@ -3369,6 +3448,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       use_filter_intra,
       filter_intra_mode,
       palette,
+      palette_uv,
       partition,
     )
   }
@@ -3397,6 +3477,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   use_filter_intra: bool,
   filter_intra_mode: FilterIntraMode,
   palette: Option<&PaletteData>,
+  palette_uv: Option<&PaletteUvData>,
   // See `encode_tx_block`'s doc comment (zenrav1e#27). RDO-trial call
   // sites that are rolled back regardless may pass `PARTITION_NONE`.
   partition: PartitionType,
@@ -3469,6 +3550,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         use_filter_intra,
         filter_intra_mode,
         palette,
+        None, // the UV palette never applies to plane 0
         partition,
       );
       partition_has_coeff |= has_coeff;
@@ -3585,7 +3667,8 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
           need_recon_pixel,
           false, // filter intra is luma-only
           FilterIntraMode::FILTER_DC_PRED,
-          None, // palette is luma-only
+          None, // the luma palette never applies to chroma planes
+          palette_uv,
           partition,
         );
         partition_has_coeff |= has_coeff;
@@ -3676,6 +3759,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
         use_filter_intra,
         filter_intra_mode,
         None, // write_tx_tree is the inter path; palette is intra-only
+        None, // (and likewise the UV palette)
         partition,
       );
       partition_has_coeff |= has_coeff;
@@ -3772,6 +3856,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
           false, // filter intra is luma-only
           FilterIntraMode::FILTER_DC_PRED,
           None, // palette is luma-only (and this is the inter path)
+          None, // UV palette is intra-only too
           partition,
         );
         partition_has_coeff |= has_coeff;
@@ -3801,6 +3886,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
   let palette = mode_decision.palette.as_deref();
+  let palette_uv = mode_decision.palette_uv.as_deref();
   let cfl = mode_decision.pred_cfl_params;
   let ref_frames = mode_decision.ref_frames;
   let mvs = mode_decision.mvs;
@@ -3858,6 +3944,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     mode_decision.use_filter_intra,
     mode_decision.filter_intra_mode,
     palette,
+    palette_uv,
     partition,
   );
 }
@@ -4533,6 +4620,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         part_decision.use_filter_intra,
         part_decision.filter_intra_mode,
         part_decision.palette.as_deref(),
+        part_decision.palette_uv.as_deref(),
         parent_partition,
       );
     }

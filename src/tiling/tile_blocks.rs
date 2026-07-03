@@ -255,18 +255,25 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
-  /// Records the block's luma palette (or clears it: `pal_sz == 0`) for the
-  /// palette-flag context and neighbor color cache of later blocks. Must be
-  /// kept in sync for every coded block, exactly like rav1d maintains its
-  /// `pal_sz`/`al_pal` above+left state.
+  /// Records the block's luma and chroma palettes (or clears them:
+  /// `pal_sz == 0` / `pal_sz_uv == 0`) for the palette-flag contexts and
+  /// neighbor color caches of later blocks. Must be kept in sync for every
+  /// coded block, exactly like rav1d maintains its `pal_sz`/`pal_sz_uv`/
+  /// `al_pal` above+left state. Both palettes are tracked over the LUMA
+  /// block region — the UV neighbor state deliberately uses luma
+  /// coordinates (rav1d `copy_pal_block_uv`, aomedia bug 2183). Only U
+  /// colors are recorded for chroma: no read path ever caches V.
   #[inline(always)]
   pub fn set_palette_info(
     &mut self, bo: TileBlockOffset, bsize: BlockSize, pal_sz: u8,
-    palette: &[u16; crate::palette::PALETTE_MAX_SIZE],
+    palette: &[u16; crate::palette::PALETTE_MAX_SIZE], pal_sz_uv: u8,
+    palette_uv: &[u16; crate::palette::PALETTE_MAX_SIZE],
   ) {
     self.for_each(bo, bsize, |block| {
       block.pal_sz = pal_sz;
       block.palette = *palette;
+      block.pal_sz_uv = pal_sz_uv;
+      block.palette_uv = *palette_uv;
     });
   }
 

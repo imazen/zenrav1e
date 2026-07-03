@@ -12,8 +12,9 @@ use std::mem::MaybeUninit;
 use super::*;
 
 use crate::palette::{
-  PALETTE_CACHE_SIZE, PALETTE_MAX_SIZE, PaletteData,
+  PALETTE_CACHE_SIZE, PALETTE_MAX_SIZE, PaletteData, PaletteUvData,
   foreach_color_index_symbol, index_color_cache, merge_palette_cache,
+  palette_delta_bits_v,
 };
 use crate::predict::{FilterIntraMode, PredictionMode};
 
@@ -192,6 +193,16 @@ pub struct Block {
   /// Luma palette colors (sorted strictly increasing; only the first
   /// `pal_sz` entries are meaningful). Mirrors rav1d's `al_pal` state.
   pub palette: [u16; PALETTE_MAX_SIZE],
+  /// Chroma (UV) palette size, maintained for every coded block like
+  /// `pal_sz`. Tracked in LUMA block coordinates — the UV palette neighbor
+  /// state deliberately uses luma coordinates (rav1d `pal_sz_uv` /
+  /// `copy_pal_block_uv`, "see aomedia bug 2183").
+  pub pal_sz_uv: u8,
+  /// Chroma palette U colors (sorted non-decreasing; only the first
+  /// `pal_sz_uv` entries are meaningful). Only the U plane feeds the
+  /// neighbor color cache — rav1d stores V in `al_pal` too but no read path
+  /// ever consults it (`rav1d_read_pal_plane` caches planes 0 and 1 only).
+  pub palette_uv: [u16; PALETTE_MAX_SIZE],
 }
 
 impl Block {
@@ -221,6 +232,8 @@ impl Default for Block {
       segmentation_idx: 0,
       pal_sz: 0,
       palette: [0; PALETTE_MAX_SIZE],
+      pal_sz_uv: 0,
+      palette_uv: [0; PALETTE_MAX_SIZE],
     }
   }
 }
@@ -818,20 +831,45 @@ impl ContextWriter<'_> {
     merge_palette_cache(above, left)
   }
 
-  /// Writes the palette mode flags for an intra block, and (when a luma
-  /// palette is used) the palette size and colors. The read-side dual is
-  /// rav1d's `decode_b` palette section plus `rav1d_read_pal_plane`.
-  ///
-  /// The UV palette flag is written (as "off") whenever chroma is present
-  /// with DC_PRED; UV palette search is not implemented.
+  /// Derives the neighbor color cache for this block's chroma palette (U
+  /// colors only — V never feeds a cache), mirroring rav1d's
+  /// `rav1d_read_pal_plane` with `pl=1`: the same sorted merge-dedup as
+  /// luma, over the neighbors' U palettes, with the identical same-64px-
+  /// superblock-row gate. The neighbor state is tracked in LUMA block
+  /// coordinates (aomedia bug 2183).
+  pub fn palette_cache_uv(
+    &self, bo: TileBlockOffset,
+  ) -> ArrayVec<u16, PALETTE_CACHE_SIZE> {
+    let above: &[u16] = if bo.0.y & 15 != 0 {
+      let b = self.bc.blocks.above_of(bo);
+      &b.palette_uv[..b.pal_sz_uv as usize]
+    } else {
+      &[]
+    };
+    let left: &[u16] = if bo.0.x > 0 {
+      let b = self.bc.blocks.left_of(bo);
+      &b.palette_uv[..b.pal_sz_uv as usize]
+    } else {
+      &[]
+    };
+    merge_palette_cache(above, left)
+  }
+
+  /// Writes the palette mode flags for an intra block, and (when a palette
+  /// is used) the palette size and colors per plane set. The read-side dual
+  /// is rav1d's `decode_b` palette section plus `rav1d_read_pal_plane` /
+  /// `rav1d_read_pal_uv`.
   pub fn write_use_palette_mode<W: Writer>(
-    &mut self, w: &mut W, palette: Option<&PaletteData>, bsize: BlockSize,
-    bo: TileBlockOffset, luma_mode: PredictionMode,
-    chroma_mode: PredictionMode, xdec: usize, ydec: usize, cs: ChromaSampling,
-    bit_depth: usize,
+    &mut self, w: &mut W, palette: Option<&PaletteData>,
+    palette_uv: Option<&PaletteUvData>, bsize: BlockSize, bo: TileBlockOffset,
+    luma_mode: PredictionMode, chroma_mode: PredictionMode, xdec: usize,
+    ydec: usize, cs: ChromaSampling, bit_depth: usize,
   ) {
     let enable = palette.is_some();
     debug_assert!(!enable || luma_mode == PredictionMode::DC_PRED);
+    debug_assert!(
+      palette_uv.is_none() || chroma_mode == PredictionMode::DC_PRED
+    );
 
     if luma_mode == PredictionMode::DC_PRED {
       // Palette-flag context: how many of (above, left) use luma palette
@@ -868,9 +906,39 @@ impl ContextWriter<'_> {
     {
       // UV palette flag context is "does this block use a luma palette"
       // (rav1d: `pal_ctx = pal_sz[0] > 0`).
+      let uv_enable = palette_uv.is_some();
       let ctx_chroma = enable as usize;
-      let cdf = &self.fc.palette_uv_mode_cdfs[ctx_chroma];
-      symbol_with_update!(self, w, false as u32, cdf);
+      {
+        let cdf = &self.fc.palette_uv_mode_cdfs[ctx_chroma];
+        symbol_with_update!(self, w, uv_enable as u32, cdf);
+      }
+      if let Some(pal_uv) = palette_uv {
+        let n = pal_uv.size();
+        debug_assert!(
+          (crate::palette::PALETTE_MIN_SIZE..=PALETTE_MAX_SIZE).contains(&n)
+        );
+        // The UV size context is the LUMA block-size context ("see aomedia
+        // bug 2183 for why we use luma coordinates", rav1d decode_b).
+        let bsize_ctx = bsize.width_mi_log2() + bsize.height_mi_log2() - 2;
+        {
+          let cdf = &self.fc.palette_uv_size_cdf[bsize_ctx];
+          symbol_with_update!(
+            self,
+            w,
+            (n - crate::palette::PALETTE_MIN_SIZE) as u32,
+            cdf
+          );
+        }
+        self.write_palette_colors_uv(
+          w,
+          bo,
+          &pal_uv.colors_u,
+          &pal_uv.colors_v,
+          bit_depth,
+        );
+      }
+    } else {
+      debug_assert!(palette_uv.is_none());
     }
   }
 
@@ -883,7 +951,22 @@ impl ContextWriter<'_> {
     bit_depth: usize,
   ) {
     let cache = self.palette_cache_y(bo);
-    let (found_flags, rest) = index_color_cache(&cache, colors);
+    self.write_palette_colors_plane(w, &cache, colors, bit_depth, 1);
+  }
+
+  /// Writes one plane's sorted palette colors against a neighbor cache:
+  /// per-cache-entry reuse bits, then the out-of-cache colors delta-coded
+  /// ascending with a minimum step of `min_step` (1 for luma — strictly
+  /// increasing; 0 for the U plane — non-decreasing, duplicates legal).
+  /// Write-side dual of rav1d's `rav1d_read_pal_plane` color parsing, where
+  /// `min_step` is the `not_pl` term (== libaom
+  /// `delta_encode_palette_colors` with `min_val = min_step`).
+  fn write_palette_colors_plane<W: Writer>(
+    &mut self, w: &mut W, cache: &[u16], colors: &[u16], bit_depth: usize,
+    min_step: u16,
+  ) {
+    debug_assert!(min_step <= 1);
+    let (found_flags, rest) = index_color_cache(cache, colors);
     let n = colors.len();
 
     // One raw bit per cache entry; the decoder stops reading these as soon
@@ -898,7 +981,8 @@ impl ContextWriter<'_> {
     }
     debug_assert_eq!(n_in_cache + rest.len(), n);
 
-    // Out-of-cache colors (sorted, strictly increasing).
+    // Out-of-cache colors (sorted; strictly increasing for min_step == 1,
+    // non-decreasing for min_step == 0).
     if rest.is_empty() {
       return;
     }
@@ -911,30 +995,95 @@ impl ContextWriter<'_> {
       .map(|p| p[1] - p[0])
       .max()
       .expect("rest has at least two colors");
-    debug_assert!(max_delta >= 1, "palette colors must strictly increase");
+    debug_assert!(
+      max_delta >= min_step,
+      "palette color deltas must be >= the plane's minimum step"
+    );
     let min_bits = bit_depth as u32 - 3;
-    // Coded deltas are `delta - 1`, so `ceil_log2(max_delta)` bits suffice
-    // (libaom: `aom_ceil_log2(max_delta + 1 - min_val)` with min_val = 1).
-    let mut bits = crate::palette::ceil_log2(max_delta as usize).max(min_bits);
+    // Coded deltas are `delta - min_step` (libaom:
+    // `aom_ceil_log2(max_delta + 1 - min_val)`).
+    let mut bits =
+      crate::palette::ceil_log2((max_delta + 1 - min_step) as usize)
+        .max(min_bits);
     debug_assert!(bits <= bit_depth as u32);
     w.literal(2, bits - min_bits);
     let max = (1usize << bit_depth) - 1;
+    let min_step = min_step as usize;
     for i in 1..rest.len() {
       let prev = rest[i - 1];
       let delta = rest[i] - prev;
-      w.literal(bits as u8, u32::from(delta - 1));
+      w.literal(bits as u8, u32::from(delta) - min_step as u32);
       let cur = rest[i] as usize;
-      if cur + 1 >= max {
+      if cur + min_step >= max {
         // The decoder fills every remaining palette slot with `max` and
-        // stops reading; strictly-increasing unique colors guarantee at
-        // most one color (== max) remains.
-        debug_assert!(i + 1 >= rest.len() - 1);
-        debug_assert!(rest[i..].iter().all(|&c| c as usize + 1 >= max));
+        // stops reading (rav1d: `if prev + not_pl >= max`); the sortedness
+        // invariant forces every remaining color to be exactly `max`
+        // (strictly increasing past `max - 1` for luma, non-decreasing
+        // from `max` for U), so the fill reproduces them.
+        debug_assert!(rest[i + 1..].iter().all(|&c| c as usize == max));
         break;
       }
-      // rav1d: `bits = min(bits, 1 + ulog2(max - prev - 1))`, which equals
-      // `ceil_log2(max - cur)` for `max - cur >= 2` (checked above).
-      bits = bits.min(crate::palette::ceil_log2(max - cur));
+      // rav1d: `bits = min(bits, 1 + ulog2(max - prev - not_pl))`, which
+      // equals `ceil_log2(max - cur + 1 - min_step)` for the surviving
+      // range (termination above rules out the degenerate cases).
+      bits = bits.min(crate::palette::ceil_log2(max - cur + 1 - min_step));
+    }
+  }
+
+  /// Writes the chroma palette colors: the U plane exactly like luma but
+  /// with a minimum delta step of 0 (against the U neighbor cache), then
+  /// the V plane either raw or wraparound-signed-delta coded, whichever is
+  /// cheaper. Write-side dual of rav1d's `rav1d_read_pal_uv`
+  /// (== libaom `write_palette_colors_uv`).
+  fn write_palette_colors_uv<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, colors_u: &[u16],
+    colors_v: &[u16], bit_depth: usize,
+  ) {
+    debug_assert_eq!(colors_u.len(), colors_v.len());
+    // U channel: cache reuse + non-decreasing deltas (min step 0).
+    let cache = self.palette_cache_uv(bo);
+    self.write_palette_colors_plane(w, &cache, colors_u, bit_depth, 0);
+
+    // V channel: no color cache (the colors are not sorted). Choose the
+    // cheaper of wraparound-delta and raw coding, libaom's exact rate
+    // arithmetic.
+    let n = colors_v.len();
+    let (bits_v, zero_count, min_bits_v) =
+      palette_delta_bits_v(colors_v, bit_depth);
+    let bd = bit_depth as u32;
+    let rate_using_delta = 2 + bd + (bits_v + 1) * (n as u32 - 1) - zero_count;
+    let rate_using_raw = bd * n as u32;
+    let max_val = 1i32 << bit_depth;
+    if rate_using_delta < rate_using_raw {
+      w.bit(1);
+      w.literal(2, bits_v - min_bits_v);
+      w.literal(bit_depth as u8, u32::from(colors_v[0]));
+      for i in 1..n {
+        if colors_v[i] == colors_v[i - 1] {
+          // Zero delta needs no sign bit (the decoder reads the sign only
+          // for a nonzero delta).
+          w.literal(bits_v as u8, 0);
+          continue;
+        }
+        let delta = (i32::from(colors_v[i]) - i32::from(colors_v[i - 1]))
+          .unsigned_abs() as i32;
+        let sign_bit = colors_v[i] < colors_v[i - 1];
+        if delta <= max_val - delta {
+          w.literal(bits_v as u8, delta as u32);
+          w.bit(sign_bit as u16);
+        } else {
+          // The wraparound-shorter representation: the decoder computes
+          // `(prev ± coded) & (2^bd - 1)`, so coding the complement with
+          // the flipped sign lands on the same value.
+          w.literal(bits_v as u8, (max_val - delta) as u32);
+          w.bit(!sign_bit as u16);
+        }
+      }
+    } else {
+      w.bit(0);
+      for &v in colors_v {
+        w.literal(bit_depth as u8, u32::from(v));
+      }
     }
   }
 
@@ -964,6 +1113,47 @@ impl ContextWriter<'_> {
         foreach_color_index_symbol(map, stride, rows, cols, |ctx, sym| {
           debug_assert!((sym as usize) < pal_sz);
           let cdf = self.fc.palette_y_color_index_cdf[sz_idx][ctx]
+            .first_chunk::<$len>()
+            .unwrap();
+          symbol_with_update!(self, w, sym, cdf);
+        })
+      };
+    }
+    match pal_sz {
+      2 => write_map_symbols!(2),
+      3 => write_map_symbols!(3),
+      4 => write_map_symbols!(4),
+      5 => write_map_symbols!(5),
+      6 => write_map_symbols!(6),
+      7 => write_map_symbols!(7),
+      _ => write_map_symbols!(8),
+    }
+  }
+
+  /// Writes the chroma color index map in wavefront order over the *chroma*
+  /// block dimensions, identically shaped to the luma map but with the UV
+  /// color-index CDFs. Write-side dual of rav1d's `read_pal_indices` with
+  /// `pl = true`.
+  ///
+  /// `rows`/`cols` are the visible chroma dimensions; `stride` is the full
+  /// chroma block width.
+  pub fn write_palette_uv_color_index_map<W: Writer>(
+    &mut self, w: &mut W, map: &[u8], stride: usize, rows: usize, cols: usize,
+    pal_sz: usize,
+  ) {
+    debug_assert!(
+      (crate::palette::PALETTE_MIN_SIZE..=PALETTE_MAX_SIZE).contains(&pal_sz)
+    );
+    debug_assert!((map[0] as usize) < pal_sz);
+    w.write_quniform(pal_sz as u32, u32::from(map[0]));
+    let sz_idx = pal_sz - crate::palette::PALETTE_MIN_SIZE;
+    // Per-palette-size partial-alphabet CDF views, exactly like the luma
+    // map writer (the adaptation count lives at `[pal_sz - 1]`).
+    macro_rules! write_map_symbols {
+      ($len:literal) => {
+        foreach_color_index_symbol(map, stride, rows, cols, |ctx, sym| {
+          debug_assert!((sym as usize) < pal_sz);
+          let cdf = self.fc.palette_uv_color_index_cdf[sz_idx][ctx]
             .first_chunk::<$len>()
             .unwrap();
           symbol_with_update!(self, w, sym, cdf);

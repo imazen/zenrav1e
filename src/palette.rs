@@ -18,10 +18,14 @@
 //!   `av1_k_means` templates) and `av1/encoder/bitstream.c`
 //!   (`write_palette_colors_y`, `pack_map_tokens`) at the pinned rev 632172a4.
 //!
-//! Scope: luma palette only. The UV palette flag is still written (as
-//! "off") by `write_use_palette_mode` when the chroma mode is DC_PRED, which
-//! is all a conforming bitstream needs; UV palette *search* is not
-//! implemented.
+//! Scope: luma palette and chroma (UV) palette. The UV palette is a *joint*
+//! palette over (U, V) color pairs sharing one index map (AV1 spec): U colors
+//! are coded like luma but with a minimum delta step of 0 (duplicates legal;
+//! rav1d's `not_pl` term), V colors are coded raw or wraparound-signed-delta,
+//! whichever is cheaper (libaom `write_palette_colors_uv`). Candidates come
+//! from a 2-D k-means over the chroma pixel pairs
+//! (libaom `av1_rd_pick_palette_intra_sbuv`, read-side dual
+//! rav1d `rav1d_read_pal_uv`).
 
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
@@ -66,6 +70,29 @@ impl PaletteData {
   #[inline]
   pub fn size(&self) -> usize {
     self.colors.len()
+  }
+}
+
+/// A chosen chroma palette for one block: joint (U, V) color pairs plus the
+/// shared per-pixel color index map over the *chroma* block (full subsampled
+/// block dimensions, row-major, stride = chroma block width). Entry `i` of
+/// the map selects `(colors_u[i], colors_v[i])` for the two chroma planes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaletteUvData {
+  /// U colors, sorted non-decreasing (duplicates are legal: the U delta
+  /// coding has a minimum step of 0, unlike luma's 1).
+  pub colors_u: PaletteColors,
+  /// V colors, parallel to `colors_u` (no ordering constraint).
+  pub colors_v: PaletteColors,
+  /// Color index map, `chroma_block_width * chroma_block_height` entries.
+  pub map: Vec<u8>,
+}
+
+impl PaletteUvData {
+  #[inline]
+  pub fn size(&self) -> usize {
+    debug_assert_eq!(self.colors_u.len(), self.colors_v.len());
+    self.colors_u.len()
   }
 }
 
@@ -403,6 +430,116 @@ fn k_means(data: &[i16], centroids: &mut [i16], max_itr: usize) {
   centroids.copy_from_slice(&best[..k]);
 }
 
+/// Nearest-centroid assignment over interleaved 2-D points (squared
+/// euclidean distance, strict `<` so the lowest index wins ties), matching
+/// libaom's `av1_calc_indices_dim2`. `data` and `centroids` are interleaved
+/// `(u, v)` pairs. Returns the summed squared distance.
+fn calc_indices_dim2(
+  data: &[i16], centroids: &[i16], indices: &mut [u8],
+) -> u64 {
+  debug_assert_eq!(data.len() % 2, 0);
+  debug_assert_eq!(centroids.len() % 2, 0);
+  let k = centroids.len() / 2;
+  let mut dist = 0u64;
+  for (p, idx) in data.chunks_exact(2).zip(indices.iter_mut()) {
+    let d2 = |j: usize| -> u32 {
+      let du = i32::from(p[0]) - i32::from(centroids[2 * j]);
+      let dv = i32::from(p[1]) - i32::from(centroids[2 * j + 1]);
+      (du * du + dv * dv) as u32
+    };
+    let mut min_d = d2(0);
+    let mut min_i = 0u8;
+    for j in 1..k {
+      let d = d2(j);
+      if d < min_d {
+        min_d = d;
+        min_i = j as u8;
+      }
+    }
+    *idx = min_i;
+    dist += u64::from(min_d);
+  }
+  dist
+}
+
+/// Centroid update step over interleaved 2-D points, matching libaom's
+/// `calc_centroids_dim2`: rounded per-channel mean per cluster; empty
+/// clusters re-seeded from a deterministic LCG-selected data *point*.
+fn calc_centroids_dim2(data: &[i16], centroids: &mut [i16], indices: &[u8]) {
+  let k = centroids.len() / 2;
+  let n = data.len() / 2;
+  let mut count = [0u32; PALETTE_MAX_SIZE];
+  let mut sum = [[0i64; 2]; PALETTE_MAX_SIZE];
+  let mut rand_state = data[0] as u16 as u32;
+  for (p, &idx) in data.chunks_exact(2).zip(indices.iter()) {
+    let idx = idx as usize;
+    debug_assert!(idx < k);
+    count[idx] += 1;
+    sum[idx][0] += i64::from(p[0]);
+    sum[idx][1] += i64::from(p[1]);
+  }
+  for i in 0..k {
+    if count[i] == 0 {
+      let j = lcg_rand16(&mut rand_state) as usize % n;
+      centroids[2 * i] = data[2 * j];
+      centroids[2 * i + 1] = data[2 * j + 1];
+    } else {
+      for c in 0..2 {
+        debug_assert!(sum[i][c] >= 0);
+        centroids[2 * i + c] =
+          ((sum[i][c] + i64::from(count[i] / 2)) / i64::from(count[i])) as i16;
+      }
+    }
+  }
+}
+
+/// 2-D k-means over interleaved `(u, v)` pairs, ported from libaom's
+/// `av1_k_means_dim2` template instantiation: iterate assign/update up to
+/// `max_itr` times, keeping the best-distortion state.
+fn k_means_dim2(data: &[i16], centroids: &mut [i16], max_itr: usize) {
+  let n = data.len() / 2;
+  let mut cent_a: ArrayVec<i16, { 2 * PALETTE_MAX_SIZE }> =
+    centroids.iter().copied().collect();
+  let mut cent_b = cent_a.clone();
+  let mut idx_a = vec![0u8; n];
+  let mut idx_b = vec![0u8; n];
+
+  let mut this_dist = calc_indices_dim2(data, &cent_a, &mut idx_a);
+  let mut l = 0usize;
+  let mut best_l = 0usize;
+  let mut i = 0usize;
+  while i < max_itr {
+    let prev_dist = this_dist;
+    let prev_l = l;
+    l = 1 - l;
+    {
+      let (cur, prev): (&mut ArrayVec<_, 16>, &ArrayVec<_, 16>) =
+        if l == 1 { (&mut cent_b, &cent_a) } else { (&mut cent_a, &cent_b) };
+      cur.clear();
+      cur.extend(prev.iter().copied());
+      let prev_idx = if prev_l == 1 { &idx_b } else { &idx_a };
+      calc_centroids_dim2(data, cur, prev_idx);
+    }
+    let (cur_cent, prev_cent) =
+      if l == 1 { (&cent_b, &cent_a) } else { (&cent_a, &cent_b) };
+    if cur_cent[..] == prev_cent[..] {
+      break;
+    }
+    let cur_idx = if l == 1 { &mut idx_b } else { &mut idx_a };
+    this_dist = calc_indices_dim2(data, cur_cent, cur_idx);
+    if this_dist > prev_dist {
+      best_l = prev_l;
+      break;
+    }
+    i += 1;
+  }
+  if i == max_itr {
+    best_l = l;
+  }
+  let best = if best_l == 1 { &cent_b } else { &cent_a };
+  centroids.copy_from_slice(&best[..centroids.len()]);
+}
+
 /// Snaps centroids to nearby cache colors (within `4 << (bit_depth - 8)`),
 /// mirroring libaom's `optimize_palette_colors`: reusing a cached color is
 /// nearly free to code, so close-enough centroids move onto cache entries.
@@ -557,6 +694,240 @@ pub fn build_index_map(data: &[i16], colors: &[u16]) -> Vec<u8> {
   let mut map = vec![0u8; data.len()];
   calc_indices(data, &cents, &mut map);
   map
+}
+
+/// Maximum candidates returned by [`palette_candidates_uv`]: one joint
+/// k-means candidate plus one dominant-pairs candidate per palette size
+/// 2..=8.
+pub const MAX_PALETTE_UV_CANDIDATES: usize = 14;
+
+/// Runs the joint chroma palette color search on a block's flattened U and V
+/// planes, producing candidate `(colors_u, colors_v)` pairs for RD
+/// evaluation. This is libaom's `av1_rd_pick_palette_intra_sbuv` candidate
+/// generation: a 2-D k-means over the `(u, v)` pixel pairs per palette size,
+/// with the U channel snapped to the neighbor cache and the pairs sorted by
+/// U ascending (the coded order). No dedup: duplicate U values are legal
+/// (minimum delta step 0) and V is unconstrained.
+///
+/// Returns an empty list when the chroma block is not palettizable
+/// (`max(colors_u, colors_v) <= 1 || > PALETTE_COLOR_COUNT_THRESH`, counted
+/// in the 8-bit domain for high bit depths).
+pub fn palette_candidates_uv(
+  data_u: &[i16], data_v: &[i16], bit_depth: usize, cache: &[u16],
+  histogram: &mut [u32],
+) -> ArrayVec<(PaletteColors, PaletteColors), MAX_PALETTE_UV_CANDIDATES> {
+  let mut out = ArrayVec::new();
+  debug_assert_eq!(data_u.len(), data_v.len());
+  debug_assert!(!data_u.is_empty());
+
+  // Distinct-color counts per plane; the palettizability gate counts in the
+  // 8-bit domain (libaom `av1_count_colors_highbd`'s threshold path), the
+  // palette-size bound uses the full-depth counts.
+  let mut count_plane = |data: &[i16]| -> (usize, usize, i16, i16) {
+    let (colors, lower, upper) = count_colors(data, bit_depth, histogram);
+    let threshold = if bit_depth > 8 {
+      let shift = bit_depth - 8;
+      let mut bins = [false; 256];
+      let mut n = 0usize;
+      for (v, &count) in histogram[..1 << bit_depth].iter().enumerate() {
+        if count > 0 && !std::mem::replace(&mut bins[v >> shift], true) {
+          n += 1;
+        }
+      }
+      n
+    } else {
+      colors
+    };
+    (colors, threshold, lower, upper)
+  };
+  let (colors_u, thresh_u, lb_u, ub_u) = count_plane(data_u);
+  let (colors_v, thresh_v, lb_v, ub_v) = count_plane(data_v);
+
+  let colors_threshold = thresh_u.max(thresh_v);
+  if colors_threshold <= 1 || colors_threshold > PALETTE_COLOR_COUNT_THRESH {
+    return out;
+  }
+
+  // Interleave (u, v) pairs for the 2-D k-means.
+  let mut data: Vec<i16> = Vec::with_capacity(data_u.len() * 2);
+  for (&u, &v) in data_u.iter().zip(data_v.iter()) {
+    data.push(u);
+    data.push(v);
+  }
+
+  let push_unique =
+    |out: &mut ArrayVec<
+      (PaletteColors, PaletteColors),
+      MAX_PALETTE_UV_CANDIDATES,
+    >,
+     cand: (PaletteColors, PaletteColors)| {
+      if !out.contains(&cand) {
+        out.push(cand);
+      }
+    };
+
+  // Family 1: dominant (u, v) pairs by frequency, the 2-D analogue of the
+  // luma search's top-colors family. Not part of libaom's sbuv search
+  // (which is k-means-only) — added because rounded-mean k-means centroids
+  // measurably miss the *exact* palette on palette-exact screen content
+  // (off-by-1/2 chroma on this repo's synthetic roundtrips), and an exact
+  // palette codes an all-zero residual.
+  {
+    let mut pairs: Vec<(u32, u32)> = Vec::new(); // (count, key)
+    {
+      let mut keys: Vec<u32> = data_u
+        .iter()
+        .zip(data_v.iter())
+        .map(|(&u, &v)| ((u as u16 as u32) << 16) | (v as u16 as u32))
+        .collect();
+      keys.sort_unstable();
+      let mut i = 0usize;
+      while i < keys.len() {
+        let k = keys[i];
+        let mut c = 0u32;
+        while i < keys.len() && keys[i] == k {
+          c += 1;
+          i += 1;
+        }
+        pairs.push((c, k));
+      }
+    }
+    // Top pairs by count descending, key ascending on ties (deterministic).
+    pairs.sort_unstable_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    let max_pairs = pairs.len().min(PALETTE_MAX_SIZE);
+    for n in PALETTE_MIN_SIZE..=max_pairs {
+      // The coded order is U non-decreasing; a stable sort by U keeps the
+      // (arbitrary but deterministic) V order within equal-U pairs.
+      let mut top: Vec<(u16, u16)> = pairs[..n]
+        .iter()
+        .map(|&(_, k)| ((k >> 16) as u16, (k & 0xffff) as u16))
+        .collect();
+      top.sort_by_key(|&(u, _)| u);
+      let mut cu = PaletteColors::new();
+      let mut cv = PaletteColors::new();
+      for &(u, v) in &top {
+        cu.push(u);
+        cv.push(v);
+      }
+      push_unique(&mut out, (cu, cv));
+    }
+  }
+
+  // Family 2: joint 2-D k-means per size (libaom's sbuv candidates).
+  let max_n = colors_u.max(colors_v).min(PALETTE_MAX_SIZE);
+  const MAX_ITR: usize = 50;
+  let max_px = (1i16 << bit_depth) - 1;
+  for n in PALETTE_MIN_SIZE..=max_n {
+    // Evenly spaced per-channel initialization (libaom's exact form).
+    let mut centroids: ArrayVec<i16, { 2 * PALETTE_MAX_SIZE }> =
+      ArrayVec::new();
+    for i in 0..n {
+      centroids.push(
+        (i32::from(lb_u)
+          + (2 * i as i32 + 1) * i32::from(ub_u - lb_u) / n as i32 / 2)
+          as i16,
+      );
+      centroids.push(
+        (i32::from(lb_v)
+          + (2 * i as i32 + 1) * i32::from(ub_v - lb_v) / n as i32 / 2)
+          as i16,
+      );
+    }
+    k_means_dim2(&data, &mut centroids, MAX_ITR);
+    // Cache snap applies to the U channel only (libaom
+    // `optimize_palette_colors` with stride 2 touches indices 0, 2, 4, ...).
+    if !cache.is_empty() {
+      let min_threshold = 4i32 << (bit_depth - 8);
+      for cent in centroids.iter_mut().step_by(2) {
+        let mut best = i32::MAX;
+        let mut best_val = 0u16;
+        for &cv in cache {
+          let d = (i32::from(*cent) - i32::from(cv)).abs();
+          if d < best {
+            best = d;
+            best_val = cv;
+          }
+        }
+        if best <= min_threshold {
+          *cent = best_val as i16;
+        }
+      }
+    }
+    // Sort pairs by U ascending (libaom's selection sort, kept exactly for
+    // determinism on ties).
+    for i in 0..n.saturating_sub(1) {
+      let mut min_idx = i;
+      let mut min_val = centroids[2 * i];
+      for j in (i + 1)..n {
+        if centroids[2 * j] < min_val {
+          min_val = centroids[2 * j];
+          min_idx = j;
+        }
+      }
+      if min_idx != i {
+        centroids.swap(2 * i, 2 * min_idx);
+        centroids.swap(2 * i + 1, 2 * min_idx + 1);
+      }
+    }
+    // Clamp to the pixel range (libaom clips at extraction; k-means output
+    // of in-range data is already in range, this is the same safeguard).
+    let mut colors_u_cand = PaletteColors::new();
+    let mut colors_v_cand = PaletteColors::new();
+    for pair in centroids.chunks_exact(2) {
+      colors_u_cand.push(pair[0].clamp(0, max_px) as u16);
+      colors_v_cand.push(pair[1].clamp(0, max_px) as u16);
+    }
+    debug_assert!(colors_u_cand.windows(2).all(|w| w[0] <= w[1]));
+    push_unique(&mut out, (colors_u_cand, colors_v_cand));
+  }
+  out
+}
+
+/// Builds the shared chroma color index map for a block given its final
+/// joint palette: nearest `(u, v)` pair by squared euclidean distance,
+/// lowest index winning ties (libaom's `av1_calc_indices_dim2` on the final
+/// integer palette).
+pub fn build_index_map_uv(
+  data_u: &[i16], data_v: &[i16], colors_u: &[u16], colors_v: &[u16],
+) -> Vec<u8> {
+  debug_assert_eq!(data_u.len(), data_v.len());
+  debug_assert_eq!(colors_u.len(), colors_v.len());
+  let mut data: Vec<i16> = Vec::with_capacity(data_u.len() * 2);
+  for (&u, &v) in data_u.iter().zip(data_v.iter()) {
+    data.push(u);
+    data.push(v);
+  }
+  let mut cents: ArrayVec<i16, { 2 * PALETTE_MAX_SIZE }> = ArrayVec::new();
+  for (&u, &v) in colors_u.iter().zip(colors_v.iter()) {
+    cents.push(u as i16);
+    cents.push(v as i16);
+  }
+  let mut map = vec![0u8; data_u.len()];
+  calc_indices_dim2(&data, &cents, &mut map);
+  map
+}
+
+/// Computes the V-plane delta-coding parameters for a chroma palette,
+/// mirroring libaom's `av1_get_palette_delta_bits_v`: deltas are measured as
+/// the wraparound distance `min(|d|, 2^bd - |d|)`, the coded width is
+/// `max(ceil_log2(max_d + 1), bd - 4)`, and `zero_count` counts the deltas
+/// that need no sign bit. Returns `(bits, zero_count, min_bits)`.
+pub fn palette_delta_bits_v(
+  colors_v: &[u16], bit_depth: usize,
+) -> (u32, u32, u32) {
+  let max_val = 1i32 << bit_depth;
+  let min_bits = bit_depth as u32 - 4;
+  let mut zero_count = 0u32;
+  let mut max_d = 0i32;
+  for w in colors_v.windows(2) {
+    let v = (i32::from(w[1]) - i32::from(w[0])).abs();
+    let d = v.min(max_val - v);
+    max_d = max_d.max(d);
+    if d == 0 {
+      zero_count += 1;
+    }
+  }
+  (ceil_log2((max_d + 1) as usize).max(min_bits), zero_count, min_bits)
 }
 
 #[cfg(test)]

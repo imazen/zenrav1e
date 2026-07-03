@@ -98,6 +98,14 @@ fn encode(
 /// Decodes a raw AV1 frame OBU stream with rav1d-safe, returning the three
 /// planes with strides stripped.
 fn decode(data: &[u8], w: usize, h: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+  decode_ss(data, w, h, 1, 1)
+}
+
+/// [`decode`] generalized over chroma subsampling (`xdec`/`ydec` are the
+/// chroma decimation shifts; chroma planes are `ceil`-sized like AV1).
+fn decode_ss(
+  data: &[u8], w: usize, h: usize, xdec: usize, ydec: usize,
+) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
   let mut dec = rav1d_safe::Decoder::new().expect("decoder");
   let mut fr = dec.decode(data).expect("decode error");
   if fr.is_none() {
@@ -105,7 +113,7 @@ fn decode(data: &[u8], w: usize, h: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
   }
   let frame = fr.expect("no decoded frame");
   assert_eq!((frame.width() as usize, frame.height() as usize), (w, h));
-  let (cw, ch) = (w / 2, h / 2);
+  let (cw, ch) = ((w + xdec) >> xdec, (h + ydec) >> ydec);
   let (mut dy, mut du, mut dv) =
     (vec![0u8; w * h], vec![0u8; cw * ch], vec![0u8; cw * ch]);
   match frame.planes() {
@@ -344,5 +352,275 @@ fn palette_10bit_roundtrip() {
     exact as f64 >= total as f64 * 0.99,
     "10-bit palette luma should be (near-)exact on palette-exact content: \
      {exact}/{total}"
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chroma (UV) palette roundtrips.
+// ---------------------------------------------------------------------------
+
+/// Synthetic *chromatic* screen content: blocky few-color luma plus chroma
+/// striped through four (U, V) pairs chosen to exercise every UV coding
+/// path — a duplicate U value across two pairs (legal only because the U
+/// deltas have minimum step 0) and a V jump of 190 (30 <-> 220) whose
+/// wraparound distance (66) is shorter than the direct one, forcing the
+/// complement-coded V delta branch.
+fn synth_chroma_screen(
+  w: usize, h: usize, xdec: usize, ydec: usize,
+) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+  const PAIRS: [(u8, u8); 4] = [(60, 200), (100, 30), (100, 220), (180, 128)];
+  let (cw, ch) = ((w + xdec) >> xdec, (h + ydec) >> ydec);
+  let mut y = vec![0u8; w * h];
+  for j in 0..h {
+    for i in 0..w {
+      // Blocky few-color luma (keeps screen-content coding plausible and
+      // gives the luma palette something to win on too).
+      let region = (i / 32 + (j / 16) * 3) % 5;
+      y[j * w + i] = [16u8, 235, 80, 160, 40][region];
+    }
+  }
+  let mut u = vec![0u8; cw * ch];
+  let mut v = vec![0u8; cw * ch];
+  for j in 0..ch {
+    for i in 0..cw {
+      // Chroma stripes cycling through the four pairs every 8 chroma px in
+      // both axes: several distinct pairs inside every block, so a flat DC
+      // prediction is poor and the joint palette pays for itself.
+      let sel = ((i / 8) + (j / 8) * 2) % PAIRS.len();
+      u[j * cw + i] = PAIRS[sel].0;
+      v[j * cw + i] = PAIRS[sel].1;
+    }
+  }
+  (y, u, v)
+}
+
+fn encode_ss(
+  sy: &[u8], su: &[u8], sv: &[u8], w: usize, h: usize, q: usize, speed: u8,
+  palette: PaletteMode, cs: ChromaSampling,
+) -> Vec<u8> {
+  let (xdec, ydec) = match cs {
+    ChromaSampling::Cs420 => (1, 1),
+    ChromaSampling::Cs422 => (1, 0),
+    ChromaSampling::Cs444 => (0, 0),
+    ChromaSampling::Cs400 => unreachable!(),
+  };
+  let cw = (w + xdec) >> xdec;
+  let _ = (h + ydec) >> ydec;
+  let mut ss = SpeedSettings::from_preset(speed);
+  ss.prediction.palette = palette;
+  let enc = EncoderConfig {
+    width: w,
+    height: h,
+    speed_settings: ss,
+    quantizer: q,
+    min_quantizer: q as u8,
+    still_picture: true,
+    chroma_sampling: cs,
+    ..Default::default()
+  };
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u8> = cfg.new_context().unwrap();
+  let mut f = ctx.new_frame();
+  f.planes[0].copy_from_raw_u8(sy, w, 1);
+  f.planes[1].copy_from_raw_u8(su, cw, 1);
+  f.planes[2].copy_from_raw_u8(sv, cw, 1);
+  ctx.send_frame(f).unwrap();
+  ctx.flush();
+  let mut out = Vec::new();
+  loop {
+    match ctx.receive_packet() {
+      Ok(pkt) => out.extend_from_slice(&pkt.data),
+      Err(EncoderStatus::LimitReached) => break,
+      Err(EncoderStatus::Encoded) => {}
+      Err(e) => panic!("encode error: {e:?}"),
+    }
+  }
+  assert!(!out.is_empty());
+  out
+}
+
+/// The joint UV palette must fire on chroma-palettizable content and
+/// round-trip the chroma planes (near-)exactly through rav1d-safe, at BOTH
+/// chroma samplings (the 4:2:0 sliver zone is bug-class territory) and both
+/// partition search paths (s6 topdown, s2 bottomup). Exact chroma at q80 is
+/// decisive evidence the tool fired: hard chroma stripes DCT-coded under a
+/// flat DC prediction ring and cannot reconstruct exactly, while a
+/// palette-exact joint palette codes an all-zero residual.
+#[test]
+fn uv_palette_roundtrip_exact_chroma_both_samplings() {
+  let (w, h) = (256usize, 256usize);
+  for (cs, xdec, ydec) in
+    [(ChromaSampling::Cs420, 1usize, 1usize), (ChromaSampling::Cs444, 0, 0)]
+  {
+    let (sy, su, sv) = synth_chroma_screen(w, h, xdec, ydec);
+    for speed in [6u8, 2] {
+      let off =
+        encode_ss(&sy, &su, &sv, w, h, 80, speed, PaletteMode::Off, cs);
+      let on =
+        encode_ss(&sy, &su, &sv, w, h, 80, speed, PaletteMode::Always, cs);
+      assert_ne!(
+        on, off,
+        "palette Always == Off bytes on chroma screen content \
+         ({cs:?} s{speed}) — the palette search never fired"
+      );
+
+      // Additive dev hook (see the luma test): dump for external decoders.
+      if let Ok(dir) = std::env::var("PALETTE_TEST_DUMP_IVF") {
+        let mut ivf = Vec::new();
+        ivf.extend_from_slice(b"DKIF");
+        ivf.extend_from_slice(&0u16.to_le_bytes());
+        ivf.extend_from_slice(&32u16.to_le_bytes());
+        ivf.extend_from_slice(b"AV01");
+        ivf.extend_from_slice(&(w as u16).to_le_bytes());
+        ivf.extend_from_slice(&(h as u16).to_le_bytes());
+        ivf.extend_from_slice(&25u32.to_le_bytes());
+        ivf.extend_from_slice(&1u32.to_le_bytes());
+        ivf.extend_from_slice(&1u32.to_le_bytes());
+        ivf.extend_from_slice(&0u32.to_le_bytes());
+        ivf.extend_from_slice(&(on.len() as u32).to_le_bytes());
+        ivf.extend_from_slice(&0u64.to_le_bytes());
+        ivf.extend_from_slice(&on);
+        std::fs::write(format!("{dir}/uvpal_{cs:?}_s{speed}.ivf"), ivf)
+          .unwrap();
+        let mut src = sy.clone();
+        src.extend_from_slice(&su);
+        src.extend_from_slice(&sv);
+        std::fs::write(format!("{dir}/uvpal_{cs:?}_s{speed}.src.yuv"), src)
+          .unwrap();
+      }
+
+      let (dy, du, dv) = decode_ss(&on, w, h, xdec, ydec);
+      if let Ok(dir) = std::env::var("PALETTE_TEST_DUMP_IVF") {
+        let mut yuv = dy.clone();
+        yuv.extend_from_slice(&du);
+        yuv.extend_from_slice(&dv);
+        std::fs::write(format!("{dir}/uvpal_{cs:?}_s{speed}.rav1d.yuv"), yuv)
+          .unwrap();
+      }
+      let exact_frac = |a: &[u8], b: &[u8]| -> f64 {
+        let n = a.len().min(b.len());
+        let eq = a.iter().zip(b.iter()).filter(|(x, y)| x == y).count();
+        eq as f64 / n as f64
+      };
+      let (ey, eu, ev) =
+        (exact_frac(&sy, &dy), exact_frac(&su, &du), exact_frac(&sv, &dv));
+      println!(
+        "{cs:?} s{speed}: off={} on={} bytes, exact y={ey:.4} u={eu:.4} \
+         v={ev:.4}",
+        off.len(),
+        on.len()
+      );
+      assert!(
+        eu >= 0.99 && ev >= 0.99,
+        "chroma should be (near-)exact via the UV palette on palette-exact \
+         content ({cs:?} s{speed}): u={eu:.4} v={ev:.4} — either the UV \
+         palette never fired or its recon/coding diverged"
+      );
+      // And the decode must agree with the source luma too (the luma
+      // palette handles that side).
+      assert!(
+        ey >= 0.99,
+        "luma should be (near-)exact ({cs:?} s{speed}): {ey:.4}"
+      );
+    }
+  }
+}
+
+/// Odd-dimension and tiny frames stay decodable with palette on (the
+/// search skips partial edge blocks; the coded UV flag path must still be
+/// conformant everywhere), at both samplings.
+#[test]
+fn uv_palette_odd_dims_and_tiny_frames_decodable() {
+  for (w, h) in [(66usize, 34usize), (34, 18), (64, 64), (32, 32)] {
+    for (cs, xdec, ydec) in
+      [(ChromaSampling::Cs420, 1usize, 1usize), (ChromaSampling::Cs444, 0, 0)]
+    {
+      let (sy, su, sv) = synth_chroma_screen(w, h, xdec, ydec);
+      let on = encode_ss(&sy, &su, &sv, w, h, 80, 6, PaletteMode::Always, cs);
+      let (dy, _du, _dv) = decode_ss(&on, w, h, xdec, ydec);
+      let py = psnr(&sy, &dy);
+      assert!(
+        py > 25.0,
+        "implausible decode at {w}x{h} {cs:?}: y-psnr {py:.2}"
+      );
+    }
+  }
+}
+
+/// 10-bit joint UV palette: V wraparound arithmetic and U duplicate coding
+/// operate on bpc-wide literals; prove end-to-end at depth 10 with
+/// (near-)exact chroma.
+#[test]
+fn uv_palette_10bit_roundtrip() {
+  let (w, h) = (128usize, 128usize);
+  let (sy8, su8, sv8) = synth_chroma_screen(w, h, 1, 1);
+
+  let mut ss = SpeedSettings::from_preset(6);
+  ss.prediction.palette = PaletteMode::Always;
+  let enc = EncoderConfig {
+    width: w,
+    height: h,
+    speed_settings: ss,
+    quantizer: 80,
+    min_quantizer: 80,
+    still_picture: true,
+    bit_depth: 10,
+    chroma_sampling: ChromaSampling::Cs420,
+    ..Default::default()
+  };
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u16> = cfg.new_context().unwrap();
+  let mut f = ctx.new_frame();
+  let srcs: [(&[u8], usize); 3] = [(&sy8, w), (&su8, w / 2), (&sv8, w / 2)];
+  for (plane, (src, pw)) in f.planes.iter_mut().zip(srcs) {
+    let widened: Vec<u8> =
+      src.iter().flat_map(|&v| (u16::from(v) << 2).to_le_bytes()).collect();
+    plane.copy_from_raw_u8(&widened, pw * 2, 2);
+  }
+  ctx.send_frame(f).unwrap();
+  ctx.flush();
+  let mut obu = Vec::new();
+  while let Ok(pkt) = ctx.receive_packet() {
+    obu.extend_from_slice(&pkt.data);
+  }
+  assert!(!obu.is_empty());
+
+  let mut dec = rav1d_safe::Decoder::new().expect("decoder");
+  let mut fr = dec.decode(&obu).expect("decode error");
+  if fr.is_none() {
+    fr = dec.flush().ok().and_then(|mut v| v.drain(..).next());
+  }
+  let frame = fr.expect("no decoded frame");
+  let (cw, ch) = (w / 2, h / 2);
+  let mut exact = 0usize;
+  let mut total = 0usize;
+  let mut mism: Vec<(usize, usize, usize, u16, u16)> = Vec::new();
+  match frame.planes() {
+    rav1d_safe::Planes::Depth16(p) => {
+      for (pl, (plane, src)) in
+        [(p.u(), &su8), (p.v(), &sv8)].into_iter().enumerate()
+      {
+        for (j, row) in
+          plane.expect("chroma plane").rows().enumerate().take(ch)
+        {
+          for (i, &px) in row[..cw].iter().enumerate() {
+            total += 1;
+            if px == (src[j * cw + i] as u16) << 2 {
+              exact += 1;
+            } else if mism.len() < 24 {
+              mism.push((pl, j, i, (src[j * cw + i] as u16) << 2, px));
+            }
+          }
+        }
+      }
+    }
+    rav1d_safe::Planes::Depth8(_) => panic!("expected 10-bit output"),
+  }
+  for (pl, j, i, s, d) in &mism {
+    eprintln!("mismatch plane{} ({j},{i}): src={s} dec={d}", pl + 1);
+  }
+  assert!(
+    exact as f64 >= total as f64 * 0.99,
+    "10-bit UV palette chroma should be (near-)exact: {exact}/{total}"
   );
 }
