@@ -120,10 +120,13 @@ pub enum Tune {
   /// distortion metric with activity masking (like Psychovisual), plus the
   /// mechanisms that measured as wins on top of it: aom-style chroma
   /// delta-q by subsampling, the SSIMULACRA2-tuned quantization-matrix
-  /// level curves (QM is always on for this tune), and the Variance Boost
+  /// level curves (QM is always on for this tune), the Variance Boost
   /// per-superblock delta-q (flat superblocks get a finer quantizer through
   /// real delta_q syntax; replaces segmentation's variance allocation for
-  /// keyframes under this tune).
+  /// keyframes under this tune), the QM-weighted RD distortion ratio
+  /// (luma RDO error scaled by the per-block QM-weighted/unweighted
+  /// tx-error ratio), and the {7,5,3}@{80,160} loop-filter sharpness
+  /// schedule (frame-header deblock sharpness, backed off by base_q_idx).
   ///
   /// Every ported libaom mechanism was A/B-measured with ssim2 AND
   /// butteraugli (metric-gaming guard); aom's all-intra rdmult weight and
@@ -1877,8 +1880,17 @@ impl<T: Pixel> FrameInvariants<T> {
   /// which is why the schedule backs off with rising base_q_idx.
   pub fn lf_sharpness(&self) -> u8 {
     match self.config.tune {
-      // For still images, increase deblocking sharpness to preserve edges.
-      Tune::StillImage => {
+      // For still images and the ssimulacra2 tune, increase deblocking
+      // sharpness to preserve edges, backing off as quality drops. For
+      // Tune::Ssimulacra2 this schedule won the 4-arm zenrav1e#30 item-1
+      // A/B (vs sharpness 0, aom's constant 7, and tune-IQ's {7,1,0}
+      // qindex clamp): ssim2 BD -0.43% median (19/24) on train26 and
+      // -0.67% (16/19 photos) on the legacy corpus, with both butteraugli
+      // norms far inside the metric-gaming veto. aom ships constant 7 for
+      // its SS2/IQ/allintra modes (picklpf.c:220-231); on zenrav1e the
+      // backed-off schedule matched const-7 on ssim2 with less butteraugli
+      // cost. Record: zenavif benchmarks/rd_gap_lfsharp_2026-07-03.tsv.
+      Tune::StillImage | Tune::Ssimulacra2 => {
         if self.base_q_idx < 80 {
           7 // High quality: maximum edge preservation
         } else if self.base_q_idx < 160 {

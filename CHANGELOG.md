@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Fixed
+- **Deblock filter + level optimizer honor frame-header `sharpness`**
+  (aba01be7): nonzero sharpness (previously only Tune::StillImage's
+  schedule) was written to the frame header but ignored by the encoder's
+  own loop filter and by `deblock_filter_optimize` — encoder recon
+  diverged from every conforming decoder and levels were priced for
+  thresholds the decoder would not use. The threshold inversions
+  (`limit_to_level`/`blimit_to_level`) now take sharpness, with exact
+  const-built inverse tables verified exhaustively against the AV1
+  7.14.4 forward map; sharpness is decided once per frame BEFORE tile
+  encoding (delayed-loopfilter RDO included) and forced 0 for lossless.
+  Sharpness-0 output (every non-StillImage config) is byte-identical
+  (18/18-cell md5 gate vs the previous master binary).
 - **Skipped intra blocks now write their prediction into the recon**
   (b30dd752): `write_tx_blocks` early-returned on skip, so any intra block
   whose residual quantized to zero (coded skip=1) left stale RDO-trial
@@ -24,6 +36,23 @@
   zenrav1e output (rd_gap, tune sweeps) wherever the tools fire.
 
 ### Added
+- **Loop-filter sharpness schedule for `Tune::Ssimulacra2`** (zenrav1e#30
+  item 1): the tune now codes frame-header deblock sharpness {7,5,3} at
+  base_q_idx {<80, <160, else} — the schedule Tune::StillImage already
+  used — after a 4-arm A/B (sharpness 0; aom's constant 7; tune-IQ's
+  {7,1,0}@{112,160} qindex clamp; this schedule) on the zenavif rd_gap
+  harness with the mandatory butteraugli veto. Measured (train26, cavif
+  s2+tune, full 12-pt grid, direct isolation): ssim2 BD −0.43% median /
+  −0.47% mean (better 19/24); legacy photos −0.67% median (16/19) with
+  butteraugli flat (ba3n +0.00%, bamax −0.12% med). First tune ingredient
+  where butteraugli's sign diverges from ssim2 on train26 (+0.11/+0.29%,
+  far under the +1.0/+1.5 veto) — sharpness trades a small blocking cost
+  for a larger edge-retention win; aom ships constant 7 for SS2/IQ on
+  subjective-sharpness grounds. const-7 tied on ssim2 (Δ0.0015%) and lost
+  the pre-registered ba3n tie-break; the adaptive clamp missed the −0.3%
+  ship bar (−0.23%). 110/110-cell aomdec+rav1d-safe conformance at s2 and
+  s1-deep with the schedule armed. Record: zenavif
+  benchmarks/rd_gap_lfsharp_2026-07-03.tsv + docs/RD_GAP_VS_LIBAOM.md.
 - **QM-weighted RD distortion for `Tune::Ssimulacra2`** (the
   `dist_metric=AOM_DIST_METRIC_QM_PSNR` analog, adapted): the tune's luma
   RDO distortion is now scaled by the per-block QM-weighted / unweighted
