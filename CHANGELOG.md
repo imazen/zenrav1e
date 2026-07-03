@@ -20,6 +20,22 @@
   `docs/RD_GAP_VS_LIBAOM.md` "Size-decay isolation A/B".
 
 ### Fixed
+- **Intra 64x64-parent 4-way slivers now require TX_MODE_SELECT** (1dabba91,
+  #34): the 3fa735dc sliver TX cap (TX_64X16/16X64 -> TX_32X16/16X32) is
+  decoder-followable only via the written intra tx-size depth -- a
+  TX_MODE_SELECT symbol. With `rdo_tx_decision=false` the frame header
+  signals TX_MODE_LARGEST, no tx-size symbol exists, and conforming decoders
+  (aomdec, rav1d-safe) derived the uncapped sliver transform against capped
+  coefficient units -- guaranteed desync ("Corrupted segment_ids" / "Failed
+  to decode tile data"). Latent since 7d254289 (HORZ_4/VERT_4 Phase 1);
+  reachable via `override_partition_range` max=64 and the stock speed 6-8
+  presets (partition max 64 + rdo_tx off) on intra frames.
+  `encode_partition_topdown` now offers intra 64-parent 4-way (and nested
+  mixed-3-way) candidates only under `tx_mode_select`; both sliver-cap sites
+  hard-assert the invariant. Plain 64-dim transforms (TX_64X64/64X32/32X64)
+  code consistently under LARGEST and remain offered. Verified: 6/6
+  previously-corrupt shapes clean under both decoders, byte-identity at
+  shipped default configs, 170 lib tests.
 - **Deblock filter + level optimizer honor frame-header `sharpness`**
   (aba01be7): nonzero sharpness (previously only Tune::StillImage's
   schedule) was written to the frame header but ignored by the encoder's
