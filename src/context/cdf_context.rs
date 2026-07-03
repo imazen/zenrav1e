@@ -34,6 +34,7 @@ pub struct CDFContext {
   pub filter_intra_mode_cdf:
     [u16; FilterIntraMode::FILTER_INTRA_MODES as usize],
   pub intra_inter_cdfs: [[u16; 2]; INTRA_INTER_CONTEXTS],
+  pub intrabc_cdf: [u16; 2],
   pub lrf_sgrproj_cdf: [u16; 2],
   pub lrf_wiener_cdf: [u16; 2],
   pub newmv_cdf: [[u16; 2]; NEWMV_MODE_CONTEXTS],
@@ -149,6 +150,7 @@ impl CDFContext {
       txfm_partition_cdf: default_txfm_partition_cdf,
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
+      intrabc_cdf: default_intrabc_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
       filter_intra_mode_cdf: default_filter_intra_mode_cdf,
@@ -251,6 +253,7 @@ impl CDFContext {
 
     reset_2d!(self.skip_cdfs);
     reset_2d!(self.intra_inter_cdfs);
+    reset_1d!(self.intrabc_cdf);
     reset_2d!(self.angle_delta_cdf);
     reset_2d!(self.filter_intra_cdfs);
     reset_1d!(self.filter_intra_mode_cdf);
@@ -395,6 +398,8 @@ impl CDFContext {
       txfm_partition_cdf_start + size_of_val(&self.txfm_partition_cdf);
     let skip_cdfs_start = self.skip_cdfs.first().unwrap().as_ptr() as usize;
     let skip_cdfs_end = skip_cdfs_start + size_of_val(&self.skip_cdfs);
+    let intrabc_cdf_start = self.intrabc_cdf.as_ptr() as usize;
+    let intrabc_cdf_end = intrabc_cdf_start + size_of_val(&self.intrabc_cdf);
     let intra_inter_cdfs_start =
       self.intra_inter_cdfs.first().unwrap().as_ptr() as usize;
     let intra_inter_cdfs_end =
@@ -557,6 +562,7 @@ impl CDFContext {
       ("txfm_partition_cdf", txfm_partition_cdf_start, txfm_partition_cdf_end),
       ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
+      ("intrabc_cdf", intrabc_cdf_start, intrabc_cdf_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
       ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
       (
@@ -670,13 +676,30 @@ pub struct ContextWriterCheckpoint {
   pub bc: BlockContextCheckpoint,
 }
 
-struct CDFContextLogPartition<const CDF_LEN_MAX_PLUS_1: usize> {
-  pub data: Vec<[u16; CDF_LEN_MAX_PLUS_1]>,
+/// One undo-log partition. Each entry is `[u16; ENTRY_LEN]` holding an
+/// EXACT-length CDF snapshot: `len` payload words at `[0..len]`, the
+/// `CDFContext` byte offset at `[ENTRY_LEN - 2]`, and `len` itself at
+/// `[ENTRY_LEN - 1]`.
+///
+/// Exact lengths are load-bearing, not an optimization: the log previously
+/// captured and restored a fixed `ENTRY_LEN - 1` words regardless of the
+/// CDF's real length, so a push near the end of one CDF table spilled its
+/// snapshot into the FIRST WORDS OF THE NEXT FIELD — and because the small
+/// and large partitions roll back sequentially (all of `small`, then all of
+/// `large`) rather than in one global LIFO order, a large-partition entry's
+/// overspilled restore could land after the small partition had already
+/// correctly restored those bytes, resurrecting mid-trial CDF state. With
+/// `palette_y_color_index_cdf` (8-wide rows, large log) directly followed
+/// by `palette_uv_color_index_cdf` (whose n=2..4 rows adapt through the
+/// small log), a luma n=8 color-index update at the last row `[6][4]`
+/// clobbered the UV n=2 row `[0][0]` on rollback — a real bitstream desync
+/// once the UV palette began adapting those bytes (silent while they held
+/// constant defaults, which is why luma-only palette streams never hit it).
+struct CDFContextLogPartition<const ENTRY_LEN: usize> {
+  pub data: Vec<[u16; ENTRY_LEN]>,
 }
 
-impl<const CDF_LEN_MAX_PLUS_1: usize>
-  CDFContextLogPartition<CDF_LEN_MAX_PLUS_1>
-{
+impl<const ENTRY_LEN: usize> CDFContextLogPartition<ENTRY_LEN> {
   fn new(capacity: usize) -> Self {
     Self { data: Vec::with_capacity(capacity) }
   }
@@ -684,7 +707,12 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
   fn push<const CDF_LEN: usize>(
     &mut self, fc: &mut CDFContext, cdf: CDFOffset<CDF_LEN>,
   ) -> &mut [u16; CDF_LEN] {
-    debug_assert!(CDF_LEN < CDF_LEN_MAX_PLUS_1);
+    // (The hard compile-time bound lives in `CDFContextLog::push`, which
+    // knows the partition dispatch; this debug_assert covers direct
+    // callers. Both partition monomorphizations exist for every CDF_LEN,
+    // so an unconditional const assert here would fire for the
+    // unreachable small-partition instantiations.)
+    debug_assert!(CDF_LEN + 2 <= ENTRY_LEN);
     debug_assert!(cdf.offset <= u16::MAX.into());
     // SAFETY: Maintain an invariant of non-zero spare capacity, so that
     // branching may be deferred until writes are issued. Benchmarks indicate
@@ -697,11 +725,14 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
       let dst = self.data.as_mut_ptr().add(len) as *mut u16;
       let base = fc as *mut _ as *mut u8;
       let src = base.add(cdf.offset) as *const u16;
-      dst.copy_from_nonoverlapping(src, CDF_LEN_MAX_PLUS_1 - 1);
-      *dst.add(CDF_LEN_MAX_PLUS_1 - 1) = cdf.offset as u16;
+      // Exact-length snapshot: never read (or later restore) bytes beyond
+      // this CDF — see the partition doc comment.
+      dst.copy_from_nonoverlapping(src, CDF_LEN);
+      *dst.add(ENTRY_LEN - 2) = cdf.offset as u16;
+      *dst.add(ENTRY_LEN - 1) = CDF_LEN as u16;
       self.data.set_len(new_len);
-      if CDF_LEN_MAX_PLUS_1 > capacity.wrapping_sub(new_len) {
-        self.data.reserve(CDF_LEN_MAX_PLUS_1);
+      if ENTRY_LEN > capacity.wrapping_sub(new_len) {
+        self.data.reserve(ENTRY_LEN);
       }
       let cdf = base.add(cdf.offset) as *mut [u16; CDF_LEN];
       &mut *cdf
@@ -719,9 +750,11 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
         len -= 1;
         src = src.sub(1);
         let src = src as *mut u16;
-        let offset = *src.add(CDF_LEN_MAX_PLUS_1 - 1) as usize;
+        let offset = *src.add(ENTRY_LEN - 2) as usize;
+        let cdf_len = *src.add(ENTRY_LEN - 1) as usize;
+        debug_assert!(cdf_len + 2 <= ENTRY_LEN);
         let dst = base.add(offset) as *mut u16;
-        dst.copy_from_nonoverlapping(src, CDF_LEN_MAX_PLUS_1 - 1);
+        dst.copy_from_nonoverlapping(src, cdf_len);
       }
       self.data.set_len(len);
     }
@@ -731,8 +764,8 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
 const CDF_LEN_SMALL: usize = 4;
 
 pub struct CDFContextLog {
-  small: CDFContextLogPartition<{ CDF_LEN_SMALL + 1 }>,
-  large: CDFContextLogPartition<{ CDF_LEN_MAX + 1 }>,
+  small: CDFContextLogPartition<{ CDF_LEN_SMALL + 2 }>,
+  large: CDFContextLogPartition<{ CDF_LEN_MAX + 2 }>,
 }
 
 impl Default for CDFContextLog {
@@ -755,6 +788,22 @@ impl CDFContextLog {
   pub fn push<const CDF_LEN: usize>(
     &mut self, fc: &mut CDFContext, cdf: CDFOffset<CDF_LEN>,
   ) -> &mut [u16; CDF_LEN] {
+    // Hard compile-time bounds (corruption-class guards, zero runtime
+    // cost): every CDF length must fit its partition's entry (payload +
+    // offset + length words), and every CDF offset in the context must
+    // fit the u16 offset slot -- silent truncation of either would
+    // corrupt CDF state on rollback.
+    const {
+      assert!(
+        CDF_LEN + 2
+          <= if CDF_LEN <= CDF_LEN_SMALL {
+            CDF_LEN_SMALL + 2
+          } else {
+            CDF_LEN_MAX + 2
+          }
+      );
+      assert!(size_of::<CDFContext>() <= u16::MAX as usize);
+    }
     if CDF_LEN <= CDF_LEN_SMALL {
       self.small.push(fc, cdf)
     } else {
@@ -827,5 +876,71 @@ impl<'a> ContextWriter<'a> {
         self.fc_map = Some(FieldMap { map: self.fc.build_map() });
       }
     }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  /// The undo log must capture and restore EXACTLY the updated CDF's words.
+  /// The old fixed-width log spilled a large-partition snapshot from the
+  /// last `palette_y_color_index_cdf` row into the first words of
+  /// `palette_uv_color_index_cdf`; because the small partition rolls back
+  /// before the large one, the spilled restore resurrected stale UV
+  /// color-index state — a real, content-dependent bitstream desync once
+  /// the UV palette adapts those bytes (silent for luma-only palettes,
+  /// whose adjacent bytes never changed).
+  #[test]
+  fn cdf_log_rollback_is_exact_length_across_field_boundaries() {
+    let mut fc = Box::new(CDFContext::new(50));
+    let mut log = CDFContextLog::default();
+    let checkpoint = log.checkpoint();
+
+    let uv_default = fc.palette_uv_color_index_cdf[0][0];
+    let y_default = fc.palette_y_color_index_cdf[6][4];
+
+    // 1. Adapt the UV n=2 row (small partition) FIRST...
+    {
+      let uv_row: *const [u16; 2] =
+        fc.palette_uv_color_index_cdf[0][0].first_chunk::<2>().unwrap();
+      let off = fc.offset(uv_row);
+      let cdf = log.push(&mut fc, off);
+      cdf[0] = cdf[0].wrapping_add(1000);
+      cdf[1] += 1;
+    }
+    let uv_dirty = fc.palette_uv_color_index_cdf[0][0];
+
+    // 2. ...then update the LAST luma color-index row (8 wide -> large
+    // partition), whose old fixed-width snapshot would capture the dirty
+    // UV words above.
+    {
+      let y_row: *const [u16; 8] = &fc.palette_y_color_index_cdf[6][4];
+      let off = fc.offset(y_row);
+      let cdf = log.push(&mut fc, off);
+      cdf[0] = cdf[0].wrapping_add(777);
+      cdf[7] += 1;
+    }
+
+    // 3. Roll back: both rows must return exactly to their defaults. The
+    // old log left the UV row at its step-1 ("dirty") state: the small
+    // partition restored it, then the large partition's 16-word restore
+    // re-clobbered it with the dirty snapshot.
+    log.rollback(&mut fc, &checkpoint);
+    std::assert_eq!(
+      fc.palette_y_color_index_cdf[6][4],
+      y_default,
+      "luma color-index row must restore exactly"
+    );
+    std::assert_eq!(
+      fc.palette_uv_color_index_cdf[0][0],
+      uv_default,
+      "UV color-index row must restore exactly (no cross-field overspill)"
+    );
+    std::assert_ne!(
+      uv_dirty,
+      uv_default,
+      "sanity: the UV row was actually modified mid-log"
+    );
   }
 }
