@@ -884,6 +884,16 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
   let sliver_cap =
     !is_inter && matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64);
   if sliver_cap {
+    // The cap is decoder-followable ONLY via the written tx-size depth,
+    // which exists only under TX_MODE_SELECT. Under TX_MODE_LARGEST the
+    // decoder derives the uncapped TX_64X16/TX_16X64 and the coefficient
+    // stream desyncs (zenrav1e#34) -- `encode_partition_topdown` must not
+    // offer 64x64-parent 4-way types without tx_mode_select. Hard assert
+    // in all builds: a silent violation is bitstream corruption.
+    assert!(
+      fi.tx_mode_select,
+      "intra 64-dim sliver TX cap requires TX_MODE_SELECT (zenrav1e#34)"
+    );
     tx_size = sub_tx_size_map[tx_size as usize];
   }
 
@@ -1894,7 +1904,12 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         // at a fraction of the cost.
         let mut tx_size = max_txsize_rect_lookup[bsize as usize];
         if matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64) {
-          // Same unvalidated-sliver-transform cap as `rdo_tx_size_type`.
+          // Same unvalidated-sliver-transform cap as `rdo_tx_size_type`,
+          // with the same TX_MODE_SELECT requirement (zenrav1e#34).
+          assert!(
+            fi.tx_mode_select,
+            "intra 64-dim sliver TX cap requires TX_MODE_SELECT (zenrav1e#34)"
+          );
           tx_size = sub_tx_size_map[tx_size as usize];
         }
         let tx_type = TxType::DCT_DCT;

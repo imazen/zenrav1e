@@ -4262,13 +4262,28 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // path (dead code upstream; bisected to bitstream corruption 2026-07-02).
       // Intra coding caps those slivers to TX_32X16/TX_16X32 in
       // `rdo_tx_size_type` -- a choice the decoder follows via the written
-      // tx-size depth. Inter blocks cannot signal that cap when
-      // `enable_inter_txfm_split` is off (`write_tx_size_inter`'s split flag
-      // would contradict the coded size), so only offer 64X64-parent 4-way
-      // types when every resulting sliver is safely codable.
+      // tx-size depth, WHICH ONLY EXISTS UNDER TX_MODE_SELECT. When
+      // `tx_mode_select` is false (rdo_tx_decision off => the frame header
+      // signals TX_MODE_LARGEST) no tx-size symbol is coded: a conforming
+      // decoder derives the uncapped TX_64X16/TX_16X64 while the encoder
+      // coded TX_32X16/TX_16X32 units -- a guaranteed coefficient-stream
+      // desync (zenrav1e#34: aomdec "Corrupted segment_ids" / "Failed to
+      // decode tile data"; bisected to 7d254289, latent since Phase 1;
+      // clean pre-Phase-1 because plain HORZ/VERT 64-dim transforms
+      // (TX_64X64/64X32/32X64) code consistently under LARGEST). Reachable
+      // via `override_partition_range` and via the stock speed 6-8 presets
+      // (partition max 64 + rdo_tx_decision=false) on intra frames. Inter
+      // blocks cannot signal the cap either when `enable_inter_txfm_split`
+      // is off (`write_tx_size_inter`'s split flag would contradict the
+      // coded size). So only offer 64X64-parent 4-way types when every
+      // resulting sliver is safely codable: inter needs
+      // enable_inter_txfm_split, intra needs tx_mode_select.
       let sliver_tx_safe = bsize != BlockSize::BLOCK_64X64
-        || !fi.frame_type.has_inter()
-        || fi.enable_inter_txfm_split;
+        || if fi.frame_type.has_inter() {
+          fi.enable_inter_txfm_split
+        } else {
+          fi.tx_mode_select
+        };
       if fully_contained
         && sliver_tx_safe
         && matches!(
