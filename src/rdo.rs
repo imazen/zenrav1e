@@ -3108,6 +3108,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
       &tileblocks_subset.as_const(),
       crop_w,
       crop_h,
+      ts.deblock.sharpness,
     );
 
     // Deblock the contents of our reconstruction copy.

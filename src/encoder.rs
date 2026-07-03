@@ -1870,6 +1870,27 @@ impl<T: Pixel> FrameInvariants<T> {
       && self.ac_delta_q.iter().all(|&d| d == 0)
   }
 
+  /// Frame-header loop-filter `sharpness` schedule (AV1 5.9.11). Nonzero
+  /// sharpness clamps the deblock filter's "inside" threshold (spec
+  /// 7.14.4) so strong edges are filtered less — preserving perceived
+  /// sharpness at the cost of more visible blocking as quality drops,
+  /// which is why the schedule backs off with rising base_q_idx.
+  pub fn lf_sharpness(&self) -> u8 {
+    match self.config.tune {
+      // For still images, increase deblocking sharpness to preserve edges.
+      Tune::StillImage => {
+        if self.base_q_idx < 80 {
+          7 // High quality: maximum edge preservation
+        } else if self.base_q_idx < 160 {
+          5
+        } else {
+          3
+        }
+      }
+      _ => 0,
+    }
+  }
+
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
     self.base_q_idx = qps.ac_qi[0];
     let base_q_idx = self.base_q_idx as i32;
@@ -4572,6 +4593,14 @@ fn encode_tile_group<T: Pixel>(
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let ti = &fi.sequence.tiling;
 
+  // Frame-header loop-filter sharpness (AV1 5.9.11). Decided once per
+  // frame BEFORE any tile encodes so every consumer prices the same
+  // thresholds the decoder will apply: the delayed-loopfilter RDO inside
+  // the tiles, the frame-level deblock level search, the final filter
+  // pass, and the header write. Lossless frames code no loop-filter
+  // params (write_deblock_filter_b returns early), so keep the default 0.
+  fs.deblock.sharpness = if fi.is_lossless() { 0 } else { fi.lf_sharpness() };
+
   let initial_cdf = get_initial_cdfcontext(fi);
   // dynamic allocation: once per frame
   let mut cdfs = vec![initial_cdf; ti.tile_count()];
@@ -4606,21 +4635,10 @@ fn encode_tile_group<T: Pixel>(
         &blocks.as_tile_blocks(),
         fi.width,
         fi.height,
+        ts.deblock.sharpness,
       )
     });
     fs.deblock.levels = levels;
-
-    // For still images, increase deblocking sharpness to preserve edges.
-    // AV1 sharpness range is 0-7. Higher = less deblocking near edges.
-    if fi.config.tune == Tune::StillImage {
-      fs.deblock.sharpness = if fi.base_q_idx < 80 {
-        7 // High quality: maximum edge preservation
-      } else if fi.base_q_idx < 160 {
-        5
-      } else {
-        3
-      };
-    }
 
     if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
       fs.apply_tile_state_mut(|ts| {
@@ -4998,6 +5016,7 @@ fn encode_tile<'a, T: Pixel>(
       &cw.bc.blocks.as_const(),
       fi.width,
       fi.height,
+      ts.deblock.sharpness,
     );
 
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
