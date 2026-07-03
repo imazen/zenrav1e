@@ -1536,10 +1536,15 @@ impl RestorationState {
               );
             }
             RestorationFilter::Sgrproj { set, xqd } => {
-              if !fi.sequence.enable_cdef {
-                continue;
-              }
-
+              // Apply unconditionally: whatever the bitstream signals, the
+              // encoder recon must reproduce a conforming decoder's output.
+              // An inherited `if !enable_cdef { continue }` skip here left
+              // signaled sgrproj units unapplied in the recon for
+              // cdef-off + lrf-on configs (API-reachable; the sgrproj RDO
+              // is gated only on enable_restoration), desyncing the recon
+              // from aomdec/rav1d-safe (zenrav1e#32). With cdef off,
+              // `cdeffed` == deblocked, which is exactly the decoder-side
+              // LR input in that configuration.
               setup_integral_image(
                 &mut stripe_filter_buffer,
                 STRIPE_IMAGE_STRIDE,
