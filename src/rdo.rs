@@ -29,6 +29,7 @@ use crate::encode_block_with_modes;
 use crate::encoder::{FrameInvariants, IMPORTANCE_BLOCK_SIZE};
 use crate::frame::*;
 use crate::header::ReferenceMode;
+use crate::intrabc::{dv_prediction, is_dv_valid, sad_at_dv};
 use crate::lrf::*;
 use crate::mc::MotionVector;
 use crate::me::MVSamplingMode;
@@ -2200,6 +2201,291 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
               cw.rollback(cw_checkpoint);
             }
+          }
+        }
+      }
+    }
+  }
+
+  // Try intra block copy (intraBC, AV1 screen content tool): the block is
+  // predicted by a fullpel copy from the already-reconstructed area of the
+  // same frame, coded as a displacement vector against the spec's DV
+  // prediction. Candidates are the DV prediction, the neighbor stack, the
+  // adjacent-block copies, and a diamond refinement over the valid region,
+  // ranked by luma SAD against the reconstruction; the best two go through
+  // full-rate RD trials (real writers, like the palette trials above).
+  //
+  // Chunk-A scope (documented in `crate::intrabc`): 8x8..64x64 non-4:1
+  // blocks, fully visible, chroma-fullpel DVs.
+  if fi.allow_intrabc
+    && !fi.frame_type.has_inter()
+    && !fi.is_lossless()
+    && bsize.width() >= 8
+    && bsize.height() >= 8
+    && bsize.width() <= 64
+    && bsize.height() <= 64
+    && bsize.width() != 4 * bsize.height()
+    && bsize.height() != 4 * bsize.width()
+  {
+    let frame_bo = ts.to_frame_block_offset(tile_bo);
+    let fully_visible = frame_bo.0.x + bsize.width_mi() <= fi.w_in_b
+      && frame_bo.0.y + bsize.height_mi() <= fi.h_in_b;
+    if fully_visible {
+      use crate::segmentation::select_segment;
+
+      let sb128 = fi.sequence.use_128x128_superblock;
+      let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+      let mut dv_stack = ArrayVec::<CandidateMV, 9>::new();
+      let dv_ctx = cw.find_mvrefs(
+        tile_bo,
+        [RefType::INTRA_FRAME, RefType::NONE_FRAME],
+        &mut dv_stack,
+        bsize,
+        fi,
+        false,
+      );
+      let pred_dv = dv_prediction(&dv_stack, tile_bo, sb128);
+
+      // Chroma-fullpel alignment: with subsampled chroma, only DVs whose
+      // px offsets are even on the subsampled axes keep every plane a
+      // pure copy (subpel chroma DV prediction is not implemented).
+      let (ax, ay) = if is_chroma_block {
+        ((8i16) << xdec, (8i16) << ydec)
+      } else {
+        (8, 8)
+      };
+      let snap = |dv: MotionVector| MotionVector {
+        row: dv.row / ay * ay,
+        col: dv.col / ax * ax,
+      };
+      let valid = |dv: MotionVector| -> bool {
+        dv.col % ax == 0
+          && dv.row % ay == 0
+          && (dv.col != 0 || dv.row != 0)
+          && is_dv_valid(
+            dv,
+            bsize,
+            tile_bo.0.y,
+            tile_bo.0.x,
+            ts.mi_height,
+            ts.mi_width,
+            is_chroma_block,
+            xdec,
+            ydec,
+            sb128,
+          )
+      };
+
+      // Seed candidates.
+      let mut seeds: ArrayVec<MotionVector, 16> = ArrayVec::new();
+      let push_seed = |s: &mut ArrayVec<MotionVector, 16>,
+                       dv: MotionVector| {
+        let dv = snap(dv);
+        if valid(dv) && !s.contains(&dv) && !s.is_full() {
+          s.push(dv);
+        }
+      };
+      push_seed(&mut seeds, pred_dv);
+      for c in dv_stack.iter().take(4) {
+        push_seed(&mut seeds, c.this_mv);
+      }
+      let w8 = (bsize.width() * 8) as i16;
+      let h8 = (bsize.height() * 8) as i16;
+      push_seed(&mut seeds, MotionVector { row: 0, col: -w8 });
+      push_seed(&mut seeds, MotionVector { row: -h8, col: 0 });
+      push_seed(&mut seeds, MotionVector { row: 0, col: -2 * w8 });
+      push_seed(&mut seeds, MotionVector { row: -2 * h8, col: 0 });
+      push_seed(&mut seeds, MotionVector { row: -512, col: 0 });
+      push_seed(&mut seeds, MotionVector { row: 0, col: -512 - 2048 });
+
+      if !seeds.is_empty() {
+        // SAD-rank the seeds, then diamond-refine from the best.
+        let mut best_dv = seeds[0];
+        let mut best_sad = u64::MAX;
+        let mut second_dv: Option<MotionVector> = None;
+        let mut second_sad = u64::MAX;
+        let consider = |dv: MotionVector,
+                        best_dv: &mut MotionVector,
+                        best_sad: &mut u64,
+                        second_dv: &mut Option<MotionVector>,
+                        second_sad: &mut u64| {
+          let sad = sad_at_dv(ts, tile_bo, bsize, dv);
+          if sad < *best_sad {
+            if *best_sad != u64::MAX && *best_dv != dv {
+              *second_sad = *best_sad;
+              *second_dv = Some(*best_dv);
+            }
+            *best_sad = sad;
+            *best_dv = dv;
+          } else if sad < *second_sad && dv != *best_dv {
+            *second_sad = sad;
+            *second_dv = Some(dv);
+          }
+        };
+        for &dv in &seeds {
+          consider(
+            dv,
+            &mut best_dv,
+            &mut best_sad,
+            &mut second_dv,
+            &mut second_sad,
+          );
+        }
+        // Diamond refinement in px steps (finishing at the alignment
+        // granularity), bounded to a fixed number of probes.
+        let mut probes = 0usize;
+        let mut step_px = 64i16;
+        while step_px >= 1 && probes < 64 {
+          let step_x = (step_px * 8).max(ax);
+          let step_y = (step_px * 8).max(ay);
+          let around = [
+            MotionVector { row: best_dv.row - step_y, col: best_dv.col },
+            MotionVector { row: best_dv.row + step_y, col: best_dv.col },
+            MotionVector { row: best_dv.row, col: best_dv.col - step_x },
+            MotionVector { row: best_dv.row, col: best_dv.col + step_x },
+          ];
+          let mut improved = false;
+          for dv in around {
+            if !valid(dv) {
+              continue;
+            }
+            let prev_best = best_sad;
+            consider(
+              dv,
+              &mut best_dv,
+              &mut best_sad,
+              &mut second_dv,
+              &mut second_sad,
+            );
+            if best_sad < prev_best {
+              improved = true;
+            }
+            probes += 1;
+          }
+          if !improved {
+            step_px /= 2;
+          }
+        }
+
+        // Full-rate RD trials for the best DV(s).
+        let mut trial_dvs: ArrayVec<MotionVector, 2> = ArrayVec::new();
+        trial_dvs.push(best_dv);
+        if let Some(dv) = second_dv
+          && !trial_dvs.contains(&dv)
+        {
+          trial_dvs.push(dv);
+        }
+
+        let tx_size = max_txsize_rect_lookup[bsize as usize];
+        debug_assert!(
+          !matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64),
+          "4:1 blocks are excluded from the intraBC search"
+        );
+        let tx_type = TxType::DCT_DCT;
+        let luma_mode = PredictionMode::GLOBALMV;
+        let chroma_mode = PredictionMode::GLOBALMV;
+        let ref_frames = [RefType::INTRA_FRAME, RefType::NONE_FRAME];
+        let angle_delta = AngleDelta::default();
+
+        for dv in trial_dvs {
+          let mvs = [dv, MotionVector::default()];
+          for sidx in select_segment(fi, ts, tile_bo, bsize, false) {
+            cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
+
+            let wr = &mut WriterCounter::new();
+            let tell = wr.tell_frac();
+            if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+              cw.write_partition(
+                wr,
+                tile_bo,
+                PartitionType::PARTITION_NONE,
+                bsize,
+              );
+            }
+            let need_recon_pixel = tx_size.block_size() != bsize;
+
+            encode_block_pre_cdef(
+              &fi.sequence,
+              ts,
+              cw,
+              wr,
+              bsize,
+              tile_bo,
+              false,
+            );
+            // Rolled back below regardless of outcome -- an RDO trial,
+            // never the persisted commit (zenrav1e#27).
+            let (has_coeff, tx_dist) = encode_block_post_cdef(
+              fi,
+              ts,
+              cw,
+              wr,
+              luma_mode,
+              chroma_mode,
+              angle_delta,
+              ref_frames,
+              mvs,
+              bsize,
+              tile_bo,
+              false,
+              CFLParams::default(),
+              tx_size,
+              tx_type,
+              dv_ctx,
+              &dv_stack,
+              rdo_type,
+              need_recon_pixel,
+              None,
+              false,
+              FilterIntraMode::FILTER_DC_PRED,
+              None,
+              None,
+              PartitionType::PARTITION_NONE,
+            );
+
+            let rate = wr.tell_frac() - tell;
+            let distortion =
+              if fi.use_tx_domain_distortion && !need_recon_pixel {
+                compute_tx_distortion(
+                  fi,
+                  ts,
+                  bsize,
+                  is_chroma_block,
+                  tile_bo,
+                  tx_dist,
+                  false,
+                  false,
+                )
+              } else {
+                compute_distortion(
+                  fi,
+                  ts,
+                  bsize,
+                  is_chroma_block,
+                  tile_bo,
+                  false,
+                )
+              };
+            let rd = compute_rd_cost(fi, rate, distortion);
+            if rd < best.rd_cost {
+              best.rd_cost = rd;
+              best.pred_mode_luma = luma_mode;
+              best.pred_mode_chroma = chroma_mode;
+              best.angle_delta = angle_delta;
+              best.ref_frames = ref_frames;
+              best.mvs = mvs;
+              best.skip = false;
+              best.has_coeff = has_coeff;
+              best.tx_size = tx_size;
+              best.tx_type = tx_type;
+              best.sidx = sidx;
+              best.use_filter_intra = false;
+              best.filter_intra_mode = FilterIntraMode::FILTER_DC_PRED;
+              best.palette = None;
+              best.palette_uv = None;
+            }
+
+            cw.rollback(cw_checkpoint);
           }
         }
       }

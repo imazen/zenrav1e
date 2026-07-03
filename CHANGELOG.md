@@ -3,6 +3,32 @@
 ## [Unreleased]
 
 ### Added
+- **Chroma (UV) palette search** (a3b72033): the previously-"off"-coded UV
+  palette flag now carries a real joint (U,V) palette — libaom
+  `av1_rd_pick_palette_intra_sbuv` 2-D k-means candidates plus a
+  dominant-pairs family (2-D analogue of the luma top-colors family;
+  k-means-only search measurably misses exact palettes on palette-exact
+  content), U colors min-step-0 against the U neighbor cache, V colors
+  raw-vs-wraparound-delta by libaom's exact rate arithmetic, one shared
+  chroma index map, trialed through the real writers on top of the winning
+  luma side. Same `PaletteMode` knob, default Off (byte-identical off).
+  Measured vs the luma-palette base: fam-7000 plots −1.95%/−2.59% ssim2-BD
+  median (s2/s6), butteraugli agreeing; conformance 200/200 corpus cells
+  @420 + 84/84 @444, aomdec + rav1d-safe raw-md5 agreement (zenavif
+  `benchmarks/uvpal_ab_2026-07-03.tsv`).
+- **Intra block copy (intraBC), chunk A** (bf1f4a13): DV prediction
+  (rav1d `decode_b` dual), `av1_is_dv_valid` port (256-px delay +
+  wavefront rule), fullpel all-plane copy MC from the tile recon, seeded
+  diamond SAD search + top-2 full-rate RD trials; per-block flag + DV
+  coding on `allow_intrabc` intra frames, reusing the inter tx/coef path
+  (GLOBALMV + INTRA_FRAME ref). Behind
+  `SpeedSettings.prediction.intrabc` (default off, byte-identical off,
+  80/80 gate cells) and the binary's `--intrabc`; with `PaletteMode::Auto`
+  the AA-aware detection's stricter intraBC criterion gates it per frame.
+  In-loop filters forced off on allowed frames per spec. Shrinks
+  exactly-repeating non-palettizable content to ~0.52x bytes at both
+  chroma samplings (tests/intrabc_roundtrip.rs).
+
 - **Size-conditional strength for the Tune::Ssimulacra2 QM-dist ratio**:
   `qm_dist_ratio_m = clamp((log2(long_edge) - 8) / 2, 0.5, 1.0)` — full
   strength at >= 1024 long edge (bit-identical to the previous encoder
@@ -20,6 +46,17 @@
   `docs/RD_GAP_VS_LIBAOM.md` "Size-decay isolation A/B".
 
 ### Fixed
+- **CDF undo-log cross-field overspill (latent bitstream-desync class)**
+  (e86235b5): the RDO CDF undo log captured/restored fixed 16-word
+  snapshots regardless of the CDF's real length, and its small/large
+  partitions rolled back sequentially rather than globally LIFO — an
+  8-wide `palette_y_color_index_cdf[6][4]` update snapshot spilled over
+  `palette_uv_color_index_cdf[0][0]` and rollbacks resurrected stale UV
+  CDF state (encoder-only state no decoder reaches ⇒ content-dependent
+  desync; silent while the adjacent bytes held constant defaults, i.e.
+  for every luma-only palette stream). Exact-length snapshots +
+  compile-time bounds; regression test
+  `cdf_log_rollback_is_exact_length_across_field_boundaries`.
 - **4:2:0 chroma TU grid truncated to zero for 4:1 slivers** (#35): the
   chroma TU-loop bounds in `write_tx_blocks`/`write_tx_tree` shifted each
   mi dimension by the subsampling and patched zeros with a 1x1 fallback --

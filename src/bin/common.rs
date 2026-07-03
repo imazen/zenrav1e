@@ -184,6 +184,12 @@ pub struct CliOptions {
   /// (always the case in still picture mode).
   #[clap(long, value_parser, default_value_t = PaletteMode::Off, help_heading = "ENCODE SETTINGS")]
   pub palette: PaletteMode,
+
+  /// Search intra block copy (intraBC) on intra frames (AV1 screen content
+  /// tool; requires screen content tools to be signaled -- see --palette).
+  /// Disables all in-loop filters on frames where it is allowed, per spec.
+  #[clap(long, help_heading = "ENCODE SETTINGS")]
+  pub intrabc: bool,
   /// Override the speed preset's loop-restoration filter (LRF) setting.
   #[clap(long, value_parser, help_heading = "ENCODE SETTINGS")]
   pub lrf: Option<bool>,
@@ -686,6 +692,7 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
 
   cfg.still_picture = matches.still_picture;
   cfg.speed_settings.prediction.palette = matches.palette;
+  cfg.speed_settings.prediction.intrabc = matches.intrabc;
   if let Some(lrf) = matches.lrf {
     cfg.speed_settings.lrf = lrf;
   }

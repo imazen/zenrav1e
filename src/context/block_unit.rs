@@ -717,13 +717,19 @@ impl ContextWriter<'_> {
   ) -> &[u16; INTRA_MODES] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
+    // intraBC neighbors count as DC_PRED for the key-frame y-mode context
+    // (rav1d's post-intrabc context update stores DC_PRED in its mode
+    // array; the block store keeps the real GLOBALMV for the ref-MV scan).
+    let ctx_mode = |b: &Block| {
+      if b.is_inter() { PredictionMode::DC_PRED } else { b.mode }
+    };
     let above_mode = if bo.0.y > 0 {
-      self.bc.blocks.above_of(bo).mode
+      ctx_mode(self.bc.blocks.above_of(bo))
     } else {
       PredictionMode::DC_PRED
     };
     let left_mode = if bo.0.x > 0 {
-      self.bc.blocks.left_of(bo).mode
+      ctx_mode(self.bc.blocks.left_of(bo))
     } else {
       PredictionMode::DC_PRED
     };
@@ -737,13 +743,19 @@ impl ContextWriter<'_> {
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
+    // intraBC neighbors count as DC_PRED for the key-frame y-mode context
+    // (rav1d's post-intrabc context update stores DC_PRED in its mode
+    // array; the block store keeps the real GLOBALMV for the ref-MV scan).
+    let ctx_mode = |b: &Block| {
+      if b.is_inter() { PredictionMode::DC_PRED } else { b.mode }
+    };
     let above_mode = if bo.0.y > 0 {
-      self.bc.blocks.above_of(bo).mode
+      ctx_mode(self.bc.blocks.above_of(bo))
     } else {
       PredictionMode::DC_PRED
     };
     let left_mode = if bo.0.x > 0 {
-      self.bc.blocks.left_of(bo).mode
+      ctx_mode(self.bc.blocks.left_of(bo))
     } else {
       PredictionMode::DC_PRED
     };
@@ -796,6 +808,14 @@ impl ContextWriter<'_> {
     &mut self, w: &mut W, enable: bool, block_size: BlockSize,
   ) {
     let cdf = &self.fc.filter_intra_cdfs[block_size as usize];
+    symbol_with_update!(self, w, enable as u32, cdf);
+  }
+
+  /// Writes the per-block intraBC flag, coded for every block of an intra
+  /// frame with `allow_intrabc` (rav1d: `!decode_bool_adapt(cdf.m.intrabc)`
+  /// gives `intra`; the coded symbol is "is intraBC", context-free).
+  pub fn write_use_intrabc<W: Writer>(&mut self, w: &mut W, enable: bool) {
+    let cdf = &self.fc.intrabc_cdf;
     symbol_with_update!(self, w, enable as u32, cdf);
   }
 
@@ -1814,6 +1834,22 @@ impl ContextWriter<'_> {
       /* TODO: Set zeromv ref to the converted global motion vector */
     } else {
       /* TODO: Set the zeromv ref to 0 */
+      // The intraBC DV prediction runs the same spatial candidate scan
+      // with the INTRA_FRAME ref pair (rav1d: `rav1d_refmvs_find` with
+      // refs [0, -1]; only intraBC neighbors match, plain intra blocks
+      // are skipped by `add_ref_mv_candidate`'s `is_inter` gate). Gated
+      // on `allow_intrabc` so intra frames without the tool keep the
+      // scan-free fast path (and byte-identical behavior).
+      if fi.allow_intrabc {
+        return self.setup_mvref_list(
+          bo,
+          ref_frames,
+          mv_stack,
+          bsize,
+          fi,
+          is_compound,
+        );
+      }
       return 0;
     }
 

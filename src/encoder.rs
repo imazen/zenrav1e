@@ -3203,7 +3203,30 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       cw.write_intra_mode(w, bsize, luma_mode);
     }
   } else {
-    cw.write_intra_mode_kf(w, tile_bo, luma_mode);
+    // Intra (key) frame. With `allow_intrabc`, every block codes the
+    // intraBC flag first (rav1d `decode_b`: `!decode_bool_adapt(intrabc)`
+    // yields `intra`); intraBC blocks then code ONLY their displacement
+    // vector -- no intra mode info at all.
+    let is_intrabc = is_inter;
+    debug_assert!(!is_intrabc || fi.allow_intrabc);
+    debug_assert!(!is_intrabc || luma_mode == PredictionMode::GLOBALMV);
+    if fi.allow_intrabc {
+      cw.write_use_intrabc(w, is_intrabc);
+    }
+    if is_intrabc {
+      // The DV is coded as an MV residual against the rav1d/spec DV
+      // prediction (first nonzero of the two top ref-MV stack entries,
+      // else the position-keyed default), always fullpel: `mv_prec = -1`
+      // reads neither the fp nor hp symbols.
+      let pred_dv = crate::intrabc::dv_prediction(
+        mv_stack,
+        tile_bo,
+        fi.sequence.use_128x128_superblock,
+      );
+      cw.write_mv(w, mvs[0], pred_dv, MvSubpelPrecision::MV_SUBPEL_NONE);
+    } else {
+      cw.write_intra_mode_kf(w, tile_bo, luma_mode);
+    }
   }
 
   if !is_inter {
@@ -3405,9 +3428,21 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
 
   if is_inter {
-    motion_compensate(
-      fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, false,
-    );
+    if !fi.frame_type.has_inter() {
+      // intraBC: fullpel copy from the same tile's reconstruction; the
+      // inter residual path below is unchanged.
+      crate::intrabc::intrabc_compensate(
+        ts,
+        tile_bo,
+        bsize,
+        mvs[0],
+        has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling),
+      );
+    } else {
+      motion_compensate(
+        fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, false,
+      );
+    }
     write_tx_tree(
       fi,
       ts,
@@ -4013,7 +4048,9 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     let mode_decision =
       rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
 
-    if !mode_decision.pred_mode_luma.is_intra() {
+    // (intraBC blocks -- keyframe "inter" with the INTRA_FRAME ref -- are
+    // excluded: `me_stats`/`to_index` have no INTRA_FRAME slot.)
+    if !mode_decision.pred_mode_luma.is_intra() && fi.frame_type.has_inter() {
       // Fill the saved motion structure
       save_block_motion(
         ts,
@@ -4189,7 +4226,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       for mode in rdo_output.part_modes.clone() {
         assert!(subsize == mode.bsize);
 
-        if !mode.pred_mode_luma.is_intra() {
+        if !mode.pred_mode_luma.is_intra() && fi.frame_type.has_inter() {
           save_block_motion(
             ts,
             mode.bsize,
@@ -4504,7 +4541,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       );
 
       // TODO: proper remap when is_compound is true
-      if !mode_luma.is_intra() {
+      // (intraBC blocks — keyframe "inter" with the INTRA_FRAME ref — are
+      // excluded: their mode is always GLOBALMV, no NEWMV remap exists,
+      // and `me_stats`/`to_index` have no INTRA_FRAME slot.)
+      if !mode_luma.is_intra() && fi.frame_type.has_inter() {
         if is_compound && mode_luma != PredictionMode::GLOBAL_GLOBALMV {
           let match0 = mv_stack[0].this_mv.row == mvs[0].row
             && mv_stack[0].this_mv.col == mvs[0].col;
@@ -4823,7 +4863,10 @@ fn encode_tile_group<T: Pixel>(
   }
 
   // In lossless mode, all loop filters are disabled (deblocking, CDEF, LRF).
-  if !fi.is_lossless() {
+  // Likewise when `allow_intrabc`: the AV1 spec hard-disables every in-loop
+  // filter for the frame (the header codes no filter params at all), so the
+  // encoder must not apply them to its reconstruction either.
+  if !fi.is_lossless() && !fi.allow_intrabc {
     /* Frame deblocking operates over a single large tile wrapping the
      * frame rather than the frame itself so that deblocking is
      * available inside RDO when needed */
@@ -4989,7 +5032,7 @@ fn check_lf_queue<T: Pixel>(
               break;
             }
           }
-          if !already_rdoed {
+          if !already_rdoed && !fi.allow_intrabc {
             rdo_loop_decision(qe.sbo, fi, ts, cw, w, deblock_p);
             for pli in 0..planes {
               if qe.lru_index[pli] != -1

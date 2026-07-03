@@ -645,6 +645,32 @@ impl<T: Pixel> ContextInner<T> {
           self.config.bit_depth,
         );
         fi.allow_screen_content_tools = est.allow_screen_content_tools as u32;
+        // intraBC rides the same detection: its stricter criterion
+        // additionally requires high-variance palettizable blocks, because
+        // `allow_intrabc` turns every in-loop filter off for the frame.
+        if self.config.speed_settings.prediction.intrabc {
+          fi.allow_intrabc = est.allow_intrabc;
+        }
+      } else if self.config.speed_settings.prediction.intrabc {
+        // Without the Auto detection, the explicit opt-in allows intraBC
+        // whenever the frame signals screen content tools (always the
+        // case for still pictures unless Auto turned it off).
+        fi.allow_intrabc = fi.allow_screen_content_tools > 0;
+      }
+      // Chunk-A scope: 64x64 superblocks only (the DV validity/wavefront
+      // rules are keyed and tested for 64-px superblocks).
+      if self.seq.use_128x128_superblock {
+        fi.allow_intrabc = false;
+      }
+      if fi.allow_intrabc {
+        // The AV1 spec disables all in-loop filters when `allow_intrabc`:
+        // the header codes no deblock/CDEF/LRF params (see `header.rs`)
+        // and the decoder applies none. Zero the encoder-side state so
+        // recon == decode; the application passes are gated in
+        // `encode_tile_group`.
+        fi.cdef_bits = 0;
+        fi.cdef_y_strengths = [0; 8];
+        fi.cdef_uv_strengths = [0; 8];
       }
       #[cfg(feature = "stop")]
       {

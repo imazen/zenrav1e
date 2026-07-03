@@ -106,6 +106,7 @@ impl Default for SpeedSettings {
         // Default off pending RD measurement; enable per-encode for screen
         // content.
         palette: PaletteMode::Off,
+        intrabc: false,
         filter_intra: None,
       },
       motion: MotionSpeedSettings {
@@ -307,6 +308,20 @@ pub struct PredictionSpeedSettings {
   /// plots, UI); wasted work on photographic content — `Auto` runs a
   /// per-frame detection pass to decide.
   pub palette: PaletteMode,
+
+  /// Search intra block copy (intraBC) on intra frames (AV1 screen
+  /// content tool): blocks copy from the already-reconstructed area of
+  /// the same frame, which captures the exact repeats screen content is
+  /// full of (text glyphs, grid lines, UI chrome).
+  ///
+  /// Requires `palette != Off` (the screen-content signaling machinery):
+  /// with `PaletteMode::Auto` the same per-frame detection decides
+  /// `allow_intrabc` (its stricter variant); with `Always` it is always
+  /// allowed. Note that `allow_intrabc` disables all in-loop filters
+  /// (deblocking, CDEF, LRF) for the frame per the AV1 spec — the
+  /// detection exists precisely to limit that trade to frames where the
+  /// copy tool pays for it.
+  pub intrabc: bool,
 
   /// Override the sequence-level filter-intra enable (`None` derives it
   /// from `prediction_modes >= ComplexKeyframes`, the historical
