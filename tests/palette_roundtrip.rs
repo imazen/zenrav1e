@@ -274,3 +274,75 @@ fn palette_auto_mode_follows_screen_content_detection() {
     "photo Auto vs Off quality diverged: {pa:.2} vs {po:.2}"
   );
 }
+
+/// 10-bit palette roundtrip: the color coding writes bpc-bit literals and
+/// delta widths derived from bit_depth; prove the whole path end-to-end at
+/// depth 10 (encode + rav1d-safe decode + exactness on palette-exact
+/// content).
+#[test]
+fn palette_10bit_roundtrip() {
+  let (w, h) = (128usize, 128usize);
+  let (sy8, su8, sv8) = synth_screen(w, h);
+
+  let mut ss = SpeedSettings::from_preset(6);
+  ss.prediction.palette = PaletteMode::Always;
+  let enc = EncoderConfig {
+    width: w,
+    height: h,
+    speed_settings: ss,
+    quantizer: 80,
+    min_quantizer: 80,
+    still_picture: true,
+    bit_depth: 10,
+    chroma_sampling: ChromaSampling::Cs420,
+    ..Default::default()
+  };
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u16> = cfg.new_context().unwrap();
+  let mut f = ctx.new_frame();
+  // Shift the 8-bit synthetic screen content to 10-bit. Plane data is
+  // origin-padded; copy_from_raw_u8 handles the layout.
+  let srcs: [(&[u8], usize); 3] = [(&sy8, w), (&su8, w / 2), (&sv8, w / 2)];
+  for (plane, (src, pw)) in f.planes.iter_mut().zip(srcs) {
+    let widened: Vec<u8> =
+      src.iter().flat_map(|&v| (u16::from(v) << 2).to_le_bytes()).collect();
+    plane.copy_from_raw_u8(&widened, pw * 2, 2);
+  }
+  ctx.send_frame(f).unwrap();
+  ctx.flush();
+  let mut obu = Vec::new();
+  while let Ok(pkt) = ctx.receive_packet() {
+    obu.extend_from_slice(&pkt.data);
+  }
+  assert!(!obu.is_empty());
+  eprintln!("10bit palette-on bytes: {}", obu.len());
+
+  let mut dec = rav1d_safe::Decoder::new().expect("decoder");
+  let mut fr = dec.decode(&obu).expect("decode error");
+  if fr.is_none() {
+    fr = dec.flush().ok().and_then(|mut v| v.drain(..).next());
+  }
+  let frame = fr.expect("no decoded frame");
+  assert_eq!((frame.width() as usize, frame.height() as usize), (w, h));
+  // Luma must reconstruct the palette-exact content perfectly at q80.
+  let mut exact = 0usize;
+  let mut total = 0usize;
+  match frame.planes() {
+    rav1d_safe::Planes::Depth16(p) => {
+      for (j, row) in p.y().rows().enumerate().take(h) {
+        for (i, &px) in row[..w].iter().enumerate() {
+          total += 1;
+          if px == (sy8[j * w + i] as u16) << 2 {
+            exact += 1;
+          }
+        }
+      }
+    }
+    rav1d_safe::Planes::Depth8(_) => panic!("expected 10-bit output"),
+  }
+  assert!(
+    exact as f64 >= total as f64 * 0.99,
+    "10-bit palette luma should be (near-)exact on palette-exact content: \
+     {exact}/{total}"
+  );
+}
