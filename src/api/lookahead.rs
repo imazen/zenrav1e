@@ -198,6 +198,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
     sequence,
     0,
     Box::new([]),
+    None,
   );
   let mut fi = FrameInvariants::new_inter_frame(
     &last_fi,

@@ -1055,6 +1055,10 @@ pub struct FrameInvariants<T: Pixel> {
   pub default_filter: FilterMode,
   pub enable_segmentation: bool,
   pub t35_metadata: Box<[T35]>,
+  /// External per-superblock hints for this frame (see
+  /// [`crate::frame::FrameHints`]). `None` for no hints; consumed by
+  /// `set_quantizers` on intra frames.
+  pub frame_hints: Option<Arc<crate::frame::FrameHints>>,
   /// Target CPU feature level.
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 
@@ -1306,6 +1310,68 @@ impl<T: Pixel> CodedFrameData<T> {
     }
     self.sb_qindex = qindex_map;
     self.sb_dist_scales = dist_scales;
+  }
+
+  /// Applies external per-superblock AC quantizer scale hints
+  /// ([`crate::frame::FrameHints::sb_q_scale`]) through the per-SB delta-q
+  /// machinery. Composes with any tune-driven map already in `sb_qindex`
+  /// (e.g. Variance Boost): each superblock's current AC quantizer — the
+  /// boosted one when a map exists, else the frame base — is scaled by the
+  /// hint (clamped to `[0.25, 4.0]`), re-quantized to the first qindex at
+  /// or above the target (floored at 1, matching the boost path's
+  /// always-lossy rule), and `sb_dist_scales` is refilled with
+  /// `(ac_q(base)/ac_q(sb))²` so RDO distortion weighting follows.
+  ///
+  /// Returns `true` when a delta-q map is active after application.
+  /// All-neutral hints leave the maps untouched (no delta-q is coded
+  /// unless a tune already coded one); a map whose length does not match
+  /// the frame's superblock grid is ignored (returns whether a tune map
+  /// remains active).
+  pub fn apply_sb_q_scale_hints(
+    &mut self, sb_q_scale: &[f32], base_q_idx: u8, bit_depth: usize,
+  ) -> bool {
+    use crate::quantize::ac_q;
+
+    let w = self.w_in_imp_b;
+    let h = self.h_in_imp_b;
+    let sb_cols = w.div_ceil(8);
+    let sb_rows = h.div_ceil(8);
+    let had_tune_map = !self.sb_qindex.is_empty();
+    if w == 0
+      || h == 0
+      || base_q_idx == 0
+      || sb_q_scale.len() != sb_cols * sb_rows
+    {
+      return had_tune_map;
+    }
+    // All-neutral hints must not activate delta-q coding on their own.
+    if !had_tune_map && sb_q_scale.iter().all(|&s| s == 1.0) {
+      return false;
+    }
+
+    let base_q = ac_q(base_q_idx, 0, bit_depth).get() as f64;
+    let mut qindex_map = if had_tune_map {
+      std::mem::take(&mut self.sb_qindex)
+    } else {
+      // dynamic allocation: once per frame
+      vec![base_q_idx; sb_cols * sb_rows].into_boxed_slice()
+    };
+    let mut dist_scales =
+      vec![DistortionScale::default(); sb_cols * sb_rows].into_boxed_slice();
+
+    for (i, qi) in qindex_map.iter_mut().enumerate() {
+      let scale = f64::from(sb_q_scale[i].clamp(0.25, 4.0));
+      if scale != 1.0 {
+        let target_q = ac_q(*qi, 0, bit_depth).get() as f64 * scale;
+        *qi = first_ac_qi_at_or_above(target_q, bit_depth).max(1);
+      }
+      let sb_q = ac_q(*qi, 0, bit_depth).get() as f64;
+      dist_scales[i] =
+        DistortionScale::from((base_q / sb_q) * (base_q / sb_q));
+    }
+    self.sb_qindex = qindex_map;
+    self.sb_dist_scales = dist_scales;
+    true
   }
 
   // Assumes that we have already computed activity scales and distortion scales
@@ -1616,6 +1682,7 @@ impl<T: Pixel> FrameInvariants<T> {
         .transform
         .enable_inter_tx_split,
       t35_metadata: Box::new([]),
+      frame_hints: None,
       sequence,
       config,
       coded_frame_data: None,
@@ -1627,6 +1694,7 @@ impl<T: Pixel> FrameInvariants<T> {
   pub fn new_key_frame(
     config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
     gop_input_frameno_start: u64, t35_metadata: Box<[T35]>,
+    frame_hints: Option<Arc<crate::frame::FrameHints>>,
   ) -> Self {
     // In lossless mode (quantizer=0), only 4x4 WHT_WHT is used, no TX selection
     let tx_mode_select =
@@ -1636,6 +1704,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.tx_mode_select = tx_mode_select;
     fi.coded_frame_data = Some(CodedFrameData::new(&fi));
     fi.t35_metadata = t35_metadata;
+    fi.frame_hints = frame_hints;
     fi
   }
 
@@ -1658,6 +1727,8 @@ impl<T: Pixel> FrameInvariants<T> {
     // quite large lookahead data for SEFs, when it is not needed.
     let mut fi = previous_coded_fi.clone_without_coded_data();
     fi.intra_only = false;
+    // External per-SB hints are keyframe-scoped; never inherit them.
+    fi.frame_hints = None;
     fi.force_integer_mv = 0; // note: should be 1 if fi.intra_only is true
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
@@ -1804,6 +1875,8 @@ impl<T: Pixel> FrameInvariants<T> {
   pub fn clone_without_coded_data(&self) -> Self {
     Self {
       coded_frame_data: None,
+      // Keyframe-scoped; `new_inter_frame` clears it anyway.
+      frame_hints: None,
 
       sequence: self.sequence.clone(),
       config: self.config.clone(),
@@ -2028,6 +2101,31 @@ impl<T: Pixel> FrameInvariants<T> {
           self.delta_q_res_log2 = variance_boost_delta_q_res_log2(base_q_idx);
           self.enable_segmentation = false;
         }
+      }
+    }
+
+    // External FrameHints: per-superblock AC quantizer scaling through the
+    // same per-SB delta-q machinery (the closed-loop channel — e.g. a
+    // butteraugli-diffmap-guided second pass computes the map from a first
+    // encode; the encoder itself stays metric-free). Composes on top of the
+    // Variance Boost map when the tune filled one. Segmentation is disabled
+    // when the hints activate delta-q, mirroring the boost path (the k-means
+    // ALT_Q channel would double-allocate against the external map, the same
+    // stacking regression measured for the boost — and the seg+delta-q
+    // composed qindex path is deliberately not exercised until validated).
+    if self.base_q_idx > 0
+      && (self.frame_type == FrameType::KEY || self.intra_only)
+      && let Some(hints) = self.frame_hints.clone()
+      && let Some(scale_map) = hints.sb_q_scale.as_deref()
+    {
+      let base_q_idx = self.base_q_idx;
+      let bit_depth = self.sequence.bit_depth;
+      if let Some(cfd) = self.coded_frame_data.as_mut()
+        && cfd.apply_sb_q_scale_hints(scale_map, base_q_idx, bit_depth)
+      {
+        self.delta_q_present = true;
+        self.delta_q_res_log2 = variance_boost_delta_q_res_log2(base_q_idx);
+        self.enable_segmentation = false;
       }
     }
 
@@ -5651,5 +5749,96 @@ mod test {
         assert!((ac_q(got - 1, 0, bd).get() as f64) < target);
       }
     }
+  }
+
+  /// Minimal `CodedFrameData` for exercising the per-SB hint map math
+  /// without a full `FrameInvariants` (grid: `w_imp × h_imp` 8×8 blocks).
+  fn hints_test_cfd(w_imp: usize, h_imp: usize) -> CodedFrameData<u8> {
+    CodedFrameData {
+      lookahead_rec_buffer: ReferenceFramesSet::new(),
+      w_in_imp_b: w_imp,
+      h_in_imp_b: h_imp,
+      lookahead_intra_costs: Box::new([]),
+      block_importances: vec![0.; w_imp * h_imp].into_boxed_slice(),
+      distortion_scales: vec![DistortionScale::default(); w_imp * h_imp]
+        .into_boxed_slice(),
+      activity_scales: vec![DistortionScale::default(); w_imp * h_imp]
+        .into_boxed_slice(),
+      activity_mask: Default::default(),
+      spatiotemporal_scores: Default::default(),
+      segmentation_scores: Default::default(),
+      sb_qindex: Default::default(),
+      sb_dist_scales: Default::default(),
+    }
+  }
+
+  #[test]
+  fn sb_q_scale_hints_neutral_is_inert() {
+    // 2×1 superblocks (16×8 importance blocks).
+    let mut cfd = hints_test_cfd(16, 8);
+    let applied = cfd.apply_sb_q_scale_hints(&[1.0, 1.0], 100, 8);
+    assert!(!applied);
+    assert!(cfd.sb_qindex.is_empty());
+    assert!(cfd.sb_dist_scales.is_empty());
+  }
+
+  #[test]
+  fn sb_q_scale_hints_grid_mismatch_ignored() {
+    let mut cfd = hints_test_cfd(16, 8);
+    // 3 entries for a 2-SB frame: ignored.
+    let applied = cfd.apply_sb_q_scale_hints(&[0.5, 0.5, 0.5], 100, 8);
+    assert!(!applied);
+    assert!(cfd.sb_qindex.is_empty());
+  }
+
+  #[test]
+  fn sb_q_scale_hints_fill_from_base_both_directions() {
+    use crate::quantize::ac_q;
+    let base: u8 = 100;
+    let bd = 8;
+    let mut cfd = hints_test_cfd(16, 8);
+    let applied = cfd.apply_sb_q_scale_hints(&[0.5, 2.0], base, bd);
+    assert!(applied);
+    assert_eq!(cfd.sb_qindex.len(), 2);
+    // Finer quantizer on the boosted SB, coarser on the deboosted one.
+    assert!(cfd.sb_qindex[0] < base, "qi0={}", cfd.sb_qindex[0]);
+    assert!(cfd.sb_qindex[1] > base, "qi1={}", cfd.sb_qindex[1]);
+    assert!(cfd.sb_qindex[0] >= 1);
+    // Distortion follow: boosted SB weights distortion more (> 1.0),
+    // deboosted less (< 1.0).
+    let neutral = DistortionScale::from(1.0).0;
+    assert!(cfd.sb_dist_scales[0].0 > neutral);
+    assert!(cfd.sb_dist_scales[1].0 < neutral);
+    // The achieved quantizers bracket the request within scan rounding:
+    // ac_q(qi0) is the first at-or-above 0.5×, so it is ≥ 0.5× (already
+    // asserted via qi ordering) and its predecessor is below the target.
+    let q0 = ac_q(cfd.sb_qindex[0], 0, bd).get() as f64;
+    let target0 = ac_q(base, 0, bd).get() as f64 * 0.5;
+    assert!(q0 >= target0);
+    assert!((ac_q(cfd.sb_qindex[0] - 1, 0, bd).get() as f64) < target0);
+  }
+
+  #[test]
+  fn sb_q_scale_hints_compose_with_tune_map() {
+    let base: u8 = 100;
+    let bd = 8;
+    let mut cfd = hints_test_cfd(16, 8);
+    // Simulate a tune-driven (variance boost) map: SB0 boosted to 80.
+    cfd.sb_qindex = vec![80u8, base].into_boxed_slice();
+    cfd.sb_dist_scales =
+      vec![DistortionScale::from(1.5), DistortionScale::from(1.0)]
+        .into_boxed_slice();
+    let applied = cfd.apply_sb_q_scale_hints(&[0.5, 1.0], base, bd);
+    assert!(applied);
+    // SB0 scaled from its BOOSTED quantizer (80), not from base.
+    assert!(cfd.sb_qindex[0] < 80, "qi0={}", cfd.sb_qindex[0]);
+    // Neutral SB keeps the tune value untouched.
+    assert_eq!(cfd.sb_qindex[1], base);
+    // Extreme scales stay in-range and lossy.
+    let mut cfd2 = hints_test_cfd(16, 8);
+    let applied2 = cfd2.apply_sb_q_scale_hints(&[0.0001, 1000.0], 2, bd);
+    assert!(applied2);
+    assert!(cfd2.sb_qindex[0] >= 1);
+    assert!(cfd2.sb_qindex[1] <= 255);
   }
 }

@@ -44,6 +44,54 @@ pub struct FrameParameters {
   pub opaque: Option<Opaque>,
   /// List of t35 metadata associated with this frame
   pub t35_metadata: Box<[T35]>,
+  /// Optional external per-superblock encoder hints for this frame
+  /// (see [`FrameHints`]). `None` leaves the encoder byte-identical.
+  pub frame_hints: Option<std::sync::Arc<FrameHints>>,
+}
+
+/// External per-superblock encoder hints for one frame.
+///
+/// Plain data, metric-free: a caller that measured the frame with any
+/// perceptual metric (or any other importance source) expresses the result
+/// as per-superblock quantizer scale factors; the encoder maps them onto
+/// its per-SB `delta_q` machinery (real delta-q syntax + the RDO
+/// distortion follow). All fields default to `None`; a default
+/// `FrameHints` (or one whose maps are all-neutral) leaves the encoded
+/// bytes identical to not passing hints at all.
+///
+/// Only applied to intra (KEY / intra-only) frames with a non-lossless
+/// base quantizer; ignored otherwise.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct FrameHints {
+  /// Per-64×64-superblock AC quantizer scale factors, in frame superblock
+  /// raster order: `ceil(ceil(w/8)/8)` columns × `ceil(ceil(h/8)/8)` rows
+  /// (one entry per 64×64 superblock, row-major). `1.0` is neutral;
+  /// `< 1.0` requests a finer quantizer (more bits) for that superblock;
+  /// `> 1.0` a coarser one. Values are clamped to `[0.25, 4.0]` and the
+  /// resulting qindex to `[1, 255]`.
+  ///
+  /// Composes with tune-driven per-SB maps (e.g. the Variance Boost of
+  /// `Tune::Ssimulacra2`): the scale applies to the superblock's already
+  /// boosted AC quantizer. Maps whose length does not match the frame's
+  /// superblock grid are ignored.
+  pub sb_q_scale: Option<Box<[f32]>>,
+}
+
+impl FrameHints {
+  /// New empty hints (all channels `None`).
+  #[must_use]
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  /// Sets the per-superblock AC quantizer scale map (see
+  /// [`Self::sb_q_scale`]).
+  #[must_use]
+  pub fn with_sb_q_scale(mut self, sb_q_scale: Box<[f32]>) -> Self {
+    self.sb_q_scale = Some(sb_q_scale);
+    self
+  }
 }
 
 pub use v_frame::frame::Frame;

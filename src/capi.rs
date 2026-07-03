@@ -217,6 +217,7 @@ impl EncContext {
       frame_type_override: frame_type,
       opaque,
       t35_metadata,
+      frame_hints: None,
     };
     if let Some(frame) = frame {
       match (self, frame) {

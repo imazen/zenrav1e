@@ -262,6 +262,8 @@ pub(crate) struct ContextInner<T: Pixel> {
   opaque_q: BTreeMap<u64, Opaque>,
   /// Optional T35 metadata per frame
   t35_q: BTreeMap<u64, Box<[T35]>>,
+  /// Optional external per-superblock hints per frame
+  frame_hints_q: BTreeMap<u64, Arc<crate::frame::FrameHints>>,
   /// Cooperative cancellation token.
   #[cfg(feature = "stop")]
   pub(crate) stop: Arc<dyn enough::Stop>,
@@ -339,6 +341,7 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
       t35_q: BTreeMap::new(),
+      frame_hints_q: BTreeMap::new(),
       #[cfg(feature = "stop")]
       stop: Arc::new(enough::Unstoppable),
     }
@@ -384,6 +387,9 @@ impl<T: Pixel> ContextInner<T> {
         self.opaque_q.insert(input_frameno, op);
       }
       self.t35_q.insert(input_frameno, params.t35_metadata);
+      if let Some(hints) = params.frame_hints {
+        self.frame_hints_q.insert(input_frameno, hints);
+      }
     }
 
     if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
@@ -622,12 +628,19 @@ impl<T: Pixel> ContextInner<T> {
     let output_frameno_in_gop =
       output_frameno - self.gop_output_frameno_start[&output_frameno];
     if output_frameno_in_gop == 0 {
+      // External per-SB hints attach to the frame actually coded as the
+      // keyframe (`input_frameno` may have been re-pointed at the next
+      // forced keyframe above, so key on the final GOP start).
+      let frame_hints = self
+        .frame_hints_q
+        .remove(&self.gop_input_frameno_start[&output_frameno]);
       #[allow(unused_mut)]
       let mut fi = FrameInvariants::new_key_frame(
         self.config.clone(),
         self.seq.clone(),
         self.gop_input_frameno_start[&output_frameno],
         t35_metadata,
+        frame_hints,
       );
       // Palette `Auto`: the per-frame anti-aliasing-aware screen-content
       // detection decides `allow_screen_content_tools` (the frame-header

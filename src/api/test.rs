@@ -2626,3 +2626,93 @@ fn lossless_inter_frame_tx_size_no_panic() {
     }
   }
 }
+
+/// External `FrameHints::sb_q_scale` through the public API: a non-neutral
+/// per-SB map changes the bitstream (per-SB delta-q coded); a neutral map —
+/// and hints absent — are byte-identical to a plain encode (the opt-in
+/// contract: no hints, no change).
+#[test]
+fn frame_hints_sb_q_scale_still_picture() {
+  fn encode_with_hints(
+    hints: Option<FrameHints>, w: usize, h: usize,
+  ) -> Vec<u8> {
+    let mut enc = EncoderConfig::with_speed_preset(10);
+    enc.width = w;
+    enc.height = h;
+    enc.quantizer = 120;
+    enc.still_picture = true;
+    enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+    let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+    let mut ctx: Context<u8> = cfg.new_context().unwrap();
+
+    let mut frame = ctx.new_frame();
+    for plane in &mut frame.planes {
+      let stride = plane.cfg.stride;
+      for (y, row) in plane.data_origin_mut().chunks_mut(stride).enumerate() {
+        for (x, px) in row.iter_mut().enumerate() {
+          *px = ((x * 7 + y * 3) % 256) as u8;
+        }
+      }
+    }
+    match hints {
+      Some(h) => {
+        let params = FrameParameters {
+          frame_hints: Some(Arc::new(h)),
+          ..Default::default()
+        };
+        ctx.send_frame((Arc::new(frame), params)).unwrap();
+      }
+      None => ctx.send_frame(Arc::new(frame)).unwrap(),
+    }
+    ctx.flush();
+
+    let mut bytes = Vec::new();
+    loop {
+      match ctx.receive_packet() {
+        Ok(pkt) => bytes.extend_from_slice(&pkt.data),
+        Err(EncoderStatus::Encoded) => {}
+        Err(EncoderStatus::LimitReached) => break,
+        Err(e) => panic!("unexpected encoder status {e:?}"),
+      }
+    }
+    assert!(!bytes.is_empty());
+    bytes
+  }
+
+  // 192×128 = 3×2 superblocks.
+  let (w, h) = (192, 128);
+  let plain = encode_with_hints(None, w, h);
+  let neutral = encode_with_hints(
+    Some(FrameHints::new().with_sb_q_scale(vec![1.0; 6].into_boxed_slice())),
+    w,
+    h,
+  );
+  assert_eq!(
+    plain, neutral,
+    "all-neutral hints must be byte-identical to no hints"
+  );
+
+  let scaled =
+    encode_with_hints(
+      Some(FrameHints::new().with_sb_q_scale(
+        vec![0.5, 1.0, 2.0, 2.0, 1.0, 0.5].into_boxed_slice(),
+      )),
+      w,
+      h,
+    );
+  assert_ne!(
+    plain, scaled,
+    "a non-neutral per-SB map must change the bitstream"
+  );
+
+  // Grid-mismatched maps are ignored entirely.
+  let mismatched = encode_with_hints(
+    Some(FrameHints::new().with_sb_q_scale(vec![0.5; 4].into_boxed_slice())),
+    w,
+    h,
+  );
+  assert_eq!(
+    plain, mismatched,
+    "grid-mismatched hint maps must be ignored (byte-identical)"
+  );
+}

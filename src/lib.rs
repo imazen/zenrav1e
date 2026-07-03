@@ -136,7 +136,7 @@ pub mod prelude {
   pub use crate::api::*;
   pub use crate::encoder::{Sequence, Tune};
   pub use crate::frame::{
-    Frame, FrameParameters, FrameTypeOverride, Plane, PlaneConfig,
+    Frame, FrameHints, FrameParameters, FrameTypeOverride, Plane, PlaneConfig,
   };
   pub use crate::partition::BlockSize;
   pub use crate::predict::PredictionMode;
@@ -149,7 +149,7 @@ pub mod data {
   pub use crate::api::{
     ChromaticityPoint, EncoderStatus, FrameType, Packet, Rational,
   };
-  pub use crate::frame::{Frame, FrameParameters};
+  pub use crate::frame::{Frame, FrameHints, FrameParameters};
   pub use crate::stats::EncoderStats;
   pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 }
