@@ -1631,6 +1631,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           fi.sequence.enable_intra_edge_filter,
           IntraParam::None,
           PartitionType::PARTITION_NONE,
+          false,
         )
       };
 
@@ -2106,6 +2107,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         fi.sequence.enable_intra_edge_filter,
         IntraParam::None,
         PartitionType::PARTITION_NONE,
+        false,
       );
       let mut alpha_cost = |alpha: i16| -> u64 {
         let mut rec_region =

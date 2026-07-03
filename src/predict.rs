@@ -858,14 +858,23 @@ pub(crate) mod rust {
     let default_val: i32 = 1 << (bit_depth - 1);
     let taps = &FILTER_INTRA_TAPS[filter_mode as usize];
     let (left, top_left, above) = edge_buf.as_slices();
-    // Left edge buffer is ordered top-to-bottom; take the last `height` entries
+    // The left edge buffer is ordered BOTTOM-TO-TOP (see `get_intra_edges`:
+    // `left[2 * MAX_TX_SIZE - 1 - i] = dst[y + i][x - 1]`, and consumers
+    // like `pred_h`/`pred_paeth` which index it reversed). The last `height`
+    // entries are the block's own left column; entries before them, if any,
+    // belong to bottom-left extension modes.
     let left_slice = &left[left.len().saturating_sub(height)..];
 
-    // Helper closures for safe edge access with default fallback
+    // Helper closures for safe edge access with default fallback.
+    // `get_left(i)` returns the left-column sample at block row `i`
+    // (top-to-bottom), i.e. the buffer read reversed. zenrav1e#33: reading
+    // it un-reversed fed the recursion an upside-down left column,
+    // desyncing the encoder recon from conforming decoders.
     let get_above =
       |i: usize| -> i32 { above.get(i).map_or(default_val, |&v| v.into()) };
     let get_left = |i: usize| -> i32 {
-      left_slice.get(i).map_or(default_val, |&v| v.into())
+      debug_assert!(i < height);
+      left_slice.get(height - 1 - i).map_or(default_val, |&v| v.into())
     };
     let get_top_left =
       || -> i32 { top_left.first().map_or(default_val, |&v| v.into()) };

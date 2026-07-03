@@ -77,6 +77,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         false,
         IntraParam::None,
         PartitionType::PARTITION_NONE,
+        false,
       );
 
       let mut plane_after_prediction_region = plane_after_prediction

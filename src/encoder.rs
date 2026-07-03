@@ -2291,6 +2291,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
       partition,
+      use_filter_intra && p == 0,
     );
 
     if use_filter_intra && p == 0 {

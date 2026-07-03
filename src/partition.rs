@@ -700,6 +700,14 @@ pub fn get_intra_edges<'a, T: Pixel>(
   // equivalent, so callers that don't track it precisely (RDO trials that
   // always get rolled back) may pass `PARTITION_NONE`.
   partition: PartitionType,
+  // Filter intra rides on `DC_PRED` in the mode field, but consumes the
+  // left column, top row, AND top-left corner unconditionally (its 7-tap
+  // recursion references p0..p6 from all three edges). Conforming decoders
+  // prepare FILTER_PRED edges as LEFT|TOP|TOP_LEFT (dav1d
+  // `av1_intra_prediction_edges[FILTER_PRED]`), so the DC-derived needs
+  // (no top-left; no left at x==0) fed the predictor mid-gray defaults and
+  // desynced the encoder recon from every conforming decoder (zenrav1e#33).
+  use_filter_intra: bool,
 ) -> IntraEdge<'a, T> {
   let mut init_left: usize = 0;
   let mut init_above: usize = 0;
@@ -751,6 +759,20 @@ pub fn get_intra_edges<'a, T: Pixel>(
       needs_bottomleft = mode.is_directional() && p_angle > 180;
       needs_topleft_filter =
         enable_intra_edge_filter && p_angle > 90 && p_angle < 180;
+    }
+
+    if use_filter_intra {
+      // FILTER_PRED edge needs per the decoders: left + top + top-left,
+      // never top-right/bottom-left, and never the Z2-only corner filter.
+      // The unavailable-edge fallbacks below (left @ x==0: above[0] or
+      // base+1; top @ y==0: left[0] or base-1; top-left: corner pixel or
+      // base) already match dav1d's `ipred_prepare` for this needs set.
+      needs_left = true;
+      needs_top = true;
+      needs_topleft = true;
+      needs_topright = false;
+      needs_bottomleft = false;
+      needs_topleft_filter = false;
     }
 
     let rect_w =
