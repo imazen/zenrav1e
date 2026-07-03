@@ -15,27 +15,49 @@
   encoding (delayed-loopfilter RDO included) and forced 0 for lossless.
   Sharpness-0 output (every non-StillImage config) is byte-identical
   (18/18-cell md5 gate vs the previous master binary).
+- **Filter-intra predictions now byte-match conforming decoders**
+  (32477046, zenrav1e#33): `get_intra_edges` prepared DC's edge needs for
+  filter-intra blocks (no top-left ever — fed 128 instead of the corner
+  pixel; no left column at x==0), and `pred_filter_intra` read the
+  bottom-to-top left-edge buffer un-reversed (upside-down left column).
+  Every filter-intra block's prediction diverged from the decode,
+  compounding to 17-25 luma RMSE at speeds <= 6. Encoder recon now
+  byte-agrees with aomdec + rav1d-safe on the repro corpus (RMSE 0.000 at
+  s2/s4/s6/s0) and across a 120-cell train26 conformance sweep.
+  `--filter-intra false` streams are byte-identical to previous builds;
+  feature-on streams change only via RDO/residuals now being computed
+  against correct predictions. This was also the "broken cost estimation /
+  12 dB PSNR regression" (zenrav1e#5) that made ravif pin
+  `complex_prediction_modes: Some(false)` — with the fix, arming
+  filter-intra is measurable again (spot: 5048 gray q60 s2+tune, fi-on
+  ssim2 59.50 pre-fix -> 75.11 post-fix vs 75.00 shipped).
+- **Signaled sgrproj units now always apply to the encoder recon**
+  (17cff82f, zenrav1e#32): an inherited 2019 skip left `Sgrproj`
+  restoration units unapplied in `lrf_filter_frame` when
+  `enable_cdef=false`, while the sgrproj RDO (gated only on
+  `enable_restoration`) still selected and signaled them — cdef-off +
+  lrf-on configs (API-reachable via pub `SpeedSettings::cdef`; not
+  reachable from the CLI) decoded differently than the encoder recon
+  (measured luma RMSE 0.387-0.580, now 0.000 vs both decoders).
+  Default (cdef-on) configs are byte-identical across the change.
+  The *reported* #32 repro (~45 RMSE at s <= 7 on smooth content) was
+  the filter-intra bug above: its speed bisect jumped s6->s8, and s7
+  (lrf on, filter-intra off) measures 0.000; LRF application itself is
+  byte-exact on 27 isolation cells + 120 all-defaults cells.
 - **Skipped intra blocks now write their prediction into the recon**
   (b30dd752): `write_tx_blocks` early-returned on skip, so any intra block
   whose residual quantized to zero (coded skip=1) left stale RDO-trial
   pixels in the recon buffer; every later intra prediction chained off
   them — valid bitstreams whose decoded image drifts from the encoder's
   intent (measured luma RMSE 67.7 -> 45.6 end-to-end on a smooth gray
-  photo at s2 q100; the remainder is zenrav1e#32/#33). Not byte-identical
+  photo at s2 q100; the remainder was zenrav1e#33). Not byte-identical
   to previous encodes wherever a forced-skip intra block occurred.
 
-### Known Issues
-- **LRF (loop restoration) desyncs encoder recon from conforming decoders**
-  on smooth content at speeds <= 7 (zenrav1e#32): aomdec and rav1d-safe
-  agree with each other and both differ from the encoder recon by up to
-  ~50 luma RMSE. `--lrf false` isolates it (added, b30dd752).
-- **filter-intra predictor desyncs encoder recon from conforming decoders**
-  at speeds <= 6 (zenrav1e#33; sequence-enabled when prediction_modes >=
-  ComplexKeyframes). `--filter-intra false` isolates it (added, 49982460).
-  Both desyncs systematically depress decoded-quality measurements of
-  zenrav1e output (rd_gap, tune sweeps) wherever the tools fire.
-
 ### Added
+- **`examples/recon_probe.rs`** (17cff82f): encodes a single-frame 4:2:0
+  y4m still with direct `cdef`/`lrf` speed-setting control (the CLI does
+  not expose cdef) and emits IVF + the encoder's reconstruction, for
+  recon-vs-decoder byte-agreement probing.
 - **Loop-filter sharpness schedule for `Tune::Ssimulacra2`** (zenrav1e#30
   item 1): the tune now codes frame-header deblock sharpness {7,5,3} at
   base_q_idx {<80, <160, else} — the schedule Tune::StillImage already
