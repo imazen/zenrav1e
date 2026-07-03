@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 ### Added
+- **AV1 palette mode** (68a8d81f, 5f82e2d4, cda831e7): full encoder-side
+  implementation of the screen-content palette tool, default OFF behind
+  `SpeedSettings.prediction.palette` (`PaletteMode::{Off, Auto, Always}`,
+  `--palette` on the CLI). Luma palettes of 2-8 colors: libaom-ported
+  top-color + k-means search with neighbor-cache snapping, cache-aware
+  color coding (reuse bits + shrinking-width deltas), wavefront index-map
+  coding with the spec's neighbor-context color ordering (exhaustively
+  unit-tested against the score-based spec formulation), palette recon
+  (`pal_pred` dual) including the zero-residual skip path, and RD trials
+  through the real bitstream writers (libaom's `discount_color_cost`
+  overuse bias deliberately not ported, see their b:421196988).
+  `PaletteMode::Auto` ports libaom's anti-aliasing-aware screen-content
+  detection (16x16 color counting + dominant-value dilation) and decides
+  `allow_screen_content_tools` per key frame. Byte-identical when Off;
+  240 palette-on cells aomdec-clean with aomdec==rav1d-safe md5 output
+  agreement; measured (train26 24 images x 5 q x 2 speeds, BD-rate at
+  matched ssim2): plots -31.7%(s2)/-79.4%(s6) median bytes, screenshots
+  -15.3%/-82.5%, scans -14.8%/-36.5%, with butteraugli-p3 agreeing.
+  UV palette search and palette-in-inter-frames are not implemented (the
+  UV flag is coded "off"; both are conformant omissions).
 - **Per-superblock delta-q coding** (d125713f): the encoder can now code real
   `delta_q` syntax — frame-header `delta_q_present`/`delta_q_res` (spec
   5.9.17), the per-SB `delta_q_index` symbol at the first block of each
