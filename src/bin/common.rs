@@ -187,6 +187,10 @@ pub struct CliOptions {
   /// Override the speed preset's loop-restoration filter (LRF) setting.
   #[clap(long, value_parser, help_heading = "ENCODE SETTINGS")]
   pub lrf: Option<bool>,
+  /// Override the sequence-level filter-intra enable (default derives
+  /// from the speed preset's prediction-modes setting).
+  #[clap(long, value_parser, help_heading = "ENCODE SETTINGS")]
+  pub filter_intra: Option<bool>,
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
   #[clap(
@@ -685,6 +689,7 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
   if let Some(lrf) = matches.lrf {
     cfg.speed_settings.lrf = lrf;
   }
+  cfg.speed_settings.prediction.filter_intra = matches.filter_intra;
 
   cfg.quantizer = quantizer;
   cfg.min_quantizer = matches.min_quantizer.unwrap_or(0);

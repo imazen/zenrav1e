@@ -549,8 +549,14 @@ impl Sequence {
       force_integer_mv: 2,
       still_picture: config.still_picture,
       reduced_still_picture_hdr: config.still_picture,
-      enable_filter_intra: config.speed_settings.prediction.prediction_modes
-        >= PredictionModesSetting::ComplexKeyframes,
+      enable_filter_intra: config
+        .speed_settings
+        .prediction
+        .filter_intra
+        .unwrap_or(
+          config.speed_settings.prediction.prediction_modes
+            >= PredictionModesSetting::ComplexKeyframes,
+        ),
       enable_intra_edge_filter: true,
       enable_interintra_compound: false,
       enable_masked_compound: false,

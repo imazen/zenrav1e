@@ -106,6 +106,7 @@ impl Default for SpeedSettings {
         // Default off pending RD measurement; enable per-encode for screen
         // content.
         palette: PaletteMode::Off,
+        filter_intra: None,
       },
       motion: MotionSpeedSettings {
         include_near_mvs: true,
@@ -306,6 +307,11 @@ pub struct PredictionSpeedSettings {
   /// plots, UI); wasted work on photographic content — `Auto` runs a
   /// per-frame detection pass to decide.
   pub palette: PaletteMode,
+
+  /// Override the sequence-level filter-intra enable (`None` derives it
+  /// from `prediction_modes >= ComplexKeyframes`, the historical
+  /// behavior).
+  pub filter_intra: Option<bool>,
 }
 
 /// Palette mode search policy (AV1 screen content tool).
