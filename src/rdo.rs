@@ -1619,17 +1619,30 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 ) -> PartitionParameters {
   let mut modes = ArrayVec::<_, INTRA_MODES>::new();
 
-  // Reduce number of prediction modes at higher speed levels
-  let num_modes_rdo = if (fi.frame_type == FrameType::KEY
-    && fi.config.speed_settings.prediction.prediction_modes
-      >= PredictionModesSetting::ComplexKeyframes)
-    || (fi.frame_type.has_inter()
-      && fi.config.speed_settings.prediction.prediction_modes
-        >= PredictionModesSetting::ComplexAll)
+  // Reduce number of prediction modes at higher speed levels. The
+  // num_modes_rdo_override knob (default None = byte-identical historical
+  // 7|3 budgets) is the still-image intra-mode dial; it is clamped to the
+  // full RAV1E_INTRA_MODES length so `skip`/`take` below stay in range.
+  let num_modes_rdo = match fi
+    .config
+    .speed_settings
+    .prediction
+    .num_modes_rdo_override
   {
-    7
-  } else {
-    3
+    Some(n) => usize::from(n).clamp(1, INTRA_MODES),
+    None => {
+      if (fi.frame_type == FrameType::KEY
+        && fi.config.speed_settings.prediction.prediction_modes
+          >= PredictionModesSetting::ComplexKeyframes)
+        || (fi.frame_type.has_inter()
+          && fi.config.speed_settings.prediction.prediction_modes
+            >= PredictionModesSetting::ComplexAll)
+      {
+        7
+      } else {
+        3
+      }
+    }
   };
 
   let intra_mode_set = RAV1E_INTRA_MODES;

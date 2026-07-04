@@ -112,6 +112,7 @@ impl Default for SpeedSettings {
         palette: PaletteMode::Off,
         intrabc: false,
         filter_intra: None,
+        num_modes_rdo_override: None,
       },
       motion: MotionSpeedSettings {
         include_near_mvs: true,
@@ -438,6 +439,22 @@ pub struct PredictionSpeedSettings {
   /// from `prediction_modes >= ComplexKeyframes`, the historical
   /// behavior).
   pub filter_intra: Option<bool>,
+
+  /// Override the number of intra prediction modes that reach full RDO on
+  /// intra frames (the SATD-prescreened shortlist length).
+  ///
+  /// `None` (the default at every speed preset) keeps the historical
+  /// budget — 7 when [`prediction_modes`](Self::prediction_modes) is at
+  /// least `ComplexKeyframes` on a keyframe (or `ComplexAll` on an inter
+  /// frame), else 3 — byte-identical to builds without this knob.
+  /// `Some(n)` RDOs the top `n` modes instead, wherever that decision
+  /// runs (clamped to 1..=13, the full DC/directional/smooth/Paeth set);
+  /// the first `n / 2` come from the CDF-probability ranking and the rest
+  /// are re-ranked by SATD, exactly as the historical budgets are. For
+  /// still images every frame is a keyframe, so this is the still-image
+  /// intra-mode dial (e.g. `Some(5)` = the top-5 midpoint between the
+  /// historical 3 and 7).
+  pub num_modes_rdo_override: Option<u8>,
 }
 
 /// Palette mode search policy (AV1 screen content tool).

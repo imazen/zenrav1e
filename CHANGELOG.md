@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 ### Added
+- **Intra mode-RDO budget override** (default-off; zenavif
+  FAST_TIER_PARITY_PLAN s4-tier column, the "missing top-5 knob" the P2
+  heads report called out):
+  `PredictionSpeedSettings.num_modes_rdo_override: Option<u8>` overrides
+  the intra-frame mode-decision shortlist length that was hardcoded 7|3
+  (rdo.rs `intra_frame_rdo_mode_decision`; 7 required
+  `prediction_modes >= ComplexKeyframes` on keyframes). `Some(n)` RDOs the
+  top `n` modes (clamped 1..=13; first `n/2` by CDF probability, rest
+  re-ranked by SATD — the historical selection shape, only the count
+  moves), giving still-image callers the top-5 midpoint between the
+  forced-Simple top-3 and ComplexKeyframes top-7. `None` at every preset —
+  byte-identical off (6/6-cell md5 vs 39f0ecdd across s{2,6,8} ×
+  quantizer{60,140} still-picture).
+
 - **Pruned top-down partition candidate walk** (default-off; zenavif
   FAST_TIER_PARITY_PLAN P1 lever 1, 725f5f71):
   `PartitionSpeedSettings.topdown_prune: Option<TopdownPartitionPrune>`
