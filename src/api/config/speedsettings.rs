@@ -90,6 +90,7 @@ impl Default for SpeedSettings {
         ),
         mixed_3way_partitions: false,
         split_trial_depth: 1,
+        topdown_prune: None,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: false,
@@ -324,6 +325,57 @@ pub struct PartitionSpeedSettings {
   /// Only meaningful above the minimum partition size; an explicit opt-in
   /// for beyond-matched-speed operating points.
   pub split_trial_depth: u8,
+
+  /// Early-exit pruning schedule for the top-down partition search
+  /// (libaom `partition_search_breakout`-family analog, adapted to the
+  /// native NONE-vs-SPLIT-trial cost model).
+  ///
+  /// `None` (the default at every speed preset) keeps the search
+  /// byte-identical to builds without this feature. `Some` re-orders the
+  /// candidate walk NONE-first — so the existing per-child early exit
+  /// abandons expensive candidates against the NONE incumbent — and
+  /// applies whichever gates below are set. Designed to keep
+  /// HORZ/VERT (and 16-parent 4-way) candidates affordable at fast
+  /// presets, where the historical alternative was deleting them from
+  /// the candidate list outright.
+  #[serde(default)]
+  pub topdown_prune: Option<TopdownPartitionPrune>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// Gate thresholds for the pruned top-down partition candidate walk
+/// (`PartitionSpeedSettings::topdown_prune`). Every field is an
+/// independent opt-in; an all-`None` value only re-orders the walk
+/// NONE-first (which changes RD tie-breaks, hence bitstreams — the
+/// whole struct lives behind an `Option` for byte-identity when off).
+pub struct TopdownPartitionPrune {
+  /// Terminate the candidate walk at PARTITION_NONE — skipping the
+  /// SPLIT trial and every non-square candidate — when the NONE
+  /// incumbent coded as skip (no residual) and its rd cost is below
+  /// `none_breakout × lambda × block_pixels`. The `lambda` factor keys
+  /// the threshold to the active quantizer and the `block_pixels`
+  /// factor to the block size, mirroring libaom's
+  /// `partition_search_breakout_dist_thr >> (sb_log2s − bsize_log2s)`
+  /// + `rate_thr × num_pels_log2` scaling of the same decision.
+  pub none_breakout: Option<f32>,
+  /// Skip HORZ/VERT evaluation unless the relative NONE-vs-SPLIT-trial
+  /// gap `(max − min) / min` is at most this value (rects win in the
+  /// contested band where whole-block and quartered coding are close;
+  /// a SPLIT trial abandoned by the early exit counts as an unbounded
+  /// gap). Inert until the SPLIT trial has run in the same walk.
+  pub rect_margin: Option<f32>,
+  /// Same-shaped gate for the extended candidates (HORZ_4/VERT_4 and,
+  /// when `mixed_3way_partitions` offers them, HORZ_A/B + VERT_A/B);
+  /// meaningfully tighter than `rect_margin`.
+  pub four_way_margin: Option<f32>,
+  /// Skip every non-square candidate when the deviation
+  /// `max − min` of `ln(1 + var)` over the block's 4×4 luma sub-blocks
+  /// (bit-depth-normalized source pixels) is below this value —
+  /// directional partitions cannot pay for their signaling on
+  /// homogeneous content. Port of libaom's allintra
+  /// `prune_rect_part_using_4x4_var_deviation` (threshold 3.0 there;
+  /// `log_sub_block_var`, partition_search.c).
+  pub homogeneity_gate: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

@@ -52,7 +52,7 @@ use crate::predict::{
 use crate::rdo_tables::*;
 use crate::tiling::*;
 use crate::transform::{RAV1E_TX_TYPES, TxSet, TxSize, TxType};
-use crate::util::{Aligned, Pixel, init_slice_repeat_mut};
+use crate::util::{Aligned, CastFromPrimitive, Pixel, init_slice_repeat_mut};
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
@@ -3248,6 +3248,56 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   Some(cost + rd_cost_sum)
 }
 
+/// Deviation `max − min` of `ln(1 + var)` over the complete 4×4 luma
+/// sub-blocks of `bsize` at `tile_bo` (source pixels, bit-depth-normalized
+/// to 8-bit range) — the evidence libaom's allintra rect-partition pruning
+/// keys on (`log_sub_block_var`, av1/encoder/partition_search.c). Sub-blocks
+/// past the visible frame edge are excluded (libaom's `right_overflow` /
+/// `bottom_overflow` handling); returns `f64::INFINITY` when fewer than two
+/// complete sub-blocks exist, so a caller gating on "deviation below
+/// threshold" never prunes on missing evidence.
+fn log_var_deviation<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
+  tile_bo: TileBlockOffset,
+) -> f64 {
+  let area = Area::BlockStartingAt { bo: tile_bo.0 };
+  let region = ts.input_tile.planes[0].subregion(area);
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
+  let (visible_w, visible_h) = clip_visible_bsize(
+    fi.width,
+    fi.height,
+    bsize,
+    frame_bo.0.x << MI_SIZE_LOG2,
+    frame_bo.0.y << MI_SIZE_LOG2,
+  );
+  let shift = fi.sequence.bit_depth.saturating_sub(8) as u32;
+
+  let mut n = 0usize;
+  let mut min_lv = f64::INFINITY;
+  let mut max_lv = f64::NEG_INFINITY;
+  for by in (0..(visible_h & !3)).step_by(4) {
+    for bx in (0..(visible_w & !3)).step_by(4) {
+      let mut sum = 0u32;
+      let mut sumsq = 0u32;
+      for y in by..by + 4 {
+        for x in bx..bx + 4 {
+          let v = u32::cast_from(region[y][x]) >> shift;
+          sum += v;
+          sumsq += v * v;
+        }
+      }
+      // Per-pixel variance of the 4×4: (Σv² − (Σv)²/16) / 16.
+      let var =
+        (f64::from(sumsq) - f64::from(sum) * f64::from(sum) / 16.0) / 16.0;
+      let lv = var.ln_1p();
+      min_lv = min_lv.min(lv);
+      max_lv = max_lv.max(lv);
+      n += 1;
+    }
+  }
+  if n < 2 { f64::INFINITY } else { max_lv - min_lv }
+}
+
 /// RDO-based single level partitioning decision
 ///
 /// # Panics
@@ -3270,10 +3320,108 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
 
-  for &partition in partition_types {
+  // Pruned candidate walk (`topdown_prune`, zenavif FAST_TIER_PARITY_PLAN P1
+  // lever 1 — libaom `partition_search_breakout`-family analog): visit NONE
+  // first so the per-child early exit in `rdo_partition_simple` abandons
+  // expensive candidates against the NONE incumbent, then gate the walk on
+  // the evidence accumulated so far. `None` (every preset's default) keeps
+  // the caller's historical candidate order with no gates: byte-identical
+  // to builds without this feature.
+  let prune = fi.config.speed_settings.partition.topdown_prune;
+  let ordered: ArrayVec<PartitionType, 10> = if prune.is_some() {
+    let mut v = ArrayVec::<PartitionType, 10>::new();
+    for &p in
+      &[PARTITION_NONE, PARTITION_SPLIT, PARTITION_HORZ, PARTITION_VERT]
+    {
+      if partition_types.contains(&p) {
+        v.push(p);
+      }
+    }
+    for &p in partition_types {
+      if !v.contains(&p) {
+        v.push(p);
+      }
+    }
+    v
+  } else {
+    partition_types.iter().copied().collect()
+  };
+  // The gates below reason relative to a NONE incumbent; without one in the
+  // candidate list (never the case for `encode_partition_topdown`) fall back
+  // to the plain walk.
+  let prune = prune.filter(|_| ordered.first() == Some(&PARTITION_NONE));
+
+  // Gate evidence: the NONE incumbent's (rd, skip) — pre-seeded from the
+  // cache when the caller already knows it (SPLIT-child recursion) — and the
+  // SPLIT trial's outcome (inner `None` = abandoned by the early exit).
+  let mut none_state: Option<(f64, bool)> =
+    if prune.is_some() && cached_block.part_type == PARTITION_NONE {
+      Some((
+        cached_block.rd_cost,
+        cached_block.part_modes.first().is_some_and(|m| m.skip),
+      ))
+    } else {
+      None
+    };
+  let mut split_state: Option<Option<f64>> = None;
+  // Lazily computed 4×4 log-variance deviation (homogeneity_gate evidence).
+  let mut homogeneity: Option<f64> = None;
+
+  for &partition in &ordered {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;
+    }
+
+    if let Some(p) = prune
+      && partition != PARTITION_NONE
+    {
+      // NONE breakout: a skip-coded incumbent below the quantizer- and
+      // blocksize-keyed threshold terminates the walk outright.
+      if let (Some(bk), Some((nc, nskip))) = (p.none_breakout, none_state)
+        && nskip
+        && nc
+          < f64::from(bk)
+            * fi.lambda
+            * ((bsize.width() * bsize.height()) as f64)
+      {
+        break;
+      }
+
+      if partition != PARTITION_SPLIT {
+        // Homogeneity gate: directional candidates cannot pay for their
+        // signaling when every 4×4 sub-block looks alike.
+        if let Some(vg) = p.homogeneity_gate {
+          let dev = *homogeneity
+            .get_or_insert_with(|| log_var_deviation(fi, ts, bsize, tile_bo));
+          if dev < f64::from(vg) {
+            continue;
+          }
+        }
+        // NONE-vs-SPLIT margin gate: only spend on non-square candidates
+        // in the contested band where the two square outcomes are close.
+        let margin = match partition {
+          PARTITION_HORZ | PARTITION_VERT => p.rect_margin,
+          _ => p.four_way_margin,
+        };
+        if let (Some(m), Some((nc, _)), Some(sc)) =
+          (margin, none_state, split_state)
+        {
+          let rel_gap = match sc {
+            Some(sc) => {
+              let lo = sc.min(nc);
+              let hi = sc.max(nc);
+              (hi - lo) / lo.max(1e-9)
+            }
+            // SPLIT abandoned by the early exit: NONE dominates by more
+            // than the exit bound.
+            None => f64::INFINITY,
+          };
+          if rel_gap > f64::from(m) {
+            continue;
+          }
+        }
+      }
     }
 
     let mut child_modes = ArrayVec::<_, 4>::new();
@@ -3310,6 +3458,19 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         unreachable!();
       }
     };
+
+    if prune.is_some() {
+      match partition {
+        PARTITION_NONE => {
+          if let Some(rd) = cost {
+            none_state =
+              Some((rd, child_modes.first().is_some_and(|m| m.skip)));
+          }
+        }
+        PARTITION_SPLIT => split_state = Some(cost),
+        _ => {}
+      }
+    }
 
     if let Some(rd) = cost
       && rd < best_rd

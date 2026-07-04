@@ -2159,6 +2159,7 @@ fn log_q_exp_overflow() {
         non_square_partition_max_threshold: BlockSize::BLOCK_4X4,
         mixed_3way_partitions: false,
         split_trial_depth: 1,
+        topdown_prune: None,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: true,
@@ -2244,6 +2245,7 @@ fn guess_frame_subtypes_assert() {
         non_square_partition_max_threshold: BlockSize::BLOCK_4X4,
         mixed_3way_partitions: false,
         split_trial_depth: 1,
+        topdown_prune: None,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: true,
