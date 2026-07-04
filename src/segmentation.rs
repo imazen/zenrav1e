@@ -48,10 +48,28 @@ pub fn segmentation_optimize<T: Pixel>(
           break;
         }
       }
-      assert_ne!(min_segment, MAX_SEGMENTS);
-      fs.segmentation.min_segment = min_segment as u8;
-      fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
-      return;
+      if min_segment < MAX_SEGMENTS {
+        fs.segmentation.min_segment = min_segment as u8;
+        fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
+        return;
+      }
+      // The primary ref frame's segmentation state has no ALT_Q segment
+      // usable at this frame's base_q_idx. Two known ways to get here:
+      // - the ref frame never ran segmentation_optimize at all (its
+      //   enable_segmentation was dynamically disabled — the
+      //   Tune::Ssimulacra2 variance-boost and FrameHints sb_q_scale
+      //   paths replace segmentation with per-SB delta-q on KEY/intra
+      //   frames), so every feature flag it carries is false;
+      // - rate control lowered base_q_idx between frames, raising
+      //   offset_lower_limit above every stored ALT_Q delta (reusing one
+      //   would push a segment to qindex 0 = lossless).
+      // Reusing that state is impossible; re-signal fresh segment data
+      // for this frame instead (update_data = 1 is legal on any frame).
+      // Clear the inherited table first so stale segments are neither
+      // signaled nor counted in preskip / last_active_segid below.
+      fs.segmentation.features = Default::default();
+      fs.segmentation.data = Default::default();
+      fs.segmentation.update_data = true;
     }
 
     segmentation_optimize_inner(fi, fs, offset_lower_limit);

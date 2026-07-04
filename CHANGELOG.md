@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Encoder panic when an INTER frame inherits unusable segmentation data**
+  (zenrav1e#31, fuzz signature `1e77077d5a3f1d17`): `segmentation_optimize`
+  asserted (`min_segment == MAX_SEGMENTS`, segmentation.rs) when the primary
+  ref frame carried no ALT_Q segment usable at the current frame's
+  `base_q_idx`. Deterministic trigger: `Tune::Ssimulacra2`'s variance boost
+  (and the `FrameHints` sb_q_scale path) disables segmentation on KEY/intra
+  frames, so the following INTER frame inherited an all-features-false
+  `SegmentationState`; also reachable when rate control drops `base_q_idx`
+  between frames (the lossless floor rises above every stored delta). The
+  encoder now re-signals fresh segment data (`segmentation_update_data = 1`)
+  on such frames instead of panicking; rav1d-safe roundtrip-verified
+  (tests/segmentation_resignal_roundtrip.rs + fuzz/regression seed).
+
 ### Added
 - **`FrameHints` — external per-superblock AC-quantizer-scale input**
   (c4047cec): `FrameParameters.frame_hints` carries an optional
