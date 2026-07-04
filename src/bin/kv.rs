@@ -8,6 +8,10 @@ struct KVString {
   output: String,
 }
 
+/// KV output supports only the flat scalar/struct shapes the CLI config
+/// actually uses. Every other serde shape returns this error rather than
+/// panicking (zenrav1e#2: a config gaining such a field must not turn
+/// `--save-config` into an abort).
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Error)]
 enum Error {
   #[error("unsupported")]
@@ -88,7 +92,7 @@ impl Serializer for &mut KVString {
     Ok(())
   }
   fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
     self.output += v;
@@ -96,7 +100,7 @@ impl Serializer for &mut KVString {
   }
 
   fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
     self.output += "None";
@@ -130,7 +134,7 @@ impl Serializer for &mut KVString {
   where
     T: ?Sized + Serialize,
   {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
 
   fn serialize_newtype_variant<T>(
@@ -140,34 +144,34 @@ impl Serializer for &mut KVString {
   where
     T: ?Sized + Serialize,
   {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
 
   fn serialize_seq(
     self, len: Option<usize>,
   ) -> Result<Self::SerializeSeq, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_tuple(
     self, len: usize,
   ) -> Result<Self::SerializeTuple, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_tuple_struct(
     self, name: &'static str, len: usize,
   ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_tuple_variant(
     self, name: &'static str, variant_index: u32, variant: &'static str,
     len: usize,
   ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_map(
     self, len: Option<usize>,
   ) -> Result<Self::SerializeMap, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
   fn serialize_struct(
     self, name: &'static str, len: usize,
@@ -178,7 +182,7 @@ impl Serializer for &mut KVString {
     self, name: &'static str, variant_index: u32, variant: &'static str,
     len: usize,
   ) -> Result<Self::SerializeStructVariant, Self::Error> {
-    unimplemented!()
+    Err(Error::Unsupported)
   }
 }
 
@@ -217,5 +221,19 @@ mod test {
       let out = super::to_string(&s).unwrap();
       println!("preset {}: {}", preset, out);
     }
+  }
+
+  /// zenrav1e#2: shapes the KV format cannot represent must serialize to a
+  /// clean error, never a panic (`--save-config` on a config that grows a
+  /// sequence/map field must not abort the CLI).
+  #[test]
+  fn unsupported_shapes_error_instead_of_panicking() {
+    assert!(super::to_string(&vec![1u8, 2, 3]).is_err(), "seq");
+    assert!(
+      super::to_string(&std::collections::BTreeMap::from([("k", 1)])).is_err(),
+      "map"
+    );
+    assert!(super::to_string(&(1u8, 2u8)).is_err(), "tuple");
+    assert!(super::to_string(&'x').is_err(), "char");
   }
 }

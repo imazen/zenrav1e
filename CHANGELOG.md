@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Fixed
+- **CLI `--save-config` can no longer abort on unrepresentable config
+  shapes** (zenrav1e#2): the last 10 `unimplemented!()` stubs in the
+  key-value serializer (`src/bin/kv.rs`) now return a clean
+  `Error::Unsupported` — the crate is `unimplemented!()`-free. Regression
+  test covers seq/map/tuple/char shapes.
+
 - **Encoder panic when an INTER frame inherits unusable segmentation data**
   (zenrav1e#31, fuzz signature `1e77077d5a3f1d17`): `segmentation_optimize`
   asserted (`min_segment == MAX_SEGMENTS`, segmentation.rs) when the primary
