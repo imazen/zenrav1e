@@ -10,14 +10,23 @@
   exit then abandons SPLIT/rect/4-way trials against the NONE incumbent) and
   adds four opt-in gates — `none_breakout` (skip everything at a skip-coded
   NONE below τ·λ·pels; libaom `partition_search_breakout` analog),
-  `rect_margin`/`four_way_margin` (spend on non-square candidates only in
-  the contested NONE-vs-SPLIT band), `homogeneity_gate` (4×4 log-variance
-  deviation port of libaom allintra
-  `prune_rect_part_using_4x4_var_deviation`). `None` at every preset —
-  byte-identical off (27/27-cell md5 vs d82c16ba across 3 images ×
-  s{2,4,6,8,10} × Q{30,85}). Purpose: keep HORZ/VERT (+16-parent 4-way)
+  `rect_margin`/`four_way_margin` (skip non-square candidates on clear
+  NONE dominance over the SPLIT-trial estimate — one-sided since 767c8ff5:
+  the original symmetric closeness band forfeited 74% of the rect/4-way
+  liveness win on SPLIT-dominant razor-edge content, measured P1PART wave
+  1), `homogeneity_gate` (4×4 log-variance deviation port of libaom
+  allintra `prune_rect_part_using_4x4_var_deviation`). `None` at every
+  preset — byte-identical off (27/27-cell md5 vs d82c16ba across 3 images ×
+  s{2,4,6,8,10} × Q{30,85}; 144/144-cell sentinel across the 767c8ff5
+  semantics change). Purpose: keep HORZ/VERT (+16-parent 4-way)
   candidates affordable at fast presets whose tables previously amputated
-  them (rect threshold 8×8 at s4+).
+  them (rect threshold 8×8 at s4+). Measured on train26 s6 (zenavif
+  `benchmarks/rd_gap_p1part_2026-07-04.tsv`): the margins are a dead end
+  in both semantics and the skip-gated breakout is a null at every τ; the
+  homogeneity gate is the one gate that pays (94% of the liveness win at
+  86% of its cost) — and it is a shape prior, not just a cost gate
+  (skipping rect leaves on smooth blocks redirects them into deeper SPLIT
+  recursion: better RD at more time than no-gate 4-way-off).
 
 - **Decoupled intra tx-RDO halves + size-depth cap** (default-off; zenavif
   FAST_TIER_PARITY_PLAN P0):
