@@ -5840,7 +5840,11 @@ mod test {
     let mut cfd2 = hints_test_cfd(16, 8);
     let applied2 = cfd2.apply_sb_q_scale_hints(&[0.0001, 1000.0], 2, bd);
     assert!(applied2);
+    // u8 makes a <=255 bound tautological (clippy absurd_extreme_comparisons).
+    // The real contracts: the lossless floor holds, and the extreme upscale
+    // stays ordered above the extreme downscale (clamped, never wrapped) --
+    // the delta-q cap bounds it far below the u8 ceiling.
     assert!(cfd2.sb_qindex[0] >= 1);
-    assert!(cfd2.sb_qindex[1] <= 255);
+    assert!(cfd2.sb_qindex[1] > cfd2.sb_qindex[0]);
   }
 }
