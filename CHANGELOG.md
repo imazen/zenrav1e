@@ -3,6 +3,22 @@
 ## [Unreleased]
 
 ### Added
+- **Pruned top-down partition candidate walk** (default-off; zenavif
+  FAST_TIER_PARITY_PLAN P1 lever 1, 725f5f71):
+  `PartitionSpeedSettings.topdown_prune: Option<TopdownPartitionPrune>`
+  re-orders the top-down partition RDO walk NONE-first (the per-child early
+  exit then abandons SPLIT/rect/4-way trials against the NONE incumbent) and
+  adds four opt-in gates — `none_breakout` (skip everything at a skip-coded
+  NONE below τ·λ·pels; libaom `partition_search_breakout` analog),
+  `rect_margin`/`four_way_margin` (spend on non-square candidates only in
+  the contested NONE-vs-SPLIT band), `homogeneity_gate` (4×4 log-variance
+  deviation port of libaom allintra
+  `prune_rect_part_using_4x4_var_deviation`). `None` at every preset —
+  byte-identical off (27/27-cell md5 vs d82c16ba across 3 images ×
+  s{2,4,6,8,10} × Q{30,85}). Purpose: keep HORZ/VERT (+16-parent 4-way)
+  candidates affordable at fast presets whose tables previously amputated
+  them (rect threshold 8×8 at s4+).
+
 - **Decoupled intra tx-RDO halves + size-depth cap** (default-off; zenavif
   FAST_TIER_PARITY_PLAN P0):
   `TransformSpeedSettings.rdo_tx_size_override` / `rdo_tx_type_override`
