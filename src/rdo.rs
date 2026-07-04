@@ -3398,8 +3398,15 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
             continue;
           }
         }
-        // NONE-vs-SPLIT margin gate: only spend on non-square candidates
-        // in the contested band where the two square outcomes are close.
+        // NONE-dominance margin gate: skip non-square candidates only when
+        // the NONE incumbent beats the SPLIT-trial estimate by more than
+        // the margin. One-sided by measurement (P1PART wave 1): the
+        // directional candidates earn most of their value exactly on
+        // SPLIT-dominant content (razor edges, screens, scans — "will
+        // partition; which shape?"), so a symmetric closeness band
+        // forfeited 74% of the liveness win. On the SPLIT-dominant side
+        // the per-child early exit already bounds each non-square trial's
+        // cost against the running best.
         let margin = match partition {
           PARTITION_HORZ | PARTITION_VERT => p.rect_margin,
           _ => p.four_way_margin,
@@ -3407,17 +3414,14 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         if let (Some(m), Some((nc, _)), Some(sc)) =
           (margin, none_state, split_state)
         {
-          let rel_gap = match sc {
-            Some(sc) => {
-              let lo = sc.min(nc);
-              let hi = sc.max(nc);
-              (hi - lo) / lo.max(1e-9)
-            }
+          let none_dominance = match sc {
+            // Signed: positive = NONE better than the SPLIT estimate.
+            Some(sc) => (sc - nc) / nc.max(1e-9),
             // SPLIT abandoned by the early exit: NONE dominates by more
             // than the exit bound.
             None => f64::INFINITY,
           };
-          if rel_gap > f64::from(m) {
+          if none_dominance > f64::from(m) {
             continue;
           }
         }

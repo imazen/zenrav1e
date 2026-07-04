@@ -358,15 +358,18 @@ pub struct TopdownPartitionPrune {
   /// `partition_search_breakout_dist_thr >> (sb_log2s − bsize_log2s)`
   /// + `rate_thr × num_pels_log2` scaling of the same decision.
   pub none_breakout: Option<f32>,
-  /// Skip HORZ/VERT evaluation unless the relative NONE-vs-SPLIT-trial
-  /// gap `(max − min) / min` is at most this value (rects win in the
-  /// contested band where whole-block and quartered coding are close;
-  /// a SPLIT trial abandoned by the early exit counts as an unbounded
-  /// gap). Inert until the SPLIT trial has run in the same walk.
+  /// Skip HORZ/VERT evaluation when the NONE incumbent beats the
+  /// SPLIT-trial estimate by more than this relative margin
+  /// (`(split − none) / none > margin`; a SPLIT trial abandoned by the
+  /// early exit counts as unbounded NONE dominance). One-sided by
+  /// measurement: directional candidates earn most of their value on
+  /// SPLIT-dominant content, where the per-child early exit already
+  /// bounds their cost — only clear NONE dominance justifies skipping
+  /// them outright. Inert until the SPLIT trial has run in the walk.
   pub rect_margin: Option<f32>,
-  /// Same-shaped gate for the extended candidates (HORZ_4/VERT_4 and,
-  /// when `mixed_3way_partitions` offers them, HORZ_A/B + VERT_A/B);
-  /// meaningfully tighter than `rect_margin`.
+  /// Same-shaped NONE-dominance gate for the extended candidates
+  /// (HORZ_4/VERT_4 and, when `mixed_3way_partitions` offers them,
+  /// HORZ_A/B + VERT_A/B); typically tighter than `rect_margin`.
   pub four_way_margin: Option<f32>,
   /// Skip every non-square candidate when the deviation
   /// `max − min` of `ln(1 + var)` over the block's 4×4 luma sub-blocks
