@@ -1696,9 +1696,11 @@ impl<T: Pixel> FrameInvariants<T> {
     gop_input_frameno_start: u64, t35_metadata: Box<[T35]>,
     frame_hints: Option<Arc<crate::frame::FrameHints>>,
   ) -> Self {
-    // In lossless mode (quantizer=0), only 4x4 WHT_WHT is used, no TX selection
+    // In lossless mode (quantizer=0), only 4x4 WHT_WHT is used, no TX selection.
+    // `tx_size_rdo()` is `rdo_tx_size_override` falling back to
+    // `rdo_tx_decision` (None = byte-identical legacy coupling).
     let tx_mode_select =
-      config.speed_settings.transform.rdo_tx_decision && config.quantizer > 0;
+      config.speed_settings.transform.tx_size_rdo() && config.quantizer > 0;
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
     fi.tx_mode_select = tx_mode_select;

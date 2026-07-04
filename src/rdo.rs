@@ -906,22 +906,33 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
   let mut best_tx_size = tx_size;
   let mut best_rd = f64::MAX;
 
+  // `tx_size_rdo()` / `tx_type_rdo()` are the per-half overrides falling
+  // back to `rdo_tx_decision` (both None = byte-identical legacy coupling).
   let do_rdo_tx_size = fi.tx_mode_select
-    && fi.config.speed_settings.transform.rdo_tx_decision
+    && fi.config.speed_settings.transform.tx_size_rdo()
     && !is_inter;
   // The written intra tx-size symbol is a DEPTH from
   // `max_txsize_rect_lookup[bsize]` with alphabet 0..=MAX_TX_DEPTH; the cap
   // above already consumed one level, so shrink the search accordingly or the
   // deepest candidate would encode depth 3 -- an out-of-alphabet symbol.
-  let rdo_tx_depth =
-    if do_rdo_tx_size { if sliver_cap { 1 } else { 2 } } else { 0 };
+  // `rdo_tx_size_depth` (None = full) can only shrink the walk further —
+  // shallower depths are always alphabet-legal.
+  let rdo_tx_depth = if do_rdo_tx_size {
+    let full: u8 = if sliver_cap { 1 } else { 2 };
+    match fi.config.speed_settings.transform.rdo_tx_size_depth {
+      Some(cap) => full.min(cap),
+      None => full,
+    }
+  } else {
+    0
+  };
   let mut cw_checkpoint: Option<ContextWriterCheckpoint> = None;
 
   for _ in 0..=rdo_tx_depth {
     let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
     let do_rdo_tx_type = tx_set > TxSet::TX_SET_DCTONLY
-      && fi.config.speed_settings.transform.rdo_tx_decision
+      && fi.config.speed_settings.transform.tx_type_rdo()
       && !is_inter
       && !skip;
 

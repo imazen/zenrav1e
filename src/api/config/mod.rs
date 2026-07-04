@@ -276,6 +276,10 @@ impl Config {
     // FIXME: tx partition for intra not supported for chroma 422
     if chroma_sampling == ChromaSampling::Cs422 {
       config.speed_settings.transform.rdo_tx_decision = false;
+      // The decoupled halves must not resurrect the unsupported path either:
+      // clear both so everything follows the forced-off coupled flag.
+      config.speed_settings.transform.rdo_tx_size_override = None;
+      config.speed_settings.transform.rdo_tx_type_override = None;
     }
 
     let mut inner = ContextInner::new(&config);

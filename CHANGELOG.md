@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Added
+- **Decoupled intra tx-RDO halves + size-depth cap** (default-off; zenavif
+  FAST_TIER_PARITY_PLAN P0):
+  `TransformSpeedSettings.rdo_tx_size_override` / `rdo_tx_type_override`
+  (each `Option<bool>`, `None` = follow `rdo_tx_decision` exactly) split the
+  coupled boolean that forced fast presets into `TX_MODE_LARGEST` + DCT-only
+  together, and `rdo_tx_size_depth` (`Option<u8>`) caps the intra tx-size
+  walk (`Some(1)` = largest + one split level). All three default `None` at
+  every preset — byte-identical off (27/27-cell md5 vs ac8c4ef3 across
+  s{2,6} × tune-ss2/off × Q{30,60,85}). Measured (zenavif FASTWINS P0,
+  train26 s6 tune-ss2): size-only depth-1 recovers 51% of the s6→s4 RD step
+  at ~1.5× time; the type half alone fails the butteraugli-max veto. 3,024
+  armed cells aomdec+rav1d-safe conformance-clean, including tx-type RDO
+  under `TX_MODE_LARGEST` and `TX_MODE_SELECT` at the s6/s8 presets.
+
 ### Fixed
 - **CLI `--save-config` can no longer abort on unrepresentable config
   shapes** (zenrav1e#2): the last 10 `unimplemented!()` stubs in the

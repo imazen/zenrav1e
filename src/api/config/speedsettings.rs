@@ -98,6 +98,9 @@ impl Default for SpeedSettings {
         tx_domain_distortion: true,
         tx_domain_rate: false,
         rdo_tx_decision: true,
+        rdo_tx_size_override: None,
+        rdo_tx_type_override: None,
+        rdo_tx_size_depth: None,
         enable_inter_tx_split: false,
       },
       prediction: PredictionSpeedSettings {
@@ -226,8 +229,61 @@ pub struct TransformSpeedSettings {
   /// Enabled is slower.
   pub rdo_tx_decision: bool,
 
+  /// Decouples the intra transform-SIZE half of
+  /// [`rdo_tx_decision`](Self::rdo_tx_decision).
+  ///
+  /// `None` (the default at every speed preset) follows `rdo_tx_decision`
+  /// exactly — byte-identical to builds without this knob. `Some(true)`
+  /// searches intra tx sizes with RDO (the frame codes `TX_MODE_SELECT`)
+  /// even when `rdo_tx_decision` is off; `Some(false)` pins the largest
+  /// legal tx size (`TX_MODE_LARGEST`) even when it is on.
+  pub rdo_tx_size_override: Option<bool>,
+
+  /// Decouples the intra transform-TYPE half of
+  /// [`rdo_tx_decision`](Self::rdo_tx_decision).
+  ///
+  /// `None` (the default at every speed preset) follows `rdo_tx_decision`.
+  /// `Some(true)` RDO-searches the legal tx-type set for whichever tx size
+  /// is being coded — this works under `TX_MODE_LARGEST` too, since
+  /// tx-type signaling is independent of the frame tx mode. `Some(false)`
+  /// codes `DCT_DCT` only.
+  pub rdo_tx_type_override: Option<bool>,
+
+  /// Caps the intra tx-size RDO walk depth (split levels evaluated below
+  /// the largest legal tx size).
+  ///
+  /// `None` (the default at every speed preset) runs the full walk
+  /// (`MAX_TX_DEPTH` = 2 levels below the largest). `Some(1)` evaluates
+  /// the largest size plus one split level; `Some(0)` evaluates only the
+  /// largest (the frame still codes `TX_MODE_SELECT`, so this isolates
+  /// the per-block depth-signaling overhead). Ignored when intra tx-size
+  /// RDO is off.
+  pub rdo_tx_size_depth: Option<u8>,
+
   /// Enable tx split for inter mode block.
   pub enable_inter_tx_split: bool,
+}
+
+impl TransformSpeedSettings {
+  /// Whether intra tx-SIZE RDO is enabled:
+  /// [`rdo_tx_size_override`](Self::rdo_tx_size_override) falling back to
+  /// [`rdo_tx_decision`](Self::rdo_tx_decision).
+  pub(crate) const fn tx_size_rdo(&self) -> bool {
+    match self.rdo_tx_size_override {
+      Some(v) => v,
+      None => self.rdo_tx_decision,
+    }
+  }
+
+  /// Whether intra tx-TYPE RDO is enabled:
+  /// [`rdo_tx_type_override`](Self::rdo_tx_type_override) falling back to
+  /// [`rdo_tx_decision`](Self::rdo_tx_decision).
+  pub(crate) const fn tx_type_rdo(&self) -> bool {
+    match self.rdo_tx_type_override {
+      Some(v) => v,
+      None => self.rdo_tx_decision,
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
