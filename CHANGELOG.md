@@ -15,6 +15,26 @@
   window, same exhaustive-construction impact.
 
 ### Added
+- **Executable gates for the engineering-baseline invariants** (zenavif
+  `docs/ENGINEERING_BASELINE.md` section A): `just gate-identity`
+  (`examples/gate_identity.rs` + `tests/gate_identity_pins.tsv`) pins the
+  default-config and `Tune::Ssimulacra2` bitstream fingerprints on a
+  deterministic 3-image × s{2,6,8} × q{60,140,220} grid, checks every
+  documented-neutral knob state byte-equals its absence (tx-override
+  fallbacks, off-tune variance-boost/ssim-rdmult inertness, neutral
+  FrameHints, intrabc_hash-under-off, num_modes historical budgets, ss2
+  Some(0.0)/Some(fitted) neutrals), and liveness-pins the armed
+  palette/intraBC paths (Auto-on-photo must DROP the still-picture
+  screen-content signaling the palette-Off baseline inherits from stock
+  rav1e — expected-different by design, so it is pinned, not
+  equality-checked). CI runs the `--ci` subset on linux-x86_64;
+  `just gate-identity-pin` re-pins after intentional behavioral changes.
+  `just gate-recon` (`scripts/gate_recon.sh`) drives
+  `examples/recon_probe.rs` over the same pinned content × the cdef/lrf
+  toggle corners and byte-compares encoder recon against rav1d-safe
+  and/or aomdec (the #32/#33 desync class as a gate; local-only, decoder
+  legs env-selected, zero legs = loud failure, 54/54 cells clean on both
+  legs at landing).
 - **Composed coefficient-level RD valuation stack**
   (`EncoderConfig::coeff_rd_stack: Option<CoeffRdStack>`, default `None` =
   byte-identical — 36/36 cells sha256-identical vs a master-built rav1e

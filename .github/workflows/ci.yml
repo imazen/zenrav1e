@@ -140,3 +140,16 @@ jobs:
         continue-on-error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  gate-identity:
+    name: Gate A1 (off-state byte-exactness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get install -y nasm
+      - uses: Swatinem/rust-cache@v2
+      # Reduced grid, full arm coverage; pins are linux-x86_64 so this job
+      # runs only here. The full grid is `just gate-identity`.
+      - name: gate-identity (--ci subset)
+        run: cargo run --release --example gate_identity -- --ci

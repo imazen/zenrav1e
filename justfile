@@ -44,6 +44,32 @@ feature-check:
 # Full CI check
 ci: lint test feature-check
 
+# --- Executable gates (zenavif docs/ENGINEERING_BASELINE.md section A) ---
+
+# Gate A1: byte-exactness of the off-state. Pinned baseline fingerprints
+# (tests/gate_identity_pins.tsv, linux-x86_64) + documented-neutral knob
+# arms + armed-path liveness pins. CI runs the --ci subset.
+gate-identity:
+    cargo run --release --example gate_identity
+
+# Re-pin the identity baselines after an INTENTIONAL behavioral change.
+# Commit the TSV diff in the same commit as the change that moved the bytes.
+gate-identity-pin:
+    cargo run --release --example gate_identity -- --pin
+
+# Gate A5: encoder recon byte-agrees with conforming decoders (the #32/#33
+# desync class). Local-only. Decoder legs are env-selected; the default
+# wires rav1d-safe via the zenavif sibling's ivf_raw example (build it
+# first: `cargo build --release --example ivf_raw` in ../zenavif), and
+# aomdec from PATH when present. At least one leg must resolve.
+gate-recon:
+    IVF_RAW="${IVF_RAW:-{{justfile_directory()}}/../zenavif/target/release/examples/ivf_raw}" \
+    AOMDEC="${AOMDEC:-$(command -v aomdec || true)}" \
+    bash scripts/gate_recon.sh
+
+# The CI-safe gate set (gate-recon and perf gates stay explicit local runs).
+gates: gate-identity
+
 # Address sanitizer (requires nightly + clang)
 asan:
     RUSTFLAGS="-Zsanitizer=address -Clinker=clang" cargo +nightly test --no-default-features --features threading --target x86_64-unknown-linux-gnu -- --test-threads=1
