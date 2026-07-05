@@ -63,6 +63,14 @@ fn encode(
   sy: &[u8], su: &[u8], sv: &[u8], w: usize, h: usize, q: usize, speed: u8,
   intrabc: bool, cs: ChromaSampling,
 ) -> Vec<u8> {
+  encode_hash(sy, su, sv, w, h, q, speed, intrabc, true, cs)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn encode_hash(
+  sy: &[u8], su: &[u8], sv: &[u8], w: usize, h: usize, q: usize, speed: u8,
+  intrabc: bool, intrabc_hash: bool, cs: ChromaSampling,
+) -> Vec<u8> {
   let (xdec, _ydec) = match cs {
     ChromaSampling::Cs420 => (1, 1),
     ChromaSampling::Cs444 => (0, 0),
@@ -72,6 +80,7 @@ fn encode(
   let mut ss = SpeedSettings::from_preset(speed);
   ss.prediction.palette = PaletteMode::Always;
   ss.prediction.intrabc = intrabc;
+  ss.prediction.intrabc_hash = intrabc_hash;
   let enc = EncoderConfig {
     width: w,
     height: h,
@@ -185,5 +194,70 @@ fn intrabc_odd_dims_and_tiny_frames_decodable() {
     let dy = decode_y(&on, w, h);
     let py = psnr(&sy, &dy);
     assert!(py > 20.0, "implausible decode at {w}x{h}: y-psnr {py:.2}");
+  }
+}
+
+/// A frame whose only repeat is one distinctive 64x64 texture stamp far
+/// from its copy, surrounded by unrelated noise: the local seeds + diamond
+/// have no gradient to follow, so finding the copy is the hash search's
+/// job (chunk B). Hash-on must beat hash-off bytes and round-trip cleanly
+/// at both samplings.
+fn synth_long_range(
+  w: usize, h: usize, xdec: usize, ydec: usize,
+) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+  let (cw, ch) = ((w + xdec) >> xdec, (h + ydec) >> ydec);
+  let mut state = 0x2545_f491u32;
+  let mut rnd = move || {
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    (state >> 24) as u8
+  };
+  let mut y = vec![0u8; w * h];
+  for px in y.iter_mut() {
+    *px = rnd();
+  }
+  // One deterministic "stamp" texture, placed at (0,0) and again at
+  // (192, 192) — same tile-relative parity on both axes (chroma-fullpel
+  // rule for 4:2:0), far outside any seed/diamond basin in pure noise.
+  for j in 0..64 {
+    for i in 0..64 {
+      let v =
+        (30 + ((i * 5 + j * 3) % 190) + ((i / 9 + j / 7) % 2) * 25) as u8;
+      y[j * w + i] = v;
+      y[(192 + j) * w + 192 + i] = v;
+    }
+  }
+  // Flat chroma keeps the repeat exact in every plane.
+  let u = vec![120u8; cw * ch];
+  let v = vec![132u8; cw * ch];
+  (y, u, v)
+}
+
+#[test]
+fn intrabc_hash_finds_long_range_repeats() {
+  let (w, h) = (320usize, 320usize);
+  for (cs, xdec, ydec) in
+    [(ChromaSampling::Cs420, 1usize, 1usize), (ChromaSampling::Cs444, 0, 0)]
+  {
+    let (sy, su, sv) = synth_long_range(w, h, xdec, ydec);
+    let off = encode_hash(&sy, &su, &sv, w, h, 100, 6, true, false, cs);
+    let on = encode_hash(&sy, &su, &sv, w, h, 100, 6, true, true, cs);
+    println!(
+      "{cs:?}: hash-off={} hash-on={} bytes ({:.3}x)",
+      off.len(),
+      on.len(),
+      on.len() as f64 / off.len() as f64
+    );
+    assert!(
+      on.len() < off.len(),
+      "hash search should shrink the long-range repeat ({cs:?}): on={} \
+       off={}",
+      on.len(),
+      off.len()
+    );
+    let dy = decode_y(&on, w, h);
+    let py = psnr(&sy, &dy);
+    assert!(py > 25.0, "implausible hash-on quality ({cs:?}): y-psnr {py:.2}");
   }
 }

@@ -169,6 +169,13 @@ pub struct IntrabcHashTable {
   buckets: Vec<Vec<BlockHashEntry>>,
 }
 
+impl std::fmt::Debug for IntrabcHashTable {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let entries: usize = self.buckets.iter().map(Vec::len).sum();
+    f.debug_struct("IntrabcHashTable").field("entries", &entries).finish()
+  }
+}
+
 impl IntrabcHashTable {
   /// Builds the table from a tile's source luma region: the full hash
   /// pyramid over every pixel position, then per-size bucket insertion in

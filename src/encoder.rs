@@ -5197,6 +5197,17 @@ fn encode_tile<'a, T: Pixel>(
   ts.last_qidx = fi.base_q_idx;
   ts.sb_qindex = fi.base_q_idx;
 
+  // On intraBC frames, build the tile's source-hash candidate table up
+  // front (chunk B of the intraBC program): exact-match lookups during the
+  // block search replace an exhaustive whole-tile pixel search. Encoder-
+  // side only — candidates feed the ordinary validity + SAD + RD trial
+  // machinery.
+  if fi.allow_intrabc && fi.config.speed_settings.prediction.intrabc_hash {
+    ts.intrabc_hash = Some(Box::new(
+      crate::intrabc_hash::IntrabcHashTable::build(&ts.input_tile.planes[0]),
+    ));
+  }
+
   // main loop
   for sby in 0..ts.sb_height {
     cw.bc.reset_left_contexts(planes);

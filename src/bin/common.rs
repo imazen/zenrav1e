@@ -190,6 +190,17 @@ pub struct CliOptions {
   /// Disables all in-loop filters on frames where it is allowed, per spec.
   #[clap(long, help_heading = "ENCODE SETTINGS")]
   pub intrabc: bool,
+  /// Use the hash-based exact-match candidate table in the intraBC
+  /// search (long-range repeat detection). Only meaningful with
+  /// --intrabc.
+  #[clap(
+    long,
+    value_parser,
+    default_value_t = true,
+    action = clap::ArgAction::Set,
+    help_heading = "ENCODE SETTINGS"
+  )]
+  pub intrabc_hash: bool,
   /// Override the speed preset's loop-restoration filter (LRF) setting.
   #[clap(long, value_parser, help_heading = "ENCODE SETTINGS")]
   pub lrf: Option<bool>,
@@ -693,6 +704,7 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
   cfg.still_picture = matches.still_picture;
   cfg.speed_settings.prediction.palette = matches.palette;
   cfg.speed_settings.prediction.intrabc = matches.intrabc;
+  cfg.speed_settings.prediction.intrabc_hash = matches.intrabc_hash;
   if let Some(lrf) = matches.lrf {
     cfg.speed_settings.lrf = lrf;
   }

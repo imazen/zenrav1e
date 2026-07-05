@@ -111,6 +111,7 @@ impl Default for SpeedSettings {
         // content.
         palette: PaletteMode::Off,
         intrabc: false,
+        intrabc_hash: true,
         filter_intra: None,
         num_modes_rdo_override: None,
       },
@@ -434,6 +435,17 @@ pub struct PredictionSpeedSettings {
   /// detection exists precisely to limit that trade to frames where the
   /// copy tool pays for it.
   pub intrabc: bool,
+
+  /// Use the hash-based exact-match candidate table in the intraBC search
+  /// (chunk B of the intraBC program): the tile's source luma is
+  /// block-hashed once per tile encode, and exact source matches anywhere
+  /// in the valid area become displacement-vector candidates alongside
+  /// the local (predictor-seeded diamond) search. This is what finds
+  /// long-range repeats — repeated glyphs, dashed grid lines, tiled UI —
+  /// that a local search never reaches. Inert unless
+  /// [`intrabc`](Self::intrabc) is on (and the frame's screen-content
+  /// gates arm it).
+  pub intrabc_hash: bool,
 
   /// Override the sequence-level filter-intra enable (`None` derives it
   /// from `prediction_modes >= ComplexKeyframes`, the historical

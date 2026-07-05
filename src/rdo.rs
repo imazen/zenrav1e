@@ -2318,9 +2318,55 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       push_seed(&mut seeds, MotionVector { row: -512, col: 0 });
       push_seed(&mut seeds, MotionVector { row: 0, col: -512 - 2048 });
 
-      if !seeds.is_empty() {
-        // SAD-rank the seeds, then diamond-refine from the best.
-        let mut best_dv = seeds[0];
+      // Hash-based exact-match candidates (chunk B): square blocks look
+      // up the tile's source-hash table; entries whose full 32-bit hash
+      // matches are exact source matches anywhere in the valid area —
+      // the long-range repeats (glyphs, dashed lines, tiled UI) that the
+      // local seeds + diamond never reach. Sorted nearest-first so that
+      // equal-SAD ties among exact repeats keep the cheapest-to-code DV,
+      // then ranked by the same recon SAD as every other candidate.
+      let mut hash_dvs: ArrayVec<
+        MotionVector,
+        { crate::intrabc_hash::MAX_HASH_CANDIDATES },
+      > = ArrayVec::new();
+      if let Some(table) = &ts.intrabc_hash
+        && bsize.is_sqr()
+      {
+        let luma = &ts.input_tile.planes[0];
+        let size = bsize.width();
+        let px_x = tile_bo.0.x << MI_SIZE_LOG2;
+        let px_y = tile_bo.0.y << MI_SIZE_LOG2;
+        if px_x + size <= luma.rect().width
+          && px_y + size <= luma.rect().height
+        {
+          let hash = table.block_hash_at(luma, px_x, px_y, bsize.width_log2());
+          for e in table.candidates(bsize.width_log2(), hash) {
+            if e.hash2 != hash {
+              continue;
+            }
+            let dv = MotionVector {
+              row: ((i32::from(e.y) - px_y as i32) * 8) as i16,
+              col: ((i32::from(e.x) - px_x as i32) * 8) as i16,
+            };
+            if !valid(dv) {
+              continue;
+            }
+            hash_dvs.push(dv);
+            if hash_dvs.is_full() {
+              break;
+            }
+          }
+          hash_dvs.sort_unstable_by_key(|dv| {
+            u32::from(dv.row.unsigned_abs()) + u32::from(dv.col.unsigned_abs())
+          });
+        }
+      }
+
+      if !seeds.is_empty() || !hash_dvs.is_empty() {
+        // SAD-rank the seeds and hash candidates, then diamond-refine
+        // from the best.
+        let mut best_dv =
+          seeds.first().or_else(|| hash_dvs.first()).copied().unwrap();
         let mut best_sad = u64::MAX;
         let mut second_dv: Option<MotionVector> = None;
         let mut second_sad = u64::MAX;
@@ -2351,10 +2397,26 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             &mut second_sad,
           );
         }
+        for &dv in &hash_dvs {
+          consider(
+            dv,
+            &mut best_dv,
+            &mut best_sad,
+            &mut second_dv,
+            &mut second_sad,
+          );
+        }
         // Diamond refinement in px steps (finishing at the alignment
-        // granularity), bounded to a fixed number of probes.
+        // granularity), bounded to a fixed number of probes. An exact
+        // reconstruction match (SAD 0, the hash-search jackpot on clean
+        // screen content) cannot be improved on — skip straight to the
+        // RD trials. The skip is gated on the hash search actually having
+        // produced candidates so that hash-off behavior (including the
+        // diamond's incidental second-candidate updates) stays
+        // byte-identical to builds without the hash table.
         let mut probes = 0usize;
-        let mut step_px = 64i16;
+        let mut step_px =
+          if best_sad == 0 && !hash_dvs.is_empty() { 0 } else { 64i16 };
         while step_px >= 1 && probes < 64 {
           let step_x = (step_px * 8).max(ax);
           let step_y = (step_px * 8).max(ay);

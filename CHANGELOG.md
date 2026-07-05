@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 ### Added
+- **intraBC hash-based block search (chunk B)** (inert unless `intrabc`
+  is armed; zenrav1e#30 item 3, the fam-7 legacy-plot / 8414-screens
+  residual owner): port of libaom's `av1_hash_table` exact-match candidate
+  machinery (`hash_motion.c` + CRC-32C, pinned rev 632172a4) in
+  `src/intrabc_hash.rs` — the tile's source luma is block-hashed once per
+  tile encode (2x2 identity/xor-fold base, hierarchical CRC-32C combine,
+  8/16/32/64 squares, 2^16 buckets/size, 256-entry caps filled in the
+  dispersal order), and square intraBC blocks add up to 64 exact-match
+  DVs (nearest-first) to the chunk-A seed/diamond SAD ranking + top-2
+  full-rate RD trials. New `PredictionSpeedSettings.intrabc_hash`
+  (default `true`, meaningful only with `intrabc`) + `--intrabc-hash`;
+  hash-off is byte-identical to pre-chunk-B builds (81/81 gate cells:
+  default + `--palette always/auto --intrabc` across 3 images x s{2,6,8}
+  x q{60,140,220} vs 0d392334), including the diamond's incidental
+  second-candidate updates (the SAD-0 diamond skip is hash-gated).
+  In-repo: `tests/intrabc_roundtrip.rs` gains the long-range-repeat
+  liveness test (both samplings) and the existing armed roundtrips run
+  the hash path by default.
+
 - **Intra mode-RDO budget override** (default-off; zenavif
   FAST_TIER_PARITY_PLAN s4-tier column, the "missing top-5 knob" the P2
   heads report called out):

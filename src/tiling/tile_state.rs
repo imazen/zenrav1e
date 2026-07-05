@@ -12,6 +12,7 @@ use super::*;
 use crate::context::*;
 use crate::encoder::*;
 use crate::frame::*;
+use crate::intrabc_hash::IntrabcHashTable;
 use crate::lrf::{IntegralImageBuffer, SOLVE_IMAGE_SIZE};
 use crate::mc::MotionVector;
 use crate::me::FrameMEStats;
@@ -91,6 +92,11 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub qm_ratio_w: u64,
   /// See [`Self::qm_ratio_w`].
   pub qm_ratio_u: u64,
+  /// Hash-based exact-match candidate table for the intraBC search, built
+  /// over this tile's source luma by `encode_tile` when the frame allows
+  /// intraBC (and `speed_settings.prediction.intrabc_hash` is on); `None`
+  /// otherwise. Read by the intraBC candidate stage in RDO.
+  pub intrabc_hash: Option<Box<IntrabcHashTable>>,
 }
 
 /// Contains information for a coded block that is
@@ -220,6 +226,9 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       sb_qindex: 0,
       qm_ratio_w: 0,
       qm_ratio_u: 0,
+      // Built by `encode_tile` on intraBC frames; filter/RDO passes that
+      // also construct tile states never need it.
+      intrabc_hash: None,
     }
   }
 
