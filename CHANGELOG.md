@@ -8,8 +8,28 @@
   struct construction (ravif constructs `EncoderConfig` exhaustively and
   adds the fields at its dep bump). Rides the already-open 0.2.0 window
   (Cargo.toml is at 0.2.0-unreleased); no additional version step needed.
+- `EncoderConfig::ssim_rdmult_strength: Option<f64>` — a fourth public
+  field in the same 0.2.0 window, same exhaustive-construction impact.
 
 ### Added
+- **Per-16×16 ssim-rdmult λ scaling** (`EncoderConfig::ssim_rdmult_strength`,
+  default `None` = byte-identical — scale 1.0 multiplies λ exactly;
+  validation error `InvalidSsimRdmultStrength`; only live under
+  `Tune::Ssimulacra2`): port of libaom's `av1_set_mb_ssim_rdmult_scaling`
+  + `av1_set_ssim_rdmult` (encoder_utils.c / encodeframe_utils.c at rev
+  632172a4, shared by aom `--tune={ssim,iq,ssimulacra2}`) — per 16×16
+  source cell, mean per-pixel 8×8 variance →
+  `67.035434·(1−exp(−0.0021489·var)) + 17.492222`, frame-geomean
+  normalized (≈[0.207, 4.832]), raised to the configured strength
+  (exponent blend keeps geomean exactly 1: pure spatial rate
+  reallocation); every block-RDO cost site (mode / tx-type /
+  partition-symbol / split-trial / NONE-breakout / bottomup edge path /
+  opt-in trellis λ) scales its rate term by the geomean of covered
+  factors. The λ-side counterpart of the distortion-side `ssim_boost`
+  activity masking; the two compose. CDEF/LRF search unscaled (aom
+  parity); `me_lambda` (intraBC MV search) unscaled in v1. The (a2)
+  mechanism of the zenavif tune study (docs/TUNE_SSIMULACRA2_PLAN.md);
+  strength fit on the zenavif rd_gap harness before any default flips.
 - **Variance Boost strength override + deep-flat ramp + flat quantizer
   rounding bias** (all three default `None` = byte-identical, md5-gated
   local cells vs master incl. `Some(1.0)` == `None`; the zenavif P3

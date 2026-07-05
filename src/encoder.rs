@@ -1116,6 +1116,14 @@ pub struct CodedFrameData<T: Pixel> {
   /// weight distortion more, mirroring libaom's per-SB rdmult follow.
   /// Same indexing as `sb_qindex`; empty when the frame codes no delta-q.
   pub sb_dist_scales: Box<[DistortionScale]>,
+  /// Per-16×16 ssim-rdmult λ scaling factors
+  /// ([`crate::EncoderConfig::ssim_rdmult_strength`]): libaom's
+  /// `av1_set_mb_ssim_rdmult_scaling` exp-curve over the mean per-pixel
+  /// 8×8 source variance, frame-geomean normalized (≈ [0.207, 4.832]) and
+  /// raised to the configured strength. Raster order with
+  /// `ssim_rdmult_cols()` per row; empty when the mechanism is off
+  /// (byte-identical behavior).
+  pub ssim_rdmult_factors: Box<[f64]>,
 }
 
 /// Sorts `vars` in place and samples octile 5 with 1:2:1 smoothing across
@@ -1260,6 +1268,7 @@ impl<T: Pixel> CodedFrameData<T> {
       segmentation_scores: Default::default(),
       sb_qindex: Default::default(),
       sb_dist_scales: Default::default(),
+      ssim_rdmult_factors: Default::default(),
     }
   }
 
@@ -1342,6 +1351,133 @@ impl<T: Pixel> CodedFrameData<T> {
     }
     self.sb_qindex = qindex_map;
     self.sb_dist_scales = dist_scales;
+  }
+
+  /// Number of 16×16 cell columns in `ssim_rdmult_factors` (two importance
+  /// blocks per cell edge, ceil at the frame boundary).
+  #[inline]
+  pub fn ssim_rdmult_cols(&self) -> usize {
+    self.w_in_imp_b.div_ceil(2)
+  }
+
+  /// Number of 16×16 cell rows in `ssim_rdmult_factors`.
+  #[inline]
+  pub fn ssim_rdmult_rows(&self) -> usize {
+    self.h_in_imp_b.div_ceil(2)
+  }
+
+  /// Per-16×16 ssim-rdmult λ scaling factors: a port of libaom's
+  /// `av1_set_mb_ssim_rdmult_scaling` (encoder_utils.c at rev 632172a4,
+  /// shared by aom `--tune={ssim,iq,ssimulacra2}`). Per 16×16 cell, the
+  /// mean per-pixel 8×8 source variance (up to four sub-blocks,
+  /// boundary-clipped) feeds an exponential curve fit upstream on the
+  /// midres dataset:
+  ///
+  /// ```text
+  /// factor = 67.035434 · (1 − exp(−0.0021489 · var)) + 17.492222
+  /// ```
+  ///
+  /// (range [17.49, 84.53]); the factors are then normalized by the frame
+  /// geometric mean (range ≈ [0.207, 4.832], geomean exactly 1) and raised
+  /// to `strength` (exponentiation commutes with the normalization, so any
+  /// strength keeps geomean 1 — a pure spatial reallocation of rate, never
+  /// a global λ shift). Consumed by `rdo::ssim_rdmult_scale`, which scales
+  /// each coding block's RD rate term by the geometric mean of the factors
+  /// the block covers (libaom's `av1_set_ssim_rdmult`).
+  ///
+  /// High-bit-depth variances normalize to the 8-bit range first
+  /// (`>> 2·(bd−8)`), matching aom's `aom_highbd_{10,12}_variance8x8`
+  /// helpers behind `av1_get_perpixel_variance`; the per-pixel division
+  /// rounds (`ROUND_POWER_OF_TWO(var, 6)`) like aom's, unlike the
+  /// truncating Variance Boost stat (whose aom counterpart truncates).
+  ///
+  /// Requires `activity_mask` to be filled (`use_activity`); clears the
+  /// factor map (disabling the mechanism) otherwise or when
+  /// `strength <= 0`.
+  pub fn compute_ssim_rdmult_factors(
+    &mut self, strength: f64, bit_depth: usize,
+  ) {
+    let w = self.w_in_imp_b;
+    let h = self.h_in_imp_b;
+    let vars = self.activity_mask.variances();
+    if w == 0 || h == 0 || vars.len() != w * h || strength <= 0.0 {
+      self.ssim_rdmult_factors = Box::default();
+      return;
+    }
+
+    let cols = w.div_ceil(2);
+    let rows = h.div_ceil(2);
+    let norm_shift = 2 * (bit_depth - 8) as u32;
+    // dynamic allocation: once per frame
+    let mut factors = vec![0.0f64; cols * rows].into_boxed_slice();
+    let mut log_sum = 0.0f64;
+    for cy in 0..rows {
+      for cx in 0..cols {
+        let x1 = (cx * 2 + 2).min(w);
+        let y1 = (cy * 2 + 2).min(h);
+        let mut sum = 0u64;
+        let mut n = 0u64;
+        for y in cy * 2..y1 {
+          for x in cx * 2..x1 {
+            // Per-pixel 8×8 variance, rounded — aom's
+            // ROUND_POWER_OF_TWO(vf(...), 6).
+            sum += (((vars[y * w + x] >> norm_shift) + 32) >> 6) as u64;
+            n += 1;
+          }
+        }
+        let var = sum as f64 / n as f64;
+        let factor =
+          67.035_434 * (1.0 - (-0.002_148_9 * var).exp()) + 17.492_222;
+        factors[cy * cols + cx] = factor;
+        log_sum += factor.ln();
+      }
+    }
+    let geomean = (log_sum / (cols * rows) as f64).exp();
+    let unit_strength = strength == 1.0;
+    for f in &mut factors {
+      *f /= geomean;
+      if !unit_strength {
+        *f = f.powf(strength);
+      }
+    }
+    self.ssim_rdmult_factors = factors;
+  }
+
+  /// Per-block λ scale from `ssim_rdmult_factors`: the geometric mean of
+  /// the factors covering the block at `frame_bo`, following libaom's
+  /// `av1_set_ssim_rdmult` (encodeframe_utils.c:35-70 at rev 632172a4,
+  /// where `rdmult *= geomean(covered factors)`). Returns exactly 1.0 when
+  /// the factor map is empty (mechanism off), keeping every consumer
+  /// bit-exact through `rdo::compute_rd_cost_scaled`.
+  pub fn ssim_rdmult_scale_at(
+    &self, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+  ) -> f64 {
+    let factors = &self.ssim_rdmult_factors;
+    if factors.is_empty() {
+      return 1.0;
+    }
+    let cols = self.ssim_rdmult_cols();
+    let rows = self.ssim_rdmult_rows();
+    // 16×16 cells are 4 MI units on a side. Legal partition positions are
+    // size-aligned, so start-cell + ceil-of-extent is exact coverage.
+    let cx0 = (frame_bo.0.x >> 2).min(cols);
+    let cy0 = (frame_bo.0.y >> 2).min(rows);
+    let cx1 = (frame_bo.0.x + bsize.width_mi()).div_ceil(4).min(cols);
+    let cy1 = (frame_bo.0.y + bsize.height_mi()).div_ceil(4).min(rows);
+    if cx0 >= cx1 || cy0 >= cy1 {
+      return 1.0;
+    }
+    let n = (cx1 - cx0) * (cy1 - cy0);
+    if n == 1 {
+      return factors[cy0 * cols + cx0];
+    }
+    let mut product = 1.0f64;
+    for cy in cy0..cy1 {
+      for &f in &factors[cy * cols + cx0..cy * cols + cx1] {
+        product *= f;
+      }
+    }
+    product.powf(1.0 / n as f64)
   }
 
   /// Applies external per-superblock AC quantizer scale hints
@@ -2173,6 +2309,24 @@ impl<T: Pixel> FrameInvariants<T> {
       }
     }
 
+    // Tune::Ssimulacra2 + `ssim_rdmult_strength`: per-16×16 ssim-rdmult λ
+    // scaling factors (libaom's `av1_set_mb_ssim_rdmult_scaling`, the (a2)
+    // mechanism of the tune study — default-off A/B knob). Purely
+    // encoder-internal (per-block RD rate weighting; no syntax change).
+    if self.config.tune == Tune::Ssimulacra2
+      && let Some(strength) = self.config.ssim_rdmult_strength
+      && strength > 0.0
+    {
+      let bit_depth = self.sequence.bit_depth;
+      if let Some(cfd) = self.coded_frame_data.as_mut() {
+        cfd.compute_ssim_rdmult_factors(strength, bit_depth);
+      }
+    } else if let Some(cfd) = self.coded_frame_data.as_mut()
+      && !cfd.ssim_rdmult_factors.is_empty()
+    {
+      cfd.ssim_rdmult_factors = Box::default();
+    }
+
     // Select QM levels based on quantizer index (all-intra heuristic from libaom).
     // AV1 spec 6.8.11: if CodedLossless == 1, using_qmatrix MUST be 0. Signaling
     // QM with a coded-lossless frame produces a non-conformant bitstream.
@@ -2510,6 +2664,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   };
 
   let frame_bo = ts.to_frame_block_offset(tx_bo);
+  let partition_frame_bo = ts.to_frame_block_offset(tile_partition_bo);
   let rec = &mut ts.rec.planes[p];
 
   if mode.is_intra()
@@ -2679,7 +2834,10 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       &ts.qc,
       tx_size,
       tx_type,
-      fi.lambda,
+      // The trellis λ follows the enclosing coding block's effective λ
+      // (per-16×16 ssim-rdmult scale when armed — libaom's trellis uses
+      // the same x->rdmult the block RDO does; exact ×1.0 when off).
+      fi.lambda * ssim_rdmult_scale(fi, partition_frame_bo, bsize),
       qm,
       fi.qm_weighted_trellis,
       eob,
@@ -4186,7 +4344,12 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
-      compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
+      compute_rd_cost_scaled(
+        fi,
+        w.tell_frac() - tell,
+        ScaledDistortion::zero(),
+        ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize),
+      )
     } else {
       0.0
     };
@@ -4287,8 +4450,12 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
         cw.write_partition(w, tile_bo, partition, bsize);
-        rd_cost =
-          compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
+        rd_cost = compute_rd_cost_scaled(
+          fi,
+          w.tell_frac() - tell,
+          ScaledDistortion::zero(),
+          ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize),
+        );
       }
 
       let four_partitions = [
@@ -5851,6 +6018,7 @@ mod test {
       segmentation_scores: Default::default(),
       sb_qindex: Default::default(),
       sb_dist_scales: Default::default(),
+      ssim_rdmult_factors: Default::default(),
     }
   }
 
@@ -5862,6 +6030,124 @@ mod test {
     assert!(!applied);
     assert!(cfd.sb_qindex.is_empty());
     assert!(cfd.sb_dist_scales.is_empty());
+  }
+
+  /// 32×32 test frame -> 4×4 importance blocks -> 2×2 16×16 ssim cells.
+  fn ssim_test_cfd(data: &[u8]) -> CodedFrameData<u8> {
+    use crate::activity::ActivityMask;
+    assert_eq!(data.len(), 32 * 32);
+    let plane: Plane<u8> = Plane::from_slice(data, 32);
+    let mut cfd = hints_test_cfd(4, 4);
+    cfd.activity_mask = ActivityMask::from_plane(&plane);
+    cfd
+  }
+
+  #[test]
+  fn ssim_rdmult_factors_uniform_frame_is_unit() {
+    // Flat frame: every 16×16 cell has the same (zero) variance, so the
+    // geomean normalization maps every factor to exactly 1 (within float
+    // noise of exp(ln(x))).
+    let mut cfd = ssim_test_cfd(&[128u8; 32 * 32]);
+    cfd.compute_ssim_rdmult_factors(1.0, 8);
+    assert_eq!(cfd.ssim_rdmult_factors.len(), 4);
+    for &f in cfd.ssim_rdmult_factors.iter() {
+      assert!((f - 1.0).abs() < 1e-12, "factor {f}");
+    }
+    // Strength 0 (or a non-armed config) clears the map.
+    cfd.compute_ssim_rdmult_factors(0.0, 8);
+    assert!(cfd.ssim_rdmult_factors.is_empty());
+  }
+
+  #[test]
+  fn ssim_rdmult_factors_mask_high_variance_and_stay_geomean_one() {
+    // Left 16 columns flat, right 16 columns a 0/255 checkerboard: the two
+    // right-hand cells carry near-max per-pixel variance (~16256), the two
+    // left cells zero.
+    let mut data = [128u8; 32 * 32];
+    for y in 0..32 {
+      for x in 16..32 {
+        data[y * 32 + x] = if (x + y) % 2 == 0 { 0 } else { 255 };
+      }
+    }
+    let mut cfd = ssim_test_cfd(&data);
+    cfd.compute_ssim_rdmult_factors(1.0, 8);
+    let f = cfd.ssim_rdmult_factors.clone();
+    assert_eq!(f.len(), 4);
+    // Raster order: [left-top, right-top, left-bottom, right-bottom].
+    assert!(f[0] < 1.0 && f[2] < 1.0, "flat cells {f:?}");
+    assert!(f[1] > 1.0 && f[3] > 1.0, "busy cells {f:?}");
+    // aom's normalized range is ~[0.2069, 4.8323]; this frame is the
+    // extreme two-level case (factor ratio 84.53/17.49).
+    let product: f64 = f.iter().product();
+    assert!((product - 1.0).abs() < 1e-9, "geomean broke: {product}");
+    for &v in f.iter() {
+      assert!((0.2..=4.84).contains(&v), "out of aom range: {v}");
+    }
+    // Exponent strength: factor^0.5, still geomean-1.
+    cfd.compute_ssim_rdmult_factors(0.5, 8);
+    for (half, full) in cfd.ssim_rdmult_factors.iter().zip(f.iter()) {
+      assert!((half - full.sqrt()).abs() < 1e-12);
+    }
+    // High bit depth: a 10-bit flat/checker frame built by <<2 has 16×
+    // the raw variance; the 8-bit normalization must reproduce the same
+    // factor map to within per-pixel rounding.
+    let mut cfd10 = {
+      let data10: Vec<u16> = data.iter().map(|&v| u16::from(v) << 2).collect();
+      let plane: Plane<u16> = Plane::from_slice(&data10, 32);
+      let mut cfd = CodedFrameData::<u16> {
+        lookahead_rec_buffer: ReferenceFramesSet::new(),
+        w_in_imp_b: 4,
+        h_in_imp_b: 4,
+        lookahead_intra_costs: Box::new([]),
+        block_importances: vec![0.; 16].into_boxed_slice(),
+        distortion_scales: vec![DistortionScale::default(); 16]
+          .into_boxed_slice(),
+        activity_scales: vec![DistortionScale::default(); 16]
+          .into_boxed_slice(),
+        activity_mask: Default::default(),
+        spatiotemporal_scores: Default::default(),
+        segmentation_scores: Default::default(),
+        sb_qindex: Default::default(),
+        sb_dist_scales: Default::default(),
+        ssim_rdmult_factors: Default::default(),
+      };
+      cfd.activity_mask = crate::activity::ActivityMask::from_plane(&plane);
+      cfd
+    };
+    cfd10.compute_ssim_rdmult_factors(1.0, 10);
+    for (f10, f8) in cfd10.ssim_rdmult_factors.iter().zip(f.iter()) {
+      assert!((f10 - f8).abs() < 1e-3, "hbd mismatch: {f10} vs {f8}");
+    }
+  }
+
+  #[test]
+  fn ssim_rdmult_scale_at_is_covered_geomean() {
+    use crate::partition::BlockSize;
+    let mut cfd = hints_test_cfd(4, 4); // 2×2 cells
+    // Empty map: exact 1.0 for any block.
+    assert_eq!(
+      cfd.ssim_rdmult_scale_at(
+        PlaneBlockOffset(BlockOffset { x: 0, y: 0 }),
+        BlockSize::BLOCK_16X16
+      ),
+      1.0
+    );
+    cfd.ssim_rdmult_factors = vec![0.5, 2.0, 1.25, 1.6].into_boxed_slice();
+    // Single-cell blocks return the cell factor exactly.
+    let at = |x, y, bs| {
+      cfd.ssim_rdmult_scale_at(PlaneBlockOffset(BlockOffset { x, y }), bs)
+    };
+    assert_eq!(at(0, 0, BlockSize::BLOCK_16X16), 0.5);
+    assert_eq!(at(4, 0, BlockSize::BLOCK_16X16), 2.0);
+    assert_eq!(at(0, 4, BlockSize::BLOCK_8X8), 1.25); // sub-cell block
+    assert_eq!(at(6, 6, BlockSize::BLOCK_4X4), 1.6); // unaligned interior
+    // A 32×32 block covers all four cells: geomean.
+    let all = at(0, 0, BlockSize::BLOCK_32X32);
+    let expect = (0.5f64 * 2.0 * 1.25 * 1.6).powf(0.25);
+    assert!((all - expect).abs() < 1e-12, "{all} vs {expect}");
+    // A 32×16 block covers the top row of cells.
+    let top = at(0, 0, BlockSize::BLOCK_32X16);
+    assert!((top - (0.5f64 * 2.0).sqrt()).abs() < 1e-12);
   }
 
   #[test]

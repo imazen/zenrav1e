@@ -192,6 +192,15 @@ pub enum InvalidConfig {
   /// (units of 1/256 of a quantizer step; 128 = 0.5-rounding).
   #[error("invalid quant_rounding_bias {0} (expected 1..=128)")]
   InvalidQuantRoundingBias(u8),
+
+  /// `ssim_rdmult_strength` is not finite or outside the supported range.
+  ///
+  /// The payload is the rejected value's `f64::to_bits()` representation so
+  /// `InvalidConfig` can stay `Eq` (NaN bit patterns compare structurally).
+  #[error(
+    "invalid ssim_rdmult_strength bits=0x{0:016x} (expected finite, >= 0.0, <= 4.0)"
+  )]
+  InvalidSsimRdmultStrength(u64),
 }
 
 /// Contains the encoder configuration.
@@ -559,6 +568,11 @@ impl Config {
       && !(1..=128).contains(&k)
     {
       return Err(InvalidQuantRoundingBias(k));
+    }
+    if let Some(s) = config.ssim_rdmult_strength
+      && (!s.is_finite() || !(0.0..=4.0).contains(&s))
+    {
+      return Err(InvalidSsimRdmultStrength(s.to_bits()));
     }
 
     // TODO: add more validation

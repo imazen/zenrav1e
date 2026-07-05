@@ -217,6 +217,31 @@ pub struct EncoderConfig {
   /// trellis-off path zenavif ships.
   pub quant_rounding_bias: Option<u8>,
 
+  /// Per-16×16 ssim-rdmult λ scaling strength, a port of libaom's
+  /// `av1_set_mb_ssim_rdmult_scaling` + `av1_set_ssim_rdmult`
+  /// (encoder_utils.c / encodeframe_utils.c at rev 632172a4, shared by
+  /// aom `--tune={ssim,iq,ssimulacra2}`): per 16×16 source block, the mean
+  /// per-pixel 8×8 variance feeds
+  /// `factor = 67.035434·(1 − exp(−0.0021489·var)) + 17.492222`, factors
+  /// are normalized by the frame geometric mean (range ≈ [0.207, 4.832]),
+  /// and every coding block's RD **rate** term is scaled by the geometric
+  /// mean of the factors it covers — bits cost more in high-variance
+  /// (masked) areas and less in flat ones. This is the λ-side counterpart
+  /// of the distortion-side `ssim_boost` activity masking the psy tunes
+  /// already run; the two compose.
+  ///
+  /// The value is an exponent blend on the normalized factor
+  /// (`factor^strength`): `1.0` = the aom curve verbatim, `0.5` = its
+  /// geometric half, `0.0` = off. Exponentiation preserves the geomean-1
+  /// normalization, so any strength is a pure spatial reallocation with no
+  /// global λ shift (the frame-level aom rdmult weight was measured
+  /// +4.41% BD — this knob deliberately cannot reproduce that failure
+  /// mode). `None` = off (byte-identical to builds without this knob).
+  /// Only effective under [`Tune::Ssimulacra2`]. Valid range 0.0..=4.0.
+  ///
+  /// [`Tune::Ssimulacra2`]: crate::api::Tune::Ssimulacra2
+  pub ssim_rdmult_strength: Option<f64>,
+
   /// Maximum pixel count (width * height). Default 120_000_000 (120 megapixels).
   /// Set to 0 to disable the limit. Validated in `Config::validate()`.
   pub max_pixel_count: u64,
@@ -287,6 +312,7 @@ impl EncoderConfig {
       variance_boost_strength: None,
       variance_boost_deep: None,
       quant_rounding_bias: None,
+      ssim_rdmult_strength: None,
       max_pixel_count: 120_000_000, // 120 megapixels (admits 108 MP phone photos)
       speed_settings: SpeedSettings::from_preset(speed),
     }

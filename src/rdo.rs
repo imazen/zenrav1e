@@ -837,6 +837,35 @@ pub fn compute_rd_cost<T: Pixel>(
   fi.lambda.mul_add(rate_in_bits, distortion.0 as f64)
 }
 
+/// `compute_rd_cost` with a per-block λ scale (the per-16×16 ssim-rdmult
+/// mechanism, [`ssim_rdmult_scale`]). `lambda_scale == 1.0` is bit-exact
+/// with the unscaled cost (IEEE multiplication by 1.0 is exact), which is
+/// what every call site passes while the mechanism is off.
+pub(crate) fn compute_rd_cost_scaled<T: Pixel>(
+  fi: &FrameInvariants<T>, rate: u32, distortion: ScaledDistortion,
+  lambda_scale: f64,
+) -> f64 {
+  let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
+  (fi.lambda * lambda_scale).mul_add(rate_in_bits, distortion.0 as f64)
+}
+
+/// Per-block λ scale from the per-16×16 ssim-rdmult factor map
+/// ([`crate::EncoderConfig::ssim_rdmult_strength`], Tune::Ssimulacra2):
+/// the geometric mean of the frame-geomean-normalized factors covering the
+/// block, following libaom's `av1_set_ssim_rdmult`
+/// (encodeframe_utils.c:35-70 at rev 632172a4, where
+/// `rdmult *= geomean(covered factors)`). Returns exactly 1.0 when the map
+/// is empty (mechanism off — every consumer stays bit-exact through
+/// [`compute_rd_cost_scaled`]).
+pub fn ssim_rdmult_scale<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+) -> f64 {
+  match fi.coded_frame_data.as_ref() {
+    Some(cfd) => cfd.ssim_rdmult_scale_at(frame_bo, bsize),
+    None => 1.0,
+  }
+}
+
 pub fn rdo_tx_size_type<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -1011,6 +1040,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
   let is_chroma_block =
     has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+  let ssim_scale =
+    ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize);
 
   if !luma_mode_is_intra {
     let ref_mvs = if mv_stack.is_empty() {
@@ -1113,7 +1144,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false)
         };
         let is_zero_dist = distortion.0 == 0;
-        let rd = compute_rd_cost(fi, rate, distortion);
+        let rd = compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
         if rd < best.rd_cost {
           //if rd < best.rd_cost || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd_cost = rd;
@@ -1163,6 +1194,8 @@ pub fn rdo_mode_decision<T: Pixel>(
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
+  let ssim_scale =
+    ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize);
 
   let rdo_type = if fi.use_tx_domain_rate {
     RDOType::TxDistEstRate
@@ -1294,7 +1327,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       // For CFL, tx-domain distortion is not an option.
       let distortion =
         compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
-      let rd = compute_rd_cost(fi, rate, distortion);
+      let rd = compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
       if rd < best.rd_cost {
         best.rd_cost = rd;
         best.pred_mode_chroma = chroma_mode;
@@ -1618,6 +1651,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
   let mut modes = ArrayVec::<_, INTRA_MODES>::new();
+  let ssim_scale =
+    ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize);
 
   // Reduce number of prediction modes at higher speed levels. The
   // num_modes_rdo_override knob (default None = byte-identical historical
@@ -1865,7 +1900,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         } else {
           compute_distortion(fi, ts, bsize, fi_is_chroma_block, tile_bo, false)
         };
-        let rd = compute_rd_cost(fi, rate, distortion);
+        let rd = compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
         if rd < best.rd_cost {
           best.rd_cost = rd;
           best.pred_mode_luma = luma_mode;
@@ -2036,7 +2071,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
                   false,
                 )
               };
-            let rd = compute_rd_cost(fi, rate, distortion);
+            let rd = compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
             if rd < best.rd_cost {
               best.rd_cost = rd;
               best.pred_mode_luma = luma_mode;
@@ -2200,7 +2235,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
                     false,
                   )
                 };
-              let rd = compute_rd_cost(fi, rate, distortion);
+              let rd =
+                compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
               if rd < best.rd_cost {
                 best.rd_cost = rd;
                 best.pred_mode_luma = luma_mode;
@@ -2548,7 +2584,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
                   false,
                 )
               };
-            let rd = compute_rd_cost(fi, rate, distortion);
+            let rd = compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
             if rd < best.rd_cost {
               best.rd_cost = rd;
               best.pred_mode_luma = luma_mode;
@@ -2761,6 +2797,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let is_chroma_block =
     has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+  let ssim_scale =
+    ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize);
 
   let is_inter = !mode.is_intra();
 
@@ -2865,7 +2903,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     };
     cw.rollback(cw_checkpoint.as_ref().unwrap());
 
-    let rd = compute_rd_cost(fi, rate, distortion);
+    let rd = compute_rd_cost_scaled(fi, rate, distortion, ssim_scale);
 
     if rd < best_rd {
       best_rd = rd;
@@ -3010,8 +3048,12 @@ fn rdo_split_child_deeper_cost<T: Pixel, W: Writer>(
   let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
   let tell = w.tell_frac();
   cw.write_partition(w, child_bo, PartitionType::PARTITION_SPLIT, child_size);
-  let mut deeper_cost =
-    compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
+  let mut deeper_cost = compute_rd_cost_scaled(
+    fi,
+    w.tell_frac() - tell,
+    ScaledDistortion::zero(),
+    ssim_rdmult_scale(fi, ts.to_frame_block_offset(child_bo), child_size),
+  );
 
   for &g_bo in &grandchildren {
     if deeper_cost >= child_none.rd_cost {
@@ -3112,7 +3154,12 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
     cw.write_partition(w, tile_bo, partition, bsize);
-    compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
+    compute_rd_cost_scaled(
+      fi,
+      w.tell_frac() - tell,
+      ScaledDistortion::zero(),
+      ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize),
+    )
   } else {
     0.0
   };
@@ -3448,12 +3495,20 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
       && partition != PARTITION_NONE
     {
       // NONE breakout: a skip-coded incumbent below the quantizer- and
-      // blocksize-keyed threshold terminates the walk outright.
+      // blocksize-keyed threshold terminates the walk outright. The
+      // incumbent cost was computed under the block's effective λ
+      // (ssim-rdmult scale when armed), so the threshold follows it —
+      // exact multiplication by 1.0 when the mechanism is off.
       if let (Some(bk), Some((nc, nskip))) = (p.none_breakout, none_state)
         && nskip
         && nc
           < f64::from(bk)
-            * fi.lambda
+            * (fi.lambda
+              * ssim_rdmult_scale(
+                fi,
+                ts.to_frame_block_offset(tile_bo),
+                bsize,
+              ))
             * ((bsize.width() * bsize.height()) as f64)
       {
         break;
