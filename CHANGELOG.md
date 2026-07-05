@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+- `EncoderConfig` gained three public fields (`variance_boost_strength`,
+  `variance_boost_deep`, `quant_rounding_bias`) — breaking for exhaustive
+  struct construction (ravif constructs `EncoderConfig` exhaustively and
+  adds the fields at its dep bump). Rides the already-open 0.2.0 window
+  (Cargo.toml is at 0.2.0-unreleased); no additional version step needed.
+
 ### Added
 - **Variance Boost strength override + deep-flat ramp + flat quantizer
   rounding bias** (all three default `None` = byte-identical, md5-gated
