@@ -24,7 +24,8 @@
   per-coefficient RD descent" posture as ONE knob (zenavif
   docs/COEFF_RD_STACK.md; aom 632172a4 `skip_trellis ? B : FP` +
   `av1_optimize_txb`). Armed: flat `rounding_bias`/256 forward-quant
-  offsets (128 = aom FP parity; overrides `quant_rounding_bias`), the
+  offsets (128 = aom FP parity; 0 = keep the fitted Valin offsets, the
+  un-gate-only decomposition arm; overrides `quant_rounding_bias`), the
   trellis runs on every TU regardless of `enable_trellis` WITHOUT its
   `ac_quant >= 200` disable and `80/ac_quant` dampening at
   `lambda × trellis_lambda_scale` (aom ss2 posture 17/128, aom

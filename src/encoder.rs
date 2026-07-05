@@ -1716,14 +1716,16 @@ impl<T: Pixel> FrameInvariants<T> {
 
   /// Effective flat quantizer rounding bias for `QuantizationContext::update`:
   /// the armed coefficient-RD stack's rounding overrides the standalone
-  /// `quant_rounding_bias` knob; with the stack off this is exactly the
-  /// standalone knob (byte-identical).
+  /// `quant_rounding_bias` knob (its sentinel 0 = keep the fitted Valin
+  /// offsets — the un-gate-the-trellis-only decomposition arm); with the
+  /// stack off this is exactly the standalone knob (byte-identical).
   #[inline]
   pub(crate) fn coeff_rounding_bias(&self) -> Option<u8> {
-    self
-      .coeff_rd_stack()
-      .map(|s| s.rounding_bias)
-      .or(self.config.quant_rounding_bias)
+    match self.coeff_rd_stack() {
+      Some(s) if s.rounding_bias == 0 => None,
+      Some(s) => Some(s.rounding_bias),
+      None => self.config.quant_rounding_bias,
+    }
   }
 
   #[allow(clippy::erasing_op, clippy::identity_op)]

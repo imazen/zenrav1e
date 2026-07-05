@@ -49,7 +49,9 @@ pub struct CoeffRdStack {
   /// Flat forward-quant rounding offset in 1/256 quantizer-step units,
   /// applied to DC, AC and the EOB dead-zone alike (same mechanics as
   /// `quant_rounding_bias`, which this overrides while armed). 128 = the
-  /// aom FP path's 0.5 round-to-nearest. Valid 1..=128.
+  /// aom FP path's 0.5 round-to-nearest. **0 = keep the fitted Valin
+  /// offsets** (the un-gate-the-trellis-only decomposition arm: quantizer
+  /// untouched, only the descent posture changes). Valid 0..=128.
   pub rounding_bias: u8,
   /// Trellis lambda relative to the block-RDO lambda. aom's tune=iq/ss2
   /// posture is 0.1328 (plane_rd_mult 17 >> 7); aom's default-tune posture

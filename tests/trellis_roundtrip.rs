@@ -154,6 +154,23 @@ fn coeff_rd_stack_liveness_and_decodability() {
     off, opt_in,
     "posture-None ac_quant>=200 gate must still no-op the opt-in trellis"
   );
+
+  // rounding_bias == 0 sentinel (the un-gate-only decomposition arm):
+  // fitted Valin quantization, but the descent runs where the opt-in gate
+  // refused — must be LIVE at the coarse quantizer.
+  let ungate = encode_with(w, h, &sy, &su, &sv, |e| {
+    e.quantizer = 180;
+    e.coeff_rd_stack = Some(CoeffRdStack {
+      rounding_bias: 0,
+      trellis_lambda_scale: 1.0,
+      preserve_guards: false,
+      tu_zero_out: false,
+    });
+  });
+  assert_ne!(
+    ungate, off,
+    "rounding=0 sentinel must still arm the descent at coarse quantizers"
+  );
 }
 
 #[test]
