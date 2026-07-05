@@ -12,9 +12,9 @@
 //! `crate::intrabc`).
 //!
 //! Port of libaom's `av1_hash_table` machinery (`av1/encoder/hash_motion.c`
-//! + the CRC-32C calculator in `av1/encoder/hash.c`, pinned rev 632172a4),
-//! adapted to the chunk-A scope (8x8..64x64 square blocks, 64-px
-//! superblocks, tile-relative positions):
+//! plus the CRC-32C calculator in `av1/encoder/hash.c`, pinned rev
+//! 632172a4), adapted to the chunk-A scope (8x8..64x64 square blocks,
+//! 64-px superblocks, tile-relative positions):
 //!
 //! - The **source** luma plane of the tile is hashed once per tile encode:
 //!   a 2x2 base layer (pixel-identity for 8-bit, byte-fold XOR for high
