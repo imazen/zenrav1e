@@ -20,6 +20,15 @@ cargo test --no-default-features --features threading
 cargo check --features threading
 ```
 
+**Executable gates** (zenavif `docs/ENGINEERING_BASELINE.md` section A): run
+`just gate-identity` (A1 off-state byte-exactness, pinned fingerprints in
+`tests/gate_identity_pins.tsv`; CI runs the `--ci` subset) and
+`just gate-recon` (A5 encoder-recon vs conforming decoders) before AND after
+any change touching coding paths. Re-pin with `just gate-identity-pin` only
+for intentional byte movement, committing the TSV diff in the same commit.
+zenavif's halves (`gate-determinism`/`gate-conformance`/`gate-ladder`) live
+in ../zenavif's justfile.
+
 ## Key Files for Still Image Work
 
 - `src/quantize/mod.rs` — quantization/dequantization core
