@@ -162,6 +162,61 @@ pub struct EncoderConfig {
   /// dependencies between coefficients. Encoder-only, bitstream compatible.
   pub enable_trellis: bool,
 
+  /// Override the [`Tune::Ssimulacra2`] per-superblock Variance Boost
+  /// strength (libaom units; the tune's fitted default is 1.0, libaom's own
+  /// default maps to 3.0). `None` keeps the fitted constant and is
+  /// byte-identical to builds without this knob. Valid range 0.0..=6.0
+  /// (0.0 disables the boost map entirely). Only effective under
+  /// [`Tune::Ssimulacra2`] on KEY/intra-only frames (the only path that
+  /// computes the boost map).
+  ///
+  /// Measured context (zenavif `benchmarks/rd_gap_deltaq_2026-07-02.tsv`):
+  /// the global strength response is an inverted-U on ssim2 with monotone
+  /// butteraugli decay — strengths >= 3 are butteraugli-vetoed corpus-wide,
+  /// but deep-AQ content (1-bit scans / ornate interiors / smooth
+  /// illustrations, the P3 iq-AQ residual class) measures monotone gains to
+  /// 4.5. This knob exists for per-image heads and A/B arms, not as a
+  /// global default.
+  ///
+  /// [`Tune::Ssimulacra2`]: crate::api::Tune::Ssimulacra2
+  pub variance_boost_strength: Option<f64>,
+
+  /// Deep-flat Variance Boost ramp: `(deep_strength, ceil_log2)`. When set,
+  /// the effective boost strength for a superblock with smoothed 8x8
+  /// variance `v` ramps linearly in `log2(v)` from `deep_strength` at
+  /// `v = 1` to the base strength (the tune default or
+  /// [`variance_boost_strength`](Self::variance_boost_strength)) at
+  /// `v >= 2^ceil_log2`; above the ceiling the base strength applies
+  /// unchanged. This reproduces libaom tune=iq's DEEPER per-SB qindex
+  /// spread on near-flat content (the aom {36,64}-vs-{42,61} bimodal-map
+  /// evidence on 1-bit rescans, zenavif docs/RD_GAP_VS_LIBAOM.md
+  /// "Near-lossless rescans residual") without re-boosting the mid-variance
+  /// superblocks that the global strength fit measured as
+  /// butteraugli-vetoed on photos. `None` = flat strength (byte-identical).
+  /// Valid: strength finite 0.0..=6.0, ceil_log2 1..=10.
+  pub variance_boost_deep: Option<(f64, u8)>,
+
+  /// Flat quantizer rounding bias, in 1/256 units of the quantizer step.
+  /// When set, replaces the fitted rounding offsets (DC 109, AC 98/109,
+  /// EOB 88 — Valin-method RD-derived, see `QuantizationContext::update`)
+  /// with a single flat offset `k/256` for DC, AC and the EOB dead-zone
+  /// alike. `Some(128)` is 0.5-rounding: every coefficient at or above half
+  /// a quantizer step codes and extends the EOB — the libaom
+  /// `sharpness != 0` quantizer path (`av1_build_quantizer` qrounding
+  /// 48->64 of 128, i.e. dead-zone removal) that aom tune=iq (at qindex
+  /// <= 112, via the adaptive-sharpness clamp) and tune=ssimulacra2
+  /// (everywhere, sharpness=7 unclamped) run with. `None` keeps the fitted
+  /// offsets (byte-identical). Valid range 1..=128.
+  ///
+  /// This is the P3 "6096 coefficient-level no-skip" probe (zenavif
+  /// docs/RD_GAP_VS_LIBAOM.md "Near-lossless rescans residual"): at
+  /// byte-matched near-lossless cells aom codes coefficients on 100% of
+  /// 4x4 cells at baseQ 64 while the fitted offsets skip 57.5% at baseQ 54.
+  /// Encoder-side value choice only — no bitstream syntax changes. Applies
+  /// to every frame this encoder quantizes (not tune-gated), including the
+  /// trellis-off path zenavif ships.
+  pub quant_rounding_bias: Option<u8>,
+
   /// Maximum pixel count (width * height). Default 120_000_000 (120 megapixels).
   /// Set to 0 to disable the limit. Validated in `Config::validate()`.
   pub max_pixel_count: u64,
@@ -229,6 +284,9 @@ impl EncoderConfig {
       vaq_strength: 1.0,
       seg_boost: 1.0,
       enable_trellis: false,
+      variance_boost_strength: None,
+      variance_boost_deep: None,
+      quant_rounding_bias: None,
       max_pixel_count: 120_000_000, // 120 megapixels (admits 108 MP phone photos)
       speed_settings: SpeedSettings::from_preset(speed),
     }

@@ -3,6 +3,30 @@
 ## [Unreleased]
 
 ### Added
+- **Variance Boost strength override + deep-flat ramp + flat quantizer
+  rounding bias** (all three default `None` = byte-identical, md5-gated
+  local cells vs master incl. `Some(1.0)` == `None`; the zenavif P3
+  near-lossless-rescans handoffs, zenavif docs/RD_GAP_VS_LIBAOM.md
+  "Near-lossless rescans residual"):
+  `EncoderConfig::variance_boost_strength: Option<f64>` overrides the
+  fitted `Tune::Ssimulacra2` per-SB boost strength 1.0 (0.0 = boost fully
+  off, the historical strength-0 sweep-arm semantics — no delta-q coded,
+  segmentation stays); `EncoderConfig::variance_boost_deep:
+  Option<(f64, u8)>` ramps the effective strength linearly in `log2(var)`
+  from the deep strength at var=1 to the base strength at
+  `var >= 2^ceil_log2` (the aom tune=iq {36,64}-style deeper per-SB
+  spread on near-flat content, without re-boosting the mid-variance SBs
+  the global strength fit measured butteraugli-vetoed on photos);
+  `EncoderConfig::quant_rounding_bias: Option<u8>` replaces the fitted
+  Valin-method rounding offsets (DC 109 / AC 98,109 / EOB 88 per 256)
+  with one flat k/256 offset — `Some(128)` = 0.5-rounding, the libaom
+  `sharpness != 0` `av1_build_quantizer` dead-zone-removal path
+  (qrounding 48->64 of 128) that both aom tune=iq and tune=ssimulacra2
+  quantize with (the 6096 "aom codes 100% of 4x4 cells at baseQ 64 while
+  we skip 57.5% at baseQ 54" probe). New validation errors:
+  `InvalidVarianceBoostStrength` / `InvalidVarianceBoostDeep` /
+  `InvalidQuantRoundingBias`.
+
 - **intraBC hash-based block search (chunk B)** (inert unless `intrabc`
   is armed; zenrav1e#30 item 3, the fam-7 legacy-plot / 8414-screens
   residual owner): port of libaom's `av1_hash_table` exact-match candidate

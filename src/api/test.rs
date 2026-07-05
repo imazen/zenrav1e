@@ -2142,6 +2142,9 @@ fn log_q_exp_overflow() {
     vaq_strength: 1.0,
     seg_boost: 1.0,
     enable_trellis: false,
+    variance_boost_strength: None,
+    variance_boost_deep: None,
+    quant_rounding_bias: None,
     max_pixel_count: 67_108_864,
     speed_settings: SpeedSettings {
       multiref: false,
@@ -2228,6 +2231,9 @@ fn guess_frame_subtypes_assert() {
     vaq_strength: 1.0,
     seg_boost: 1.0,
     enable_trellis: false,
+    variance_boost_strength: None,
+    variance_boost_deep: None,
+    quant_rounding_bias: None,
     max_pixel_count: 67_108_864,
     speed_settings: SpeedSettings {
       multiref: false,

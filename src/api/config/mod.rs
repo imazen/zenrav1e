@@ -169,6 +169,29 @@ pub enum InvalidConfig {
     "invalid seg_boost bits=0x{0:016x} (expected finite, >= 0.5, <= 4.0)"
   )]
   InvalidSegBoost(u64),
+
+  /// `variance_boost_strength` is not finite or outside the supported range.
+  ///
+  /// The payload is the rejected value's `f64::to_bits()` representation so
+  /// `InvalidConfig` can stay `Eq` (NaN bit patterns compare structurally).
+  #[error(
+    "invalid variance_boost_strength bits=0x{0:016x} (expected finite, >= 0.0, <= 6.0)"
+  )]
+  InvalidVarianceBoostStrength(u64),
+
+  /// `variance_boost_deep` is invalid: the deep strength must be finite in
+  /// `0.0..=6.0` and the `ceil_log2` in `1..=10`.
+  ///
+  /// The payload is `(strength.to_bits(), ceil_log2)`.
+  #[error(
+    "invalid variance_boost_deep (bits=0x{0:016x}, ceil_log2={1}) (expected finite strength 0.0..=6.0, ceil_log2 1..=10)"
+  )]
+  InvalidVarianceBoostDeep(u64, u8),
+
+  /// `quant_rounding_bias` is outside the supported range `1..=128`
+  /// (units of 1/256 of a quantizer step; 128 = 0.5-rounding).
+  #[error("invalid quant_rounding_bias {0} (expected 1..=128)")]
+  InvalidQuantRoundingBias(u8),
 }
 
 /// Contains the encoder configuration.
@@ -519,6 +542,23 @@ impl Config {
       || !(0.5..=4.0).contains(&config.seg_boost)
     {
       return Err(InvalidSegBoost(config.seg_boost.to_bits()));
+    }
+    if let Some(s) = config.variance_boost_strength
+      && (!s.is_finite() || !(0.0..=6.0).contains(&s))
+    {
+      return Err(InvalidVarianceBoostStrength(s.to_bits()));
+    }
+    if let Some((s, c)) = config.variance_boost_deep
+      && (!s.is_finite()
+        || !(0.0..=6.0).contains(&s)
+        || !(1..=10).contains(&c))
+    {
+      return Err(InvalidVarianceBoostDeep(s.to_bits(), c));
+    }
+    if let Some(k) = config.quant_rounding_bias
+      && !(1..=128).contains(&k)
+    {
+      return Err(InvalidQuantRoundingBias(k));
     }
 
     // TODO: add more validation

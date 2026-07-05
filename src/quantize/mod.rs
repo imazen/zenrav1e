@@ -209,6 +209,53 @@ mod test {
       assert!(tx_size.1 == get_log_tx_scale(tx_size.0));
     }
   }
+
+  #[test]
+  fn quant_rounding_bias_flat_offsets_and_none_identity() {
+    // None reproduces the fitted Valin-method offsets (byte-identity leg
+    // of EncoderConfig::quant_rounding_bias).
+    let mut qc = QuantizationContext::default();
+    qc.update(100, TX_8X8, true, 8, 0, 0, None);
+    let dc = qc.dc_quant.get() as u32;
+    let ac = qc.ac_quant.get() as u32;
+    assert_eq!(qc.dc_offset, dc * 109 / 256);
+    assert_eq!(qc.ac_offset0, ac * 98 / 256);
+    assert_eq!(qc.ac_offset1, ac * 109 / 256);
+    assert_eq!(qc.ac_offset_eob, ac * 88 / 256);
+
+    // Some(128) = flat 0.5-rounding on every offset (the aom sharpness!=0
+    // build_quantizer path: dead-zone removal).
+    let mut qf = QuantizationContext::default();
+    qf.update(100, TX_8X8, true, 8, 0, 0, Some(128));
+    assert_eq!(qf.dc_quant.get(), qc.dc_quant.get());
+    assert_eq!(qf.ac_quant.get(), qc.ac_quant.get());
+    assert_eq!(qf.dc_offset, dc * 128 / 256);
+    assert_eq!(qf.ac_offset0, ac * 128 / 256);
+    assert_eq!(qf.ac_offset1, ac * 128 / 256);
+    assert_eq!(qf.ac_offset_eob, ac * 128 / 256);
+
+    // The flat offset strictly raises the AC tail bias (98 -> 128) and the
+    // EOB bias (88 -> 128): more coefficients code and extend the EOB.
+    assert!(qf.ac_offset0 > qc.ac_offset0);
+    assert!(qf.ac_offset_eob > qc.ac_offset_eob);
+
+    // A coefficient at 0.55 * ac_q: fitted offsets round it to zero in the
+    // tail (0.55 + 98/256 < 1) and it cannot extend the EOB
+    // (0.55 < 1 - 88/256 is false... the EOB deadzone is |c| >= q - eob_off
+    // = 0.656q, and 0.55q < 0.656q), while flat-128 codes it as a 1
+    // (0.55 + 0.5 >= 1) and extends the EOB (0.55q >= 0.5q).
+    let c55 = (ac * 55 / 100) as i32;
+    let fitted_tail_level =
+      (c55 as u32 + qc.ac_offset0) / qc.ac_quant.get() as u32;
+    let flat_tail_level =
+      (c55 as u32 + qf.ac_offset0) / qf.ac_quant.get() as u32;
+    assert_eq!(fitted_tail_level, 0);
+    assert_eq!(flat_tail_level, 1);
+    let fitted_deadzone = ac - qc.ac_offset_eob.min(ac);
+    let flat_deadzone = ac - qf.ac_offset_eob.min(ac);
+    assert!((c55 as u32) < fitted_deadzone);
+    assert!((c55 as u32) >= flat_deadzone);
+  }
 }
 
 impl QuantizationContext {
@@ -226,7 +273,7 @@ impl QuantizationContext {
 
   pub fn update(
     &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize,
-    dc_delta_q: i8, ac_delta_q: i8,
+    dc_delta_q: i8, ac_delta_q: i8, rounding_bias: Option<u8>,
   ) {
     self.log_tx_scale = get_log_tx_scale(tx_size);
 
@@ -235,6 +282,21 @@ impl QuantizationContext {
 
     self.ac_quant = ac_q(qindex, ac_delta_q, bit_depth);
     self.ac_mul_add = divu_gen(self.ac_quant.into());
+
+    // Flat rounding-bias override (`EncoderConfig::quant_rounding_bias`):
+    // one k/256 offset for DC, AC and the EOB dead-zone alike. Some(128)
+    // = 0.5-rounding, the libaom sharpness!=0 `av1_build_quantizer` path
+    // (qrounding 48->64 of 128: dead-zone removal — every coefficient at
+    // or above half a step codes and extends the EOB). The P3 "6096
+    // no-skip" probe; None = the fitted offsets below (byte-identical).
+    if let Some(k) = rounding_bias {
+      let k = u32::from(k);
+      self.dc_offset = self.dc_quant.get() as u32 * k / 256;
+      self.ac_offset0 = self.ac_quant.get() as u32 * k / 256;
+      self.ac_offset1 = self.ac_quant.get() as u32 * k / 256;
+      self.ac_offset_eob = self.ac_quant.get() as u32 * k / 256;
+      return;
+    }
 
     // All of these biases were derived by measuring the cost of coding
     // a zero vs coding a one on any given coefficient position, or, in

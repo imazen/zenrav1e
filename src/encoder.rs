@@ -1180,6 +1180,29 @@ fn variance_boost_delta_q_res_log2(base_q_idx: u8) -> u8 {
   }
 }
 
+/// Effective boost strength for one superblock under the optional
+/// deep-flat ramp ([`crate::EncoderConfig::variance_boost_deep`]): linear
+/// in `log2(var)` from `deep_strength` at `var = 1` up to the base
+/// `strength` at `var >= 2^ceil_log2`; above the ceiling the base strength
+/// applies unchanged. `None` = flat base strength (byte-identical to
+/// builds without the knob).
+fn variance_boost_effective_strength(
+  var: u64, strength: f64, deep: Option<(f64, u8)>,
+) -> f64 {
+  match deep {
+    Some((s_deep, ceil_log2)) => {
+      let ceil = f64::from(ceil_log2.max(1));
+      let lv = (var.max(1) as f64).log2();
+      if lv >= ceil {
+        strength
+      } else {
+        s_deep + (strength - s_deep) * (lv / ceil)
+      }
+    }
+    None => strength,
+  }
+}
+
 /// Boosted per-superblock qindex for a smoothed 8×8 variance, following
 /// libaom's `av1_get_sbq_variance_boost` (allintra_vis.c at rev 632172a4).
 /// `strength` is in libaom's internal units (its default
@@ -1258,8 +1281,13 @@ impl<T: Pixel> CodedFrameData<T> {
   ///
   /// Requires `activity_mask` to be filled (`use_activity`); clears the
   /// maps (disabling delta-q) otherwise or when `base_q_idx == 0`.
+  ///
+  /// `deep` is the optional deep-flat strength ramp
+  /// ([`crate::EncoderConfig::variance_boost_deep`]); `None` is
+  /// byte-identical to the flat-strength behavior.
   pub fn compute_variance_boost_sb_qindex(
-    &mut self, strength: f64, base_q_idx: u8, bit_depth: usize,
+    &mut self, strength: f64, deep: Option<(f64, u8)>, base_q_idx: u8,
+    bit_depth: usize,
   ) {
     use crate::quantize::ac_q;
 
@@ -1300,7 +1328,11 @@ impl<T: Pixel> CodedFrameData<T> {
         }
         let var = octile5_smoothed_variance(&mut sb_vars[..n]);
         let sb_qindex = variance_boost_sb_qindex(
-          var, strength, base_q_idx, base_q, bit_depth,
+          var,
+          variance_boost_effective_strength(var, strength, deep),
+          base_q_idx,
+          base_q,
+          bit_depth,
         );
         let sb_q = ac_q(sb_qindex, 0, bit_depth).get() as f64;
         qindex_map[sby * sb_cols + sbx] = sb_qindex;
@@ -2092,11 +2124,21 @@ impl<T: Pixel> FrameInvariants<T> {
     {
       let base_q_idx = self.base_q_idx;
       let bit_depth = self.sequence.bit_depth;
-      if let Some(cfd) = self.coded_frame_data.as_mut() {
+      // Per-image/A-B override of the fitted strength constant + the
+      // optional deep-flat ramp (both default None = byte-identical).
+      // Some(0.0) without a ramp disables the boost outright — identical
+      // to the historical strength-0 sweep arm (no delta-q coded,
+      // segmentation stays on).
+      let strength = self
+        .config
+        .variance_boost_strength
+        .unwrap_or(DELTAQ_VARIANCE_BOOST_STRENGTH);
+      let deep = self.config.variance_boost_deep;
+      if let Some(cfd) = self.coded_frame_data.as_mut()
+        && (strength > 0.0 || deep.is_some())
+      {
         cfd.compute_variance_boost_sb_qindex(
-          DELTAQ_VARIANCE_BOOST_STRENGTH,
-          base_q_idx,
-          bit_depth,
+          strength, deep, base_q_idx, bit_depth,
         );
         if !cfd.sb_qindex.is_empty() {
           self.delta_q_present = true;
@@ -3649,6 +3691,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
     fi.sequence.bit_depth,
     fi.dc_delta_q[0],
     0,
+    fi.config.quant_rounding_bias,
   );
 
   for by in 0..bh {
@@ -3761,6 +3804,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
       fi.sequence.bit_depth,
       fi.dc_delta_q[p],
       fi.ac_delta_q[p],
+      fi.config.quant_rounding_bias,
     );
     let alpha = cfl.alpha(p - 1);
     for by in 0..bh_uv {
@@ -3854,6 +3898,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
     fi.sequence.bit_depth,
     fi.dc_delta_q[0],
     0,
+    fi.config.quant_rounding_bias,
   );
 
   // TODO: If tx-parition more than only 1-level, this code does not work.
@@ -3953,6 +3998,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
       fi.sequence.bit_depth,
       fi.dc_delta_q[p],
       fi.ac_delta_q[p],
+      fi.config.quant_rounding_bias,
     );
 
     for by in 0..bh_uv {
@@ -5633,6 +5679,29 @@ mod test {
       RAV1E_PARTITION_TYPES[RAV1E_PARTITION_TYPES.len() - 1],
       PartitionType::PARTITION_SPLIT
     );
+  }
+
+  #[test]
+  fn variance_boost_deep_ramp_endpoints_and_identity() {
+    // None = flat base strength at every variance (the byte-identity leg).
+    for var in [1u64, 4, 16, 64, 1024, 1 << 20] {
+      assert_eq!(variance_boost_effective_strength(var, 1.0, None), 1.0);
+    }
+    // Deep ramp (4.5 @ var=1, ceiling log2=4 => var 16): endpoints exact,
+    // interior linear in log2(var), above-ceiling = base.
+    let deep = Some((4.5, 4u8));
+    assert_eq!(variance_boost_effective_strength(1, 1.0, deep), 4.5);
+    assert_eq!(variance_boost_effective_strength(16, 1.0, deep), 1.0);
+    assert_eq!(variance_boost_effective_strength(1024, 1.0, deep), 1.0);
+    let mid = variance_boost_effective_strength(4, 1.0, deep); // log2(4)=2
+    assert!((mid - (4.5 + (1.0 - 4.5) * 0.5)).abs() < 1e-12, "mid={mid}");
+    // var=0 is treated as var=1 (octile helper never emits 0, but the
+    // ramp must not produce -inf through log2(0)).
+    assert_eq!(variance_boost_effective_strength(0, 1.0, deep), 4.5);
+    // Inverted ramp (deep below base) stays finite at the endpoints.
+    let inv = Some((0.0, 4u8));
+    assert_eq!(variance_boost_effective_strength(1, 1.0, inv), 0.0);
+    assert_eq!(variance_boost_effective_strength(16, 1.0, inv), 1.0);
   }
 
   /// Decoder mirror of the per-SB `delta_q_index` reconstruction
