@@ -2146,6 +2146,7 @@ fn log_q_exp_overflow() {
     variance_boost_deep: None,
     quant_rounding_bias: None,
     ssim_rdmult_strength: None,
+    coeff_rd_stack: None,
     max_pixel_count: 67_108_864,
     speed_settings: SpeedSettings {
       multiref: false,
@@ -2236,6 +2237,7 @@ fn guess_frame_subtypes_assert() {
     variance_boost_deep: None,
     quant_rounding_bias: None,
     ssim_rdmult_strength: None,
+    coeff_rd_stack: None,
     max_pixel_count: 67_108_864,
     speed_settings: SpeedSettings {
       multiref: false,

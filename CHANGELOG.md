@@ -10,8 +10,33 @@
   (Cargo.toml is at 0.2.0-unreleased); no additional version step needed.
 - `EncoderConfig::ssim_rdmult_strength: Option<f64>` — a fourth public
   field in the same 0.2.0 window, same exhaustive-construction impact.
+- `EncoderConfig::coeff_rd_stack: Option<CoeffRdStack>` — a fifth public
+  field (plus the new `CoeffRdStack` config struct) in the same 0.2.0
+  window, same exhaustive-construction impact.
 
 ### Added
+- **Composed coefficient-level RD valuation stack**
+  (`EncoderConfig::coeff_rd_stack: Option<CoeffRdStack>`, default `None` =
+  byte-identical — 36/36 cells sha256-identical vs a master-built rav1e
+  across 3 contents × q{60,120,180} × s{2,6} × tune{ss2,psy}; validation
+  error `InvalidCoeffRdStack`; disarmed on explicit-lossless configs):
+  libaom's coupled "FP round-to-nearest quantization + always-on
+  per-coefficient RD descent" posture as ONE knob (zenavif
+  docs/COEFF_RD_STACK.md; aom 632172a4 `skip_trellis ? B : FP` +
+  `av1_optimize_txb`). Armed: flat `rounding_bias`/256 forward-quant
+  offsets (128 = aom FP parity; overrides `quant_rounding_bias`), the
+  trellis runs on every TU regardless of `enable_trellis` WITHOUT its
+  `ac_quant >= 200` disable and `80/ac_quant` dampening at
+  `lambda × trellis_lambda_scale` (aom ss2 posture 17/128, aom
+  default-tune posture 4.25), optional aom `sharpness != 0` preserve
+  guards (never zero level-1s; level > 2 required at scan pos <= 5;
+  descent floor 1; EOB pull-in only to >= 5 kept), and an optional per-TU
+  zero-out counterweight at block λ (aom tx_search.c:3294-3311 analog).
+  The two prior half-stack probes (flat rounding alone; forced trellis
+  alone) are measured rejections — this knob measures the composition aom
+  actually ships. Liveness + rav1d-safe decodability gated in
+  `tests/trellis_roundtrip.rs` including at coarse quantizers where the
+  opt-in trellis was previously a hard no-op.
 - **Per-16×16 ssim-rdmult λ scaling** (`EncoderConfig::ssim_rdmult_strength`,
   default `None` = byte-identical — scale 1.0 multiplies λ exactly;
   validation error `InvalidSsimRdmultStrength`; only live under

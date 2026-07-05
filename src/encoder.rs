@@ -1702,6 +1702,30 @@ impl<T: Pixel> FrameInvariants<T> {
     Ok(())
   }
 
+  /// The armed coefficient-RD stack, if any (`EncoderConfig::coeff_rd_stack`).
+  /// Disarmed on explicit-lossless configs (quantizer 0): the stack is a
+  /// lossy-valuation posture; lossless semantics (WHT + qindex 0) must not
+  /// see altered rounding or a coefficient descent.
+  #[inline]
+  pub(crate) fn coeff_rd_stack(&self) -> Option<crate::api::CoeffRdStack> {
+    if self.config.quantizer == 0 {
+      return None;
+    }
+    self.config.coeff_rd_stack
+  }
+
+  /// Effective flat quantizer rounding bias for `QuantizationContext::update`:
+  /// the armed coefficient-RD stack's rounding overrides the standalone
+  /// `quant_rounding_bias` knob; with the stack off this is exactly the
+  /// standalone knob (byte-identical).
+  #[inline]
+  pub(crate) fn coeff_rounding_bias(&self) -> Option<u8> {
+    self
+      .coeff_rd_stack()
+      .map(|s| s.rounding_bias)
+      .or(self.config.quant_rounding_bias)
+  }
+
   #[allow(clippy::erasing_op, clippy::identity_op)]
   /// # Panics
   ///
@@ -2826,7 +2850,14 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   // the tune, `fi.qm_weighted_trellis` weights its coefficient distortion
   // consistently with QM dequant (≈0 ssim2 vs unweighted, softer
   // butteraugli max).
-  let eob = if fi.config.enable_trellis && eob > 1 {
+  //
+  // NOTE (COEFF_RD_STACK, 2026-07-05): those two measurements were HALF-
+  // stacks — the trellis ran over dead-zone-quantized input (and was
+  // hard-disabled below ~Q80 by its ac_quant gate). `coeff_rd_stack` arms
+  // the composed aom posture instead: flat 0.5-rounding INTO an always-on
+  // scaled-lambda trellis (zenavif docs/COEFF_RD_STACK.md).
+  let coeff_stack = fi.coeff_rd_stack();
+  let eob = if (fi.config.enable_trellis || coeff_stack.is_some()) && eob > 1 {
     let plane_type = if p == 0 { 0 } else { 1 };
     crate::quantize::trellis::optimize(
       qcoeffs,
@@ -2843,6 +2874,11 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       eob,
       &*cw.fc,
       plane_type,
+      coeff_stack.map(|s| crate::quantize::trellis::StackPosture {
+        lambda_scale: s.trellis_lambda_scale,
+        preserve_guards: s.preserve_guards,
+        tu_zero_out: s.tu_zero_out,
+      }),
     )
   } else {
     eob
@@ -3849,7 +3885,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
     fi.sequence.bit_depth,
     fi.dc_delta_q[0],
     0,
-    fi.config.quant_rounding_bias,
+    fi.coeff_rounding_bias(),
   );
 
   for by in 0..bh {
@@ -3962,7 +3998,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
       fi.sequence.bit_depth,
       fi.dc_delta_q[p],
       fi.ac_delta_q[p],
-      fi.config.quant_rounding_bias,
+      fi.coeff_rounding_bias(),
     );
     let alpha = cfl.alpha(p - 1);
     for by in 0..bh_uv {
@@ -4056,7 +4092,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
     fi.sequence.bit_depth,
     fi.dc_delta_q[0],
     0,
-    fi.config.quant_rounding_bias,
+    fi.coeff_rounding_bias(),
   );
 
   // TODO: If tx-parition more than only 1-level, this code does not work.
@@ -4156,7 +4192,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
       fi.sequence.bit_depth,
       fi.dc_delta_q[p],
       fi.ac_delta_q[p],
-      fi.config.quant_rounding_bias,
+      fi.coeff_rounding_bias(),
     );
 
     for by in 0..bh_uv {

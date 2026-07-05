@@ -201,6 +201,15 @@ pub enum InvalidConfig {
     "invalid ssim_rdmult_strength bits=0x{0:016x} (expected finite, >= 0.0, <= 4.0)"
   )]
   InvalidSsimRdmultStrength(u64),
+
+  /// `coeff_rd_stack` is invalid: `rounding_bias` must be in `1..=128` and
+  /// `trellis_lambda_scale` finite in `(0.0, 8.0]`.
+  ///
+  /// The payload is `(rounding_bias, trellis_lambda_scale.to_bits())`.
+  #[error(
+    "invalid coeff_rd_stack (rounding_bias={0}, lambda_scale bits=0x{1:016x}) (expected rounding 1..=128, scale finite in (0.0, 8.0])"
+  )]
+  InvalidCoeffRdStack(u8, u64),
 }
 
 /// Contains the encoder configuration.
@@ -573,6 +582,17 @@ impl Config {
       && (!s.is_finite() || !(0.0..=4.0).contains(&s))
     {
       return Err(InvalidSsimRdmultStrength(s.to_bits()));
+    }
+    if let Some(cs) = config.coeff_rd_stack
+      && (!(1..=128).contains(&cs.rounding_bias)
+        || !cs.trellis_lambda_scale.is_finite()
+        || cs.trellis_lambda_scale <= 0.0
+        || cs.trellis_lambda_scale > 8.0)
+    {
+      return Err(InvalidCoeffRdStack(
+        cs.rounding_bias,
+        cs.trellis_lambda_scale.to_bits(),
+      ));
     }
 
     // TODO: add more validation

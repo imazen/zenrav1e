@@ -49,6 +49,113 @@ fn psnr(a: &[u8], b: &[u8]) -> f64 {
   }
 }
 
+/// Encode the synthetic frame with a caller-tweaked config; returns the OBUs.
+fn encode_with(
+  w: usize, h: usize, sy: &[u8], su: &[u8], sv: &[u8],
+  tweak: impl FnOnce(&mut EncoderConfig),
+) -> Vec<u8> {
+  let mut ss = SpeedSettings::from_preset(6);
+  ss.segmentation = SegmentationLevel::Disabled;
+  let mut enc = EncoderConfig {
+    width: w,
+    height: h,
+    bit_depth: 8,
+    chroma_sampling: ChromaSampling::Cs420,
+    still_picture: true,
+    low_latency: true,
+    quantizer: 60,
+    tune: Tune::Ssimulacra2,
+    speed_settings: ss,
+    ..Default::default()
+  };
+  tweak(&mut enc);
+  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  let mut ctx: Context<u8> = cfg.new_context().unwrap();
+  let mut f = ctx.new_frame();
+  f.planes[0].copy_from_raw_u8(sy, w, 1);
+  f.planes[1].copy_from_raw_u8(su, w / 2, 1);
+  f.planes[2].copy_from_raw_u8(sv, w / 2, 1);
+  ctx.send_frame(f).unwrap();
+  ctx.flush();
+  let mut obu = Vec::new();
+  while let Ok(pkt) = ctx.receive_packet() {
+    obu.extend_from_slice(&pkt.data);
+  }
+  assert!(!obu.is_empty(), "encoder produced no data");
+  obu
+}
+
+/// Gates for the armed coefficient-RD stack (`coeff_rd_stack`):
+/// determinism off, liveness on — INCLUDING at coarse quantizers where the
+/// opt-in trellis's `ac_quant >= 200` gate made forced-trellis a no-op —
+/// and decodability of the armed output under the composed ss2 tune (QM
+/// paths exercised).
+#[test]
+fn coeff_rd_stack_liveness_and_decodability() {
+  let (w, h) = (256usize, 256usize);
+  let (sy, su, sv) = synth(w, h);
+
+  for q in [60usize, 180] {
+    let off1 = encode_with(w, h, &sy, &su, &sv, |e| e.quantizer = q);
+    let off2 = encode_with(w, h, &sy, &su, &sv, |e| e.quantizer = q);
+    assert_eq!(off1, off2, "q{q}: knob-off encode must be deterministic");
+
+    let armed = encode_with(w, h, &sy, &su, &sv, |e| {
+      e.quantizer = q;
+      e.coeff_rd_stack = Some(CoeffRdStack::default());
+    });
+    assert_ne!(
+      armed, off1,
+      "q{q}: armed stack must change the bitstream (liveness; q180 is the \
+       band the opt-in trellis's ac_quant gate previously dead-zoned)"
+    );
+
+    // The armed output must decode.
+    let mut dec = rav1d_safe::Decoder::new().expect("decoder");
+    let mut fr = dec.decode(&armed).expect("armed decode error");
+    if fr.is_none() {
+      fr = dec.flush().ok().and_then(|mut v| v.drain(..).next());
+    }
+    let frame = fr.unwrap_or_else(|| panic!("q{q}: no decoded armed frame"));
+    assert_eq!(
+      (frame.width() as usize, frame.height() as usize),
+      (w, h),
+      "q{q}: armed decoded dimensions differ"
+    );
+    let mut dy = vec![0u8; w * h];
+    match frame.planes() {
+      rav1d_safe::Planes::Depth8(p) => {
+        for (j, row) in p.y().rows().enumerate().take(h) {
+          dy[j * w..j * w + w].copy_from_slice(&row[..w]);
+        }
+      }
+      rav1d_safe::Planes::Depth16(p) => {
+        for (j, row) in p.y().rows().enumerate().take(h) {
+          for (i, &px) in row[..w].iter().enumerate() {
+            dy[j * w + i] = px as u8;
+          }
+        }
+      }
+    }
+    let p = psnr(&sy, &dy);
+    assert!(p > 10.0, "q{q}: armed decode is garbage (Y-PSNR {p:.1})");
+  }
+
+  // Posture-None regression: at a coarse quantizer the opt-in trellis's
+  // historical gate still no-ops it — forced `enable_trellis` bytes must
+  // equal trellis-off bytes there (the byte-identity half of the old
+  // behavior this knob deliberately does NOT change).
+  let off = encode_with(w, h, &sy, &su, &sv, |e| e.quantizer = 180);
+  let opt_in = encode_with(w, h, &sy, &su, &sv, |e| {
+    e.quantizer = 180;
+    e.enable_trellis = true;
+  });
+  assert_eq!(
+    off, opt_in,
+    "posture-None ac_quant>=200 gate must still no-op the opt-in trellis"
+  );
+}
+
 #[test]
 fn trellis_on_output_is_decodable() {
   let (w, h) = (256usize, 256usize);

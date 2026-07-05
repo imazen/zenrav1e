@@ -39,6 +39,49 @@ pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::MAX as u64 / 3;
 // reach the dependency's panic at encode time.
 pub(crate) const MAX_FRAME_RATE: u64 = 65536;
 
+/// Parameters for the composed coefficient-level RD valuation stack
+/// (`EncoderConfig::coeff_rd_stack`): libaom's coupled FP-quantization +
+/// per-coefficient RD descent posture as one A/B unit. See the field's
+/// documentation and zenavif docs/COEFF_RD_STACK.md for the mechanism map
+/// and measured context.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CoeffRdStack {
+  /// Flat forward-quant rounding offset in 1/256 quantizer-step units,
+  /// applied to DC, AC and the EOB dead-zone alike (same mechanics as
+  /// `quant_rounding_bias`, which this overrides while armed). 128 = the
+  /// aom FP path's 0.5 round-to-nearest. Valid 1..=128.
+  pub rounding_bias: u8,
+  /// Trellis lambda relative to the block-RDO lambda. aom's tune=iq/ss2
+  /// posture is 0.1328 (plane_rd_mult 17 >> 7); aom's default-tune posture
+  /// is 4.25 (17 * 8 >> 5). Replaces the opt-in trellis's quality
+  /// dampening AND its `ac_quant >= 200` disable. Valid finite, > 0.0,
+  /// <= 8.0.
+  pub trellis_lambda_scale: f64,
+  /// Map aom's `sharpness != 0` preserve gates into the descent: never
+  /// zero level-1 coefficients, require level > 2 to lower scan positions
+  /// <= 5, floor the level descent at 1, and only pull the EOB in to >= 5
+  /// kept coefficients.
+  pub preserve_guards: bool,
+  /// aom's per-TU zero-out counterweight: after the descent, zero the
+  /// whole TU when its coded RD loses to the zero block at the BLOCK
+  /// lambda (aom tx_search.c:3294-3311, which runs un-neutered even under
+  /// the tunes).
+  pub tu_zero_out: bool,
+}
+
+impl Default for CoeffRdStack {
+  /// The aom tune=ssimulacra2 posture verbatim: FP 0.5-rounding, trellis
+  /// lambda 17/128, preserve guards on, no TU zero-out.
+  fn default() -> Self {
+    Self {
+      rounding_bias: 128,
+      trellis_lambda_scale: 17.0 / 128.0,
+      preserve_guards: true,
+      tu_zero_out: false,
+    }
+  }
+}
+
 /// Encoder settings which impact the produced bitstream.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncoderConfig {
@@ -242,6 +285,40 @@ pub struct EncoderConfig {
   /// [`Tune::Ssimulacra2`]: crate::api::Tune::Ssimulacra2
   pub ssim_rdmult_strength: Option<f64>,
 
+  /// The composed coefficient-level RD valuation stack — libaom's coupled
+  /// "FP round-to-nearest quantization + always-on per-coefficient RD
+  /// descent" posture, ported as ONE knob (zenavif
+  /// docs/COEFF_RD_STACK.md; aom rev 632172a4: `av1_build_quantizer`
+  /// round_fp = 64/128, `skip_trellis ? B : FP` coupling in tx_search.c,
+  /// `av1_optimize_txb` with the tune's rdmult posture and sharpness
+  /// guards). When set:
+  ///
+  /// - forward quantization uses the flat `rounding_bias`/256 offset for
+  ///   DC, AC and the EOB dead-zone (identical mechanics to
+  ///   [`quant_rounding_bias`](Self::quant_rounding_bias), which this
+  ///   overrides; 128 = aom FP parity);
+  /// - the trellis runs on every transform block regardless of
+  ///   [`enable_trellis`](Self::enable_trellis), WITHOUT the `ac_quant >=
+  ///   200` disable and WITHOUT the `80/ac_quant` quality dampening, at
+  ///   `lambda_trellis = lambda * trellis_lambda_scale` (aom's ss2-tune
+  ///   posture is 0.1328 = plane_rd_mult 17 / 128; aom's default-tune
+  ///   posture is 4.25 = 17 * 8 / 32);
+  /// - `preserve_guards` maps aom's `sharpness != 0` trellis gates:
+  ///   level-1 coefficients are never zeroed, near-DC (scan pos <= 5)
+  ///   coefficients need level > 2 to be lowered, level descent floors at
+  ///   1 instead of 0, and the EOB may only be pulled in to >= 5 kept
+  ///   coefficients;
+  /// - `tu_zero_out` adds aom's per-TU counterweight (tx_search.c
+  ///   :3294-3311): after the trellis, the whole TU is zeroed when the
+  ///   coded rate-distortion loses to the zero block at the BLOCK lambda.
+  ///
+  /// `None` = byte-identical to builds without this knob. The two prior
+  /// half-stack probes are both measured rejections (flat rounding alone
+  /// +2.67% med / 20-of-23 butteraugli vetoes; forced trellis alone
+  /// +0.32..0.55%) — this knob exists to measure the composition aom
+  /// actually ships, which neither probe reached.
+  pub coeff_rd_stack: Option<CoeffRdStack>,
+
   /// Maximum pixel count (width * height). Default 120_000_000 (120 megapixels).
   /// Set to 0 to disable the limit. Validated in `Config::validate()`.
   pub max_pixel_count: u64,
@@ -313,6 +390,7 @@ impl EncoderConfig {
       variance_boost_deep: None,
       quant_rounding_bias: None,
       ssim_rdmult_strength: None,
+      coeff_rd_stack: None,
       max_pixel_count: 120_000_000, // 120 megapixels (admits 108 MP phone photos)
       speed_settings: SpeedSettings::from_preset(speed),
     }

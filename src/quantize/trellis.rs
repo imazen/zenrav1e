@@ -33,6 +33,27 @@ const EC_PROB_SHIFT: u32 = 6;
 /// CDF probability total after shifting: 32768 >> 6 = 512.
 const CDF_TOTAL: u32 = 32768 >> EC_PROB_SHIFT;
 
+/// Posture overrides for the armed coefficient-RD stack
+/// (`EncoderConfig::coeff_rd_stack`, zenavif docs/COEFF_RD_STACK.md).
+/// `None` keeps the opt-in trellis's historical behavior byte-identically
+/// (quality gates + unit lambda); `Some` bypasses the `ac_quant >= 200`
+/// disable and the `80/ac_quant` dampening, scales the trellis lambda, and
+/// optionally applies libaom's `sharpness != 0` preserve gates and per-TU
+/// zero-out counterweight.
+#[derive(Clone, Copy, Debug)]
+pub struct StackPosture {
+  /// Trellis lambda relative to the block-RDO lambda (aom ss2 posture
+  /// 17/128 ~= 0.133; aom default-tune posture 17*8/32 = 4.25).
+  pub lambda_scale: f64,
+  /// Map aom's `sharpness != 0` gates: never zero level-1s, require level
+  /// above 2 at scan positions <= 5, floor the descent at 1, EOB pull-in
+  /// only to at least 5 kept coefficients.
+  pub preserve_guards: bool,
+  /// After the descent, zero the whole TU when its coded RD loses to the
+  /// zero block at the BLOCK lambda (aom tx_search.c:3294-3311 analog).
+  pub tu_zero_out: bool,
+}
+
 /// Optimize quantized coefficients using CDF-based rate-distortion optimization.
 ///
 /// `qcoeffs`: quantized coefficients (modified in-place)
@@ -51,12 +72,15 @@ const CDF_TOTAL: u32 = 32768 >> EC_PROB_SHIFT;
 /// `eob`: current end-of-block position (1-based, in scan order)
 /// `fc`: CDF context (frozen snapshot — not updated during trellis)
 /// `plane_type`: 0 for luma, 1 for chroma
+/// `posture`: `None` = the opt-in trellis's historical behavior
+///   (byte-identical); `Some` = the armed coefficient-RD stack posture
+///   (see [`StackPosture`]).
 ///
 /// Returns the new eob after optimization.
 pub fn optimize<T: Coefficient>(
   qcoeffs: &mut [T], coeffs: &[T], qc: &QuantizationContext, tx_size: TxSize,
   tx_type: TxType, lambda: f64, qm: Option<&[u8]>, qm_weight_dist: bool,
-  eob: u16, fc: &CDFContext, plane_type: usize,
+  eob: u16, fc: &CDFContext, plane_type: usize, posture: Option<StackPosture>,
 ) -> u16 {
   // WHT_WHT (lossless pseudo-type) shares DCT_DCT's 4x4 scan/class.
   let scan_tx_type =
@@ -81,18 +105,33 @@ pub fn optimize<T: Coefficient>(
   // large quantizer (low quality) → reduced strength.
   // ac_quant ~40 at Q95, ~200 at Q80, ~800 at Q50.
   let tx_dist_scale = (1u64 << (6 - 2 * log_tx_scale)) as f64;
-  // Skip trellis when quantizer is too coarse for beneficial optimization.
-  // At ac_quant >= 200 (~Q80 and below), the dampening would be ≤ 0.4
-  // and the effect is empirically zero (< 0.01% BPP savings).
-  if ac_quant >= 200 {
-    return eob;
-  }
-  let dampening = (80.0 / (ac_quant as f64).max(80.0)).min(1.0);
-  // The unit lambda (no extra scale) is the calibrated optimum: a 2026-06-18
-  // sweep over lambda scales {0.5, 0.75, 1.0, 1.5, 2.0} on a 38-image real-photo
-  // corpus showed BD-rate is best at 1.0 (0.5:-0.39% < 0.75:-0.75% < 1.0:-0.94%
-  // > 1.5:+0.15% > 2.0:+1.83%). See benchmarks/trellis_rdoq_2026-06-18.md.
-  let lambda_trellis = lambda * tx_dist_scale * dampening;
+  let (lambda_trellis, guards) = match posture {
+    // Armed coefficient-RD stack: no quality disable, no dampening — the
+    // posture's lambda scale IS the strength (aom runs its trellis at every
+    // qindex; the keep-vs-drop trade is carried entirely by the scaled
+    // lambda). Guards map aom's `sharpness != 0` gates.
+    Some(p) => (lambda * tx_dist_scale * p.lambda_scale, p.preserve_guards),
+    None => {
+      // Historical opt-in behavior (byte-identical when the stack is off):
+      // Skip trellis when quantizer is too coarse for beneficial
+      // optimization. At ac_quant >= 200 (~Q80 and below), the dampening
+      // would be ≤ 0.4 and the effect is empirically zero (< 0.01% BPP
+      // savings).
+      if ac_quant >= 200 {
+        return eob;
+      }
+      let dampening = (80.0 / (ac_quant as f64).max(80.0)).min(1.0);
+      // The unit lambda (no extra scale) is the calibrated optimum: a
+      // 2026-06-18 sweep over lambda scales {0.5, 0.75, 1.0, 1.5, 2.0} on a
+      // 38-image real-photo corpus showed BD-rate is best at 1.0
+      // (0.5:-0.39% < 0.75:-0.75% < 1.0:-0.94% > 1.5:+0.15% > 2.0:+1.83%).
+      // See benchmarks/trellis_rdoq_2026-06-18.md. NOTE (COEFF_RD_STACK
+      // study): that sweep ran over dead-zone-quantized input at the
+      // qualities where this gate lets the trellis run at all — it is a
+      // fit of THIS posture, not of the armed stack's.
+      (lambda * tx_dist_scale * dampening, false)
+    }
+  };
 
   let tx_class = tx_type_to_class[scan_tx_type as usize];
   let txs_ctx = ContextWriter::get_txsize_entropy_ctx(tx_size);
@@ -193,6 +232,14 @@ pub fn optimize<T: Coefficient>(
       continue;
     }
 
+    // Preserve guard (aom `sharpness != 0`, txb_rdopt.c:287): the EOB may
+    // only be pulled in to a position keeping >= 5 coefficients. The
+    // rate/dist accumulators above still integrate — only candidacy is
+    // gated.
+    if guards && i < 5 {
+      continue;
+    }
+
     // Context switch cost: position i-1 changes from non-EOB to EOB role.
     let non_eob_rate_prev = coeff_rate(
       prev_level,
@@ -279,6 +326,17 @@ pub fn optimize<T: Coefficient>(
         continue;
       }
 
+      // Preserve guards (aom `sharpness != 0`, txb_rdopt.c:118/:151/:275):
+      // level-1 coefficients are never lowered, and near-DC scan positions
+      // (<= 5) need level > 2 — the tune posture protects the small
+      // coefficients that carry texture/grain.
+      if guards {
+        let thr = if i <= 5 { 2 } else { 1 };
+        if orig_level <= thr {
+          continue;
+        }
+      }
+
       let coeff = (coeff_raw as i64) << log_tx_scale;
       let wt = dist_weight(qm, qm_weight_dist, pos);
       let is_eob_coeff = i == best_new_eob - 1;
@@ -318,7 +376,9 @@ pub fn optimize<T: Coefficient>(
       // is Phase 1's job). The early-break still holds: distortion grows
       // monotonically toward level 0, so high-magnitude coefficients are never
       // zeroed (their dist(0) exceeds the best cost immediately).
-      let floor = if is_eob_coeff { 1 } else { 0 };
+      // Under preserve guards the descent floors at 1 everywhere (aom's
+      // sharpness path lowers levels but never zeroes them).
+      let floor = if is_eob_coeff || guards { 1 } else { 0 };
       let mut best_level = orig_level;
       let mut best_cost = dist_at(orig_level) + rate_at(orig_level);
       for level in (floor..orig_level).rev() {
@@ -341,11 +401,72 @@ pub fn optimize<T: Coefficient>(
   }
 
   // Final EOB: find last non-zero in scan order.
-  scan[..n]
+  let final_eob = scan[..n]
     .iter()
     .rposition(|&pos| qcoeffs[pos as usize] != T::cast_from(0))
     .map(|i| i + 1)
-    .unwrap_or(0) as u16
+    .unwrap_or(0) as u16;
+
+  // Phase 3 (armed stack only): per-TU zero-out counterweight — libaom's
+  // block-level force-skip comparison (tx_search.c:3294-3311), which aom
+  // runs UN-neutered even under the tunes: zero the whole TU when the
+  // coded rate-distortion loses to the zero block at the BLOCK lambda
+  // (not the trellis's scaled one). This is the balance to the
+  // keep-everything posture on flat blocks; without it the stack has no
+  // whole-TU drop path at all (Phase 1 keeps >= 1 coefficient and the
+  // guards keep level-1s).
+  if let Some(p) = posture
+    && p.tu_zero_out
+    && final_eob > 0
+  {
+    let lambda_block = lambda * tx_dist_scale;
+    let m = final_eob as usize;
+    // Coded side: EOB position + all coefficient symbols (the same CDF
+    // rate model as Phases 1-2) + the txb_skip=0 flag. Zero side: the
+    // txb_skip=1 flag alone. The flag-cost delta is evaluated at context
+    // 0 — both sides share the same (neighbor-dependent) context, the
+    // delta is 1-3 bits, second-order vs the coefficient mass being
+    // priced; the neighbor context is not derivable from within one TU.
+    let skip_cdf = &fc.txb_skip_cdf[txs_ctx][0];
+    let rate_coded = estimate_block_coeff_rate(
+      qcoeffs, final_eob, tx_size, tx_type, fc, plane_type,
+    ) + cdf_rate(0, skip_cdf);
+    let rate_zero = cdf_rate(1, skip_cdf);
+
+    // Distortion delta from zeroing every kept coefficient (positions
+    // whose quantized level is already 0 contribute equally to both
+    // sides and cancel). DC (scan index 0) uses the DC quantizer.
+    let dc_quant = qc.dc_quant() as u32;
+    let mut dist_delta = 0.0f64;
+    for (i, &pos16) in scan.iter().enumerate().take(m) {
+      let pos = pos16 as usize;
+      let level = i32::cast_from(qcoeffs[pos]).unsigned_abs();
+      if level == 0 {
+        continue;
+      }
+      let base_quant = if i == 0 { dc_quant } else { ac_quant };
+      let eff_quant = effective_ac_quant(base_quant, pos, qm);
+      if eff_quant == 0 {
+        continue;
+      }
+      let wt = dist_weight(qm, qm_weight_dist, pos);
+      let coeff = (i32::cast_from(coeffs[pos]) as i64) << log_tx_scale;
+      let dist_keep = sq_err(coeff, level, eff_quant, log_tx_scale, wt);
+      let dist_zero = sq_err(coeff, 0, eff_quant, log_tx_scale, wt);
+      dist_delta += (dist_zero - dist_keep) as f64;
+    }
+
+    // aom zeroes on >= (ties go to skip): coded loses when its extra
+    // distortion-savings do not cover its extra rate at block lambda.
+    if dist_delta <= lambda_block * (rate_coded - rate_zero) {
+      for &pos in scan.iter().take(m) {
+        qcoeffs[pos as usize] = T::cast_from(0);
+      }
+      return 0;
+    }
+  }
+
+  final_eob
 }
 
 /// Closed-form estimate of a transform block's coefficient coding rate (bits),
@@ -360,8 +481,8 @@ pub fn optimize<T: Coefficient>(
 /// encode path — the 2026-06-18 Stage-2 study measured that replacing real coeff
 /// coding with this estimate caps at ~5% encoder speedup (coefficient
 /// entropy-coding is only ~5% of RDO cost; transform/quant/distortion dominate),
-/// which did not justify a user-facing flag. Kept for future RDO rate work.
-#[allow(dead_code)]
+/// which did not justify a user-facing flag. Also serves as the coded-side
+/// rate of the armed stack's per-TU zero-out comparison (Phase 3).
 pub(crate) fn estimate_block_coeff_rate<T: Coefficient>(
   qcoeffs: &[T], eob: u16, tx_size: TxSize, tx_type: TxType, fc: &CDFContext,
   plane_type: usize,
@@ -700,6 +821,221 @@ mod tests {
         }
       }
     }
+  }
+
+  fn mk_qc(qindex: u8) -> QuantizationContext {
+    let mut qc = QuantizationContext::default();
+    qc.update(qindex, TxSize::TX_4X4, true, 8, 0, 0, None);
+    qc
+  }
+
+  /// Build a 4x4 block whose quantized levels along the scan are exactly
+  /// `levels`, returning (coeffs, qcoeffs, eob).
+  fn mk_block(
+    qc: &QuantizationContext, levels: &[u32],
+  ) -> ([i32; 16], [i32; 16], u16) {
+    let scan =
+      &av1_scan_orders[TxSize::TX_4X4 as usize][TxType::DCT_DCT as usize].scan;
+    let mut coeffs = [0i32; 16];
+    for (i, &l) in levels.iter().enumerate() {
+      let q = if i == 0 { qc.dc_quant() } else { qc.ac_quant() } as i32;
+      coeffs[scan[i] as usize] = l as i32 * q;
+    }
+    let mut qcoeffs = [0i32; 16];
+    let eob =
+      qc.quantize(&coeffs, &mut qcoeffs, TxSize::TX_4X4, TxType::DCT_DCT);
+    // The exact-multiple construction must quantize back to the levels.
+    for (i, &l) in levels.iter().enumerate() {
+      assert_eq!(
+        qcoeffs[scan[i] as usize].unsigned_abs(),
+        l,
+        "construction: level at scan {i}"
+      );
+    }
+    (coeffs, qcoeffs, eob)
+  }
+
+  const HUGE_LAMBDA: f64 = 1e13;
+
+  /// posture None keeps the historical coarse-quant disable byte-identically:
+  /// at ac_quant >= 200 the trellis is a no-op even with a huge lambda,
+  /// while the armed posture optimizes the same block.
+  #[test]
+  fn posture_none_keeps_coarse_quant_gate() {
+    let qc = mk_qc(250);
+    assert!(qc.ac_quant() >= 200, "test premise: coarse quantizer");
+    let fc = CDFContext::new(0);
+    let levels = [10u32, 3, 1, 1, 1, 1, 1, 1];
+    let (coeffs, qcoeffs0, eob0) = mk_block(&qc, &levels);
+
+    let mut q_none = qcoeffs0;
+    let eob_none = optimize(
+      &mut q_none,
+      &coeffs,
+      &qc,
+      TxSize::TX_4X4,
+      TxType::DCT_DCT,
+      HUGE_LAMBDA,
+      None,
+      false,
+      eob0,
+      &fc,
+      0,
+      None,
+    );
+    assert_eq!(eob_none, eob0, "gate must early-return");
+    assert_eq!(q_none, qcoeffs0, "gate must not touch coefficients");
+
+    let mut q_armed = qcoeffs0;
+    let eob_armed = optimize(
+      &mut q_armed,
+      &coeffs,
+      &qc,
+      TxSize::TX_4X4,
+      TxType::DCT_DCT,
+      HUGE_LAMBDA,
+      None,
+      false,
+      eob0,
+      &fc,
+      0,
+      Some(StackPosture {
+        lambda_scale: 1.0,
+        preserve_guards: false,
+        tu_zero_out: false,
+      }),
+    );
+    assert!(
+      eob_armed < eob0,
+      "armed posture must optimize where the gate refused ({eob_armed} vs {eob0})"
+    );
+  }
+
+  /// Preserve guards: level-1 interiors survive, level>2 descends to the
+  /// floor of 1 (never 0), and the EOB cannot be pulled below 5 kept
+  /// coefficients — while the unguarded posture collapses the same block.
+  #[test]
+  fn preserve_guards_protect_small_levels_and_eob() {
+    let qc = mk_qc(120);
+    assert!(qc.ac_quant() < 200, "test premise: trellis-active quantizer");
+    let fc = CDFContext::new(0);
+    let scan =
+      &av1_scan_orders[TxSize::TX_4X4 as usize][TxType::DCT_DCT as usize].scan;
+    let levels = [10u32, 3, 1, 1, 1, 1, 1, 1];
+    let (coeffs, qcoeffs0, eob0) = mk_block(&qc, &levels);
+    assert_eq!(eob0, 8);
+
+    let mut q_free = qcoeffs0;
+    let eob_free = optimize(
+      &mut q_free,
+      &coeffs,
+      &qc,
+      TxSize::TX_4X4,
+      TxType::DCT_DCT,
+      HUGE_LAMBDA,
+      None,
+      false,
+      eob0,
+      &fc,
+      0,
+      Some(StackPosture {
+        lambda_scale: 1.0,
+        preserve_guards: false,
+        tu_zero_out: false,
+      }),
+    );
+    assert_eq!(
+      eob_free, 1,
+      "unguarded huge-lambda posture collapses to DC-only"
+    );
+
+    let mut q_guard = qcoeffs0;
+    let eob_guard = optimize(
+      &mut q_guard,
+      &coeffs,
+      &qc,
+      TxSize::TX_4X4,
+      TxType::DCT_DCT,
+      HUGE_LAMBDA,
+      None,
+      false,
+      eob0,
+      &fc,
+      0,
+      Some(StackPosture {
+        lambda_scale: 1.0,
+        preserve_guards: true,
+        tu_zero_out: false,
+      }),
+    );
+    assert_eq!(eob_guard, 5, "guarded EOB pull-in floors at 5 kept coeffs");
+    // Level 3 at scan 1 (pos <= 5, level > 2) descends but floors at 1.
+    assert_eq!(q_guard[scan[1] as usize].unsigned_abs(), 1);
+    // Level-1 interiors are never zeroed.
+    for i in 2..5 {
+      assert_eq!(
+        q_guard[scan[i] as usize].unsigned_abs(),
+        1,
+        "guarded level-1 at scan {i} must survive"
+      );
+    }
+  }
+
+  /// The per-TU zero-out counterweight zeroes the whole TU (guards
+  /// notwithstanding) when the coded RD loses at block lambda, and leaves
+  /// high-energy blocks alone at a sane lambda.
+  #[test]
+  fn tu_zero_out_drops_losing_tu_and_keeps_winning_tu() {
+    let qc = mk_qc(120);
+    let fc = CDFContext::new(0);
+    let levels = [10u32, 3, 1, 1, 1, 1, 1, 1];
+    let (coeffs, qcoeffs0, eob0) = mk_block(&qc, &levels);
+
+    let posture = |tuz: bool| {
+      Some(StackPosture {
+        lambda_scale: 1.0,
+        preserve_guards: true,
+        tu_zero_out: tuz,
+      })
+    };
+
+    let mut q_tuz = qcoeffs0;
+    let eob_tuz = optimize(
+      &mut q_tuz,
+      &coeffs,
+      &qc,
+      TxSize::TX_4X4,
+      TxType::DCT_DCT,
+      HUGE_LAMBDA,
+      None,
+      false,
+      eob0,
+      &fc,
+      0,
+      posture(true),
+    );
+    assert_eq!(eob_tuz, 0, "losing TU must be zeroed whole");
+    assert!(q_tuz.iter().all(|&c| c == 0));
+
+    // At a tiny lambda the distortion side dominates: the TU survives
+    // untouched by the zero-out.
+    let mut q_keep = qcoeffs0;
+    let eob_keep = optimize(
+      &mut q_keep,
+      &coeffs,
+      &qc,
+      TxSize::TX_4X4,
+      TxType::DCT_DCT,
+      1e-6,
+      None,
+      false,
+      eob0,
+      &fc,
+      0,
+      posture(true),
+    );
+    assert_eq!(eob_keep, eob0, "winning TU survives the zero-out check");
+    assert_eq!(q_keep, qcoeffs0);
   }
 
   #[test]
