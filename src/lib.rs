@@ -96,6 +96,7 @@ pub(crate) mod asm;
 mod dist;
 mod ec;
 mod intrabc;
+mod intrabc_hash;
 mod palette;
 mod partition;
 mod predict;
