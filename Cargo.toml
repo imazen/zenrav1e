@@ -65,6 +65,11 @@ signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
 quick_test = []
 desync_finder = ["backtrace"]
+# COOPT_LOOP decision-trace (docs/COOPT_LOOP_PLAN.md Phase 0 part 2): a per-RD-
+# evaluation log of the (lambda, rate, distortion, cost) currency, the dataset
+# generator for the joint lambda-D-R fits. Compiled out when off (byte-identical
+# encodes by construction — the emit sites are behind `#[cfg]`). Analysis-only.
+cooptloop_trace = []
 bench = []
 check_asm = []
 # Internal: exposes `pub mod fuzzing` so `tests/fuzz_regression.rs` can replay

@@ -93,6 +93,10 @@ mod cpu_features;
 
 mod activity;
 pub(crate) mod asm;
+/// COOPT_LOOP decision-trace instrumentation (analysis-only; behind the
+/// `cooptloop_trace` feature — a stock build compiles this away entirely).
+#[cfg(feature = "cooptloop_trace")]
+pub mod cooptloop_trace;
 mod dist;
 mod ec;
 mod intrabc;

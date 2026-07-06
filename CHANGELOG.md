@@ -15,6 +15,14 @@
   window, same exhaustive-construction impact.
 
 ### Added
+- **`cooptloop_trace` feature** (default-off, analysis-only): a per-RD-evaluation
+  decision trace of the `(lambda, rate, distortion, cost)` currency that
+  `compute_rd_cost` combines — the dataset generator for the COOPT_LOOP joint
+  lambda-D-R fits (zenavif `docs/COOPT_LOOP_PLAN.md` Phase 0 part 2). `pub mod
+  cooptloop_trace` (`record`/`len`/`clear`/`dump_tsv`) exists only under the
+  feature; a stock build is byte-identical (the emit sites are `#[cfg]`-gated).
+  `tests/cooptloop_trace.rs` gates liveness + the `cost == distortion +
+  lambda*rate_bits` currency identity + the TSV schema.
 - **Executable gates for the engineering-baseline invariants** (zenavif
   `docs/ENGINEERING_BASELINE.md` section A): `just gate-identity`
   (`examples/gate_identity.rs` + `tests/gate_identity_pins.tsv`) pins the

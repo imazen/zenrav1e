@@ -834,7 +834,18 @@ pub fn compute_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, rate: u32, distortion: ScaledDistortion,
 ) -> f64 {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  fi.lambda.mul_add(rate_in_bits, distortion.0 as f64)
+  let cost = fi.lambda.mul_add(rate_in_bits, distortion.0 as f64);
+  // COOPT_LOOP trace (analysis-only; the line does not exist without the
+  // feature, so stock encodes are byte-identical).
+  #[cfg(feature = "cooptloop_trace")]
+  crate::cooptloop_trace::record(
+    fi.lambda,
+    rate_in_bits,
+    distortion.0 as f64,
+    cost,
+    0,
+  );
+  cost
 }
 
 /// `compute_rd_cost` with a per-block λ scale (the per-16×16 ssim-rdmult
@@ -846,7 +857,17 @@ pub(crate) fn compute_rd_cost_scaled<T: Pixel>(
   lambda_scale: f64,
 ) -> f64 {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  (fi.lambda * lambda_scale).mul_add(rate_in_bits, distortion.0 as f64)
+  let lambda = fi.lambda * lambda_scale;
+  let cost = lambda.mul_add(rate_in_bits, distortion.0 as f64);
+  #[cfg(feature = "cooptloop_trace")]
+  crate::cooptloop_trace::record(
+    lambda,
+    rate_in_bits,
+    distortion.0 as f64,
+    cost,
+    1,
+  );
+  cost
 }
 
 /// Per-block λ scale from the per-16×16 ssim-rdmult factor map
