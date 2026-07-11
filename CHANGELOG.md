@@ -22,7 +22,14 @@
   cooptloop_trace` (`record`/`len`/`clear`/`dump_tsv`) exists only under the
   feature; a stock build is byte-identical (the emit sites are `#[cfg]`-gated).
   `tests/cooptloop_trace.rs` gates liveness + the `cost == distortion +
-  lambda*rate_bits` currency identity + the TSV schema.
+  lambda*rate_bits` currency identity + the TSV schema. Enriched same-day with
+  **block decision scopes**: `rdo_mode_decision` opens a thread-local scope
+  (`begin_block`) that stamps every currency row with `(block_seq, bo, bsize)`
+  and closes with a decision row (`end_block`: chosen mode/tx/skip + rd_cost),
+  so chosen-vs-evaluated joins need no per-candidate plumbing; plus
+  `COOPTLOOP_TRACE_CAP` row bound with counted (never silent) drops, and
+  `examples/cooptloop_trace_dump.rs` (PPM/synthetic → trace TSV, the
+  per-encode dataset generator).
 - **Executable gates for the engineering-baseline invariants** (zenavif
   `docs/ENGINEERING_BASELINE.md` section A): `just gate-identity`
   (`examples/gate_identity.rs` + `tests/gate_identity_pins.tsv`) pins the

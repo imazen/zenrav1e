@@ -76,9 +76,11 @@ fn trace_fires_and_currency_identity_holds() {
   }
   assert!(!obu.is_empty(), "encoder produced no data");
 
-  // The RD loop must have evaluated many candidates (liveness).
+  // The RD loop must have evaluated many candidates (liveness), with no
+  // capped-out drops (a dropped-rows trace is INCOMPLETE by contract).
   let n = cooptloop_trace::len();
   assert!(n > 100, "expected a busy RD trace, got {n} records");
+  assert_eq!(cooptloop_trace::dropped(), 0, "unexpected capped drops");
 
   // Dump + verify the documented schema and that the row count is exact.
   let path = std::env::temp_dir().join("cooptloop_trace_test.tsv");
@@ -89,7 +91,8 @@ fn trace_fires_and_currency_identity_holds() {
   let text = std::fs::read_to_string(path).unwrap();
   assert_eq!(
     text.lines().next().unwrap(),
-    "kind\tlambda\trate_bits\tdistortion\trd_cost",
+    "block_seq\tbo_x\tbo_y\tbsize\trow\tlambda\trate_bits\tdistortion\t\
+     rd_cost\tmode\ttx_size\tskip",
     "schema header drift"
   );
   assert_eq!(
@@ -98,23 +101,57 @@ fn trace_fires_and_currency_identity_holds() {
     "TSV data rows must equal record count"
   );
 
-  // The currency identity the fits rely on: cost == distortion + lambda*rate_bits
-  // (recomputed with the same fused mul_add, so bit-exact up to the text
-  // round-trip, which Rust's {} guarantees round-trips).
-  let mut checked = 0usize;
-  for line in text.lines().skip(1).take(500) {
-    let c: Vec<f64> =
-      line.split('\t').skip(1).map(|x| x.parse().unwrap()).collect();
-    let (lambda, rate_bits, distortion, cost) = (c[0], c[1], c[2], c[3]);
-    let expect = lambda.mul_add(rate_bits, distortion);
-    assert!(
-      (expect - cost).abs() <= 1e-6 * cost.abs().max(1.0),
-      "currency identity broken: {lambda}*{rate_bits}+{distortion} \
-       = {expect} != {cost}"
-    );
-    checked += 1;
+  // Parse rows: [block_seq, bo_x, bo_y, bsize, row] ints + 4 floats + 3 ints.
+  let mut evals = 0usize;
+  let mut decisions = 0usize;
+  let mut eval_seqs = std::collections::HashSet::new();
+  let mut decision_seqs = Vec::new();
+  for line in text.lines().skip(1) {
+    let c: Vec<&str> = line.split('\t').collect();
+    assert_eq!(c.len(), 12, "row width");
+    let block_seq: u64 = c[0].parse().unwrap();
+    let row: u8 = c[4].parse().unwrap();
+    match row {
+      0 | 1 => {
+        // Currency identity the fits rely on:
+        // cost == distortion + lambda*rate_bits (same fused mul_add; text
+        // round-trip is exact for Rust's {} float formatting).
+        let (lambda, rate_bits): (f64, f64) =
+          (c[5].parse().unwrap(), c[6].parse().unwrap());
+        let (distortion, cost): (f64, f64) =
+          (c[7].parse().unwrap(), c[8].parse().unwrap());
+        let expect = lambda.mul_add(rate_bits, distortion);
+        assert!(
+          (expect - cost).abs() <= 1e-6 * cost.abs().max(1.0),
+          "currency identity broken: {lambda}*{rate_bits}+{distortion} \
+           = {expect} != {cost}"
+        );
+        evals += 1;
+        eval_seqs.insert(block_seq);
+      }
+      2 => {
+        // Decision rows carry the chosen (mode, tx_size, skip) + rd_cost.
+        let cost: f64 = c[8].parse().unwrap();
+        assert!(cost.is_finite() && cost >= 0.0, "bad decision rd_cost");
+        assert_ne!(c[9], "255", "decision row must carry a real mode");
+        assert!(block_seq > 0, "decision row outside any scope");
+        decisions += 1;
+        decision_seqs.push(block_seq);
+      }
+      other => panic!("unknown row kind {other}"),
+    }
   }
-  assert!(checked > 0, "no rows checked");
+  assert!(evals > 100, "expected many currency rows, got {evals}");
+  assert!(decisions > 0, "expected block decision rows, got none");
+  // Scope integrity: every decision's search emitted currency rows under the
+  // same block_seq (the chosen-vs-evaluated join the analyzer relies on).
+  let joined = decision_seqs.iter().filter(|s| eval_seqs.contains(s)).count();
+  assert!(
+    joined * 10 >= decision_seqs.len() * 9,
+    "fewer than 90% of decision scopes have currency rows \
+     ({joined}/{})",
+    decision_seqs.len()
+  );
 
   let _ = std::fs::remove_file(path);
 }

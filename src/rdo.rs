@@ -1215,6 +1215,15 @@ pub fn rdo_mode_decision<T: Pixel>(
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
+  // COOPT_LOOP decision scope: currency rows emitted during this block's
+  // search inherit its (seq, bo, bsize) stamp; `end_block` at the return
+  // writes the decision row (analysis-only; compiled out without the feature).
+  #[cfg(feature = "cooptloop_trace")]
+  crate::cooptloop_trace::begin_block(
+    tile_bo.0.x as u16,
+    tile_bo.0.y as u16,
+    bsize as u8,
+  );
   let ssim_scale =
     ssim_rdmult_scale(fi, ts.to_frame_block_offset(tile_bo), bsize);
 
@@ -1369,6 +1378,15 @@ pub fn rdo_mode_decision<T: Pixel>(
   cw.bc.blocks.set_motion_vectors(tile_bo, bsize, best.mvs);
 
   assert!(best.rd_cost >= 0_f64);
+
+  #[cfg(feature = "cooptloop_trace")]
+  crate::cooptloop_trace::end_block(
+    best.pred_mode_luma as u8,
+    best.tx_size as u8,
+    best.skip,
+    best.rd_cost,
+    fi.lambda,
+  );
 
   PartitionParameters {
     bo: tile_bo,
