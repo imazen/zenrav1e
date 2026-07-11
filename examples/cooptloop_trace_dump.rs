@@ -4,7 +4,10 @@
 //!
 //! Usage:
 //!   cargo run --release --features cooptloop_trace --example cooptloop_trace_dump -- \
-//!     OUT.tsv [INPUT.ppm] [--speed N] [--quantizer N]
+//!     OUT.tsv [INPUT.ppm] [--speed N] [--quantizer N] [--ivf-out PATH]
+//!
+//! `--ivf-out` also writes the encode as a decodable IVF (aomdec/dav1d/
+//! rav1d) so the trace can be joined to decoded-quality scores.
 //!
 //! Without INPUT.ppm a deterministic gradient+noise synthetic frame is used
 //! (the tests' fixture). The encode itself is discarded — the trace is the
@@ -63,6 +66,7 @@ fn main() {
   let mut input: Option<String> = None;
   let mut speed: u8 = 6;
   let mut quantizer: usize = 100;
+  let mut ivf_out: Option<String> = None;
   while let Some(a) = args.next() {
     match a.as_str() {
       "--speed" => {
@@ -71,6 +75,9 @@ fn main() {
       "--quantizer" => {
         quantizer =
           args.next().expect("--quantizer N").parse().expect("quantizer")
+      }
+      "--ivf-out" => {
+        ivf_out = Some(args.next().expect("--ivf-out PATH"));
       }
       p => input = Some(p.to_string()),
     }
@@ -166,8 +173,35 @@ fn main() {
   ctx.send_frame(f).unwrap();
   ctx.flush();
   let mut bytes = 0usize;
+  let mut frames: Vec<Vec<u8>> = Vec::new();
   while let Ok(pkt) = ctx.receive_packet() {
     bytes += pkt.data.len();
+    frames.push(pkt.data);
+  }
+
+  // Optional IVF wrap (decodable by aomdec/dav1d/rav1d) so the trace's
+  // encode can be scored — the D-vs-metric join the Phase-1 fits need.
+  if let Some(path) = &ivf_out {
+    use std::io::Write;
+    let mut fout =
+      std::io::BufWriter::new(std::fs::File::create(path).expect("ivf out"));
+    // 32-byte IVF header: DKIF v0, hdr len 32, AV01, w, h, timebase 25/1,
+    // frame count, unused.
+    fout.write_all(b"DKIF").unwrap();
+    fout.write_all(&0u16.to_le_bytes()).unwrap();
+    fout.write_all(&32u16.to_le_bytes()).unwrap();
+    fout.write_all(b"AV01").unwrap();
+    fout.write_all(&(w as u16).to_le_bytes()).unwrap();
+    fout.write_all(&(h as u16).to_le_bytes()).unwrap();
+    fout.write_all(&25u32.to_le_bytes()).unwrap();
+    fout.write_all(&1u32.to_le_bytes()).unwrap();
+    fout.write_all(&(frames.len() as u32).to_le_bytes()).unwrap();
+    fout.write_all(&0u32.to_le_bytes()).unwrap();
+    for (i, fr) in frames.iter().enumerate() {
+      fout.write_all(&(fr.len() as u32).to_le_bytes()).unwrap();
+      fout.write_all(&(i as u64).to_le_bytes()).unwrap();
+      fout.write_all(fr).unwrap();
+    }
   }
 
   let n = cooptloop_trace::dump_tsv(&out).expect("dump trace");
