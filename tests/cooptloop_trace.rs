@@ -104,12 +104,20 @@ fn trace_fires_and_currency_identity_holds() {
   // Parse rows: [block_seq, bo_x, bo_y, bsize, row] ints + 4 floats + 3 ints.
   let mut evals = 0usize;
   let mut decisions = 0usize;
+  let mut commits = 0usize;
   let mut eval_seqs = std::collections::HashSet::new();
   let mut decision_seqs = Vec::new();
+  // (bo_x, bo_y, bsize) -> last decision seq (the survivor-join the
+  // analyzer performs; valid under threads=1 ordering).
+  let mut last_decision: std::collections::HashMap<(u16, u16, u8), u64> =
+    std::collections::HashMap::new();
+  let mut commit_joined = 0usize;
   for line in text.lines().skip(1) {
     let c: Vec<&str> = line.split('\t').collect();
     assert_eq!(c.len(), 12, "row width");
     let block_seq: u64 = c[0].parse().unwrap();
+    let key: (u16, u16, u8) =
+      (c[1].parse().unwrap(), c[2].parse().unwrap(), c[3].parse().unwrap());
     let row: u8 = c[4].parse().unwrap();
     match row {
       0 | 1 => {
@@ -137,12 +145,33 @@ fn trace_fires_and_currency_identity_holds() {
         assert!(block_seq > 0, "decision row outside any scope");
         decisions += 1;
         decision_seqs.push(block_seq);
+        last_decision.insert(key, block_seq);
+      }
+      3 => {
+        // Commit rows mark blocks encoded into the final bitstream; each
+        // must join to a previously-seen decision scope at the same
+        // (bo, bsize).
+        assert_ne!(c[9], "255", "commit row must carry a real mode");
+        commits += 1;
+        if last_decision.contains_key(&key) {
+          commit_joined += 1;
+        }
       }
       other => panic!("unknown row kind {other}"),
     }
   }
   assert!(evals > 100, "expected many currency rows, got {evals}");
   assert!(decisions > 0, "expected block decision rows, got none");
+  assert!(commits > 0, "expected commit rows (final-pass marking), got none");
+  assert!(
+    commits < decisions,
+    "commits ({commits}) must be a strict subset of decisions \
+     ({decisions}) — the search evaluates more leaves than survive"
+  );
+  assert_eq!(
+    commit_joined, commits,
+    "every commit row must join to a decision scope at its (bo, bsize)"
+  );
   // Scope integrity: every decision's search emitted currency rows under the
   // same block_seq (the chosen-vs-evaluated join the analyzer relies on).
   let joined = decision_seqs.iter().filter(|s| eval_seqs.contains(s)).count();

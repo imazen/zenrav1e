@@ -111,6 +111,34 @@ pub fn end_block(
   CTX.with(|c| c.set((0, 0, 0, 255)));
 }
 
+/// Mark a block as COMMITTED to the final bitstream (row = 3). Emitted from
+/// `encode_block_with_modes` on the final (non-trial) encode pass — the pass
+/// that collects `EncoderStats` — never from RDO trials. The analyzer joins a
+/// commit row to the LAST decision scope with the same `(bo, bsize)` (valid
+/// under the threads=1 discipline: each superblock's search precedes its
+/// commit), which is what separates SURVIVING scopes from partition-leaves
+/// the search discarded — without it, frame-level aggregation over-counts
+/// (measured 5.9× on rate, 2026-07-11).
+pub fn commit_block(
+  bo_x: u16, bo_y: u16, bsize: u8, mode: u8, tx_size: u8, skip: bool,
+  rd_cost: f64,
+) {
+  push(Record {
+    block_seq: 0, // commits are outside any decision scope by construction
+    bo_x,
+    bo_y,
+    bsize,
+    row: 3,
+    lambda: f64::NAN,
+    rate_bits: f64::NAN,
+    distortion: f64::NAN,
+    cost: rd_cost,
+    mode,
+    tx_size,
+    skip: skip as u8,
+  });
+}
+
 /// Append one currency evaluation (called from `compute_rd_cost[_scaled]`).
 /// `kind`: 0 = plain, 1 = scaled.
 #[inline]

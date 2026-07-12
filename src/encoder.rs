@@ -4288,6 +4288,23 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     (mode_decision.tx_size, mode_decision.tx_type)
   };
 
+  // COOPT_LOOP trace: mark the block as committed to the final bitstream.
+  // `enc_stats` is Some only on the final (non-trial) encode pass — the RDO
+  // trial call sites pass None — so this fires exactly once per surviving
+  // block (compiled out without the feature).
+  #[cfg(feature = "cooptloop_trace")]
+  if enc_stats.is_some() {
+    crate::cooptloop_trace::commit_block(
+      tile_bo.0.x as u16,
+      tile_bo.0.y as u16,
+      bsize as u8,
+      mode_luma as u8,
+      tx_size as u8,
+      skip,
+      mode_decision.rd_cost,
+    );
+  }
+
   cdef_coded = encode_block_pre_cdef(
     &fi.sequence,
     ts,
@@ -4976,6 +4993,20 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           part_decision.mvs[0],
         );
       }
+
+      // COOPT_LOOP trace: the topdown final encode of the chosen leaf — the
+      // survivor-marking counterpart of the `encode_block_with_modes`
+      // (bottomup/replay) site. Compiled out without the feature.
+      #[cfg(feature = "cooptloop_trace")]
+      crate::cooptloop_trace::commit_block(
+        tile_bo.0.x as u16,
+        tile_bo.0.y as u16,
+        bsize as u8,
+        mode_luma as u8,
+        part_decision.tx_size as u8,
+        skip,
+        part_decision.rd_cost,
+      );
 
       // FIXME: every final block that has gone through the RDO decision process is encoded twice
       cdef_coded = encode_block_pre_cdef(
