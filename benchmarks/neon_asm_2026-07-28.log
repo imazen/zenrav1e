@@ -1,0 +1,2979 @@
+   Compiling zenrav1e v0.2.0 (/Users/lilith/work/zen/zenrav1e)
+warning[E0133]: call to unsafe function `cdef::rust::cdef_filter_block` is unsafe and requires unsafe block
+  --> src/asm/aarch64/cdef.rs:74:5
+   |
+74 | /     rust::cdef_filter_block(
+75 | |       dst,
+76 | |       src,
+77 | |       src_stride,
+...  |
+86 | |       cpu,
+87 | |     );
+   | |_____^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/cdef.rs:68:1
+   |
+68 | / pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
+69 | |   dst: &mut PlaneRegionMut<'_, T>, src: *const T, src_stride: isize,
+70 | |   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
+71 | |   bit_depth: usize, xdec: usize, ydec: usize, edges: u8, cpu: CpuFeatureLevel,
+72 | | ) {
+   | |_^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+   = note: `#[warn(unsafe_op_in_unsafe_fn)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:109:21
+    |
+109 |           let top = src.offset(-2 * src_stride);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/cdef.rs:68:1
+    |
+ 68 | / pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
+ 69 | |   dst: &mut PlaneRegionMut<'_, T>, src: *const T, src_stride: isize,
+ 70 | |   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
+ 71 | |   bit_depth: usize, xdec: usize, ydec: usize, edges: u8, cpu: CpuFeatureLevel,
+ 72 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:110:24
+    |
+110 |           let bottom = src.offset(h as isize * src_stride);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:118:28
+    |
+118 |             let mut wptr = src.offset(-2) as *const u8;
+    |                            ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:120:42
+    |
+120 |               left.data[i as usize][0] = *wptr;
+    |                                          ^^^^^ dereference of raw pointer
+    |
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:121:42
+    |
+121 |               left.data[i as usize][1] = *wptr.add(1);
+    |                                          ^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:121:43
+    |
+121 |               left.data[i as usize][1] = *wptr.add(1);
+    |                                           ^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:122:22
+    |
+122 |               wptr = wptr.offset(src_stride);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:134:11
+    |
+134 | /           (pad)(
+135 | |             tmp.data.as_mut_ptr().offset(2 * tmpstride + 8),
+136 | |             src as *const u8,
+137 | |             T::to_asm_stride(src_stride as usize),
+...   |
+142 | |             edges.into(),
+143 | |           );
+    | |___________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:135:13
+    |
+135 |             tmp.data.as_mut_ptr().offset(2 * tmpstride + 8),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:145:11
+    |
+145 | /           (func)(
+146 | |             dst.data_ptr_mut() as *mut u8,
+147 | |             T::to_asm_stride(dst.plane_cfg.stride),
+148 | |             tmp.data.as_ptr().offset(2 * tmpstride + 8),
+...   |
+154 | |             edges.into(),
+155 | |           );
+    | |___________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:148:13
+    |
+148 |             tmp.data.as_ptr().offset(2 * tmpstride + 8),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:176:21
+    |
+176 |           let top = src.offset(-2 * src_stride);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:177:24
+    |
+177 |           let bottom = src.offset(h as isize * src_stride);
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:181:28
+    |
+181 |             let mut wptr = src.offset(-2) as *const u16;
+    |                            ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:183:42
+    |
+183 |               left.data[i as usize][0] = *wptr;
+    |                                          ^^^^^ dereference of raw pointer
+    |
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:184:42
+    |
+184 |               left.data[i as usize][1] = *wptr.add(1);
+    |                                          ^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:184:43
+    |
+184 |               left.data[i as usize][1] = *wptr.add(1);
+    |                                           ^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:185:22
+    |
+185 |               wptr = wptr.offset(src_stride);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:189:11
+    |
+189 | /           (pad)(
+190 | |             tmp.data.as_mut_ptr().offset(2 * tmpstride + 8),
+191 | |             src as *const u16,
+192 | |             T::to_asm_stride(src_stride as usize),
+...   |
+197 | |             edges.into(),
+198 | |           );
+    | |___________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:190:13
+    |
+190 |             tmp.data.as_mut_ptr().offset(2 * tmpstride + 8),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:200:11
+    |
+200 | /           (func)(
+201 | |             dst.data_ptr_mut() as *mut u16,
+202 | |             T::to_asm_stride(dst.plane_cfg.stride),
+203 | |             tmp.data.as_ptr().offset(2 * tmpstride + 8),
+...   |
+210 | |             (1 << bit_depth) - 1,
+211 | |           );
+    | |___________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::offset` is unsafe and requires unsafe block
+   --> src/asm/aarch64/cdef.rs:203:13
+    |
+203 |             tmp.data.as_ptr().offset(2 * tmpstride + 8),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_z1_upsample_edge_8bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:247:11
+    |
+247 |     U8 => rav1e_ipred_z1_upsample_edge_8bpc_neon(o as _, sz, i as _, n),
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:243:1
+    |
+243 | / unsafe fn ipred_z1_upsample_edge<T: Pixel>(
+244 | |   o: *mut T, sz: c_int, i: *const T, n: c_int, m: c_int,
+245 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_z1_upsample_edge_16bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:248:12
+    |
+248 |     U16 => rav1e_ipred_z1_upsample_edge_16bpc_neon(o as _, sz, i as _, n, m),
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_z2_upsample_edge_8bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:256:11
+    |
+256 |     U8 => rav1e_ipred_z2_upsample_edge_8bpc_neon(o as _, sz, i as _),
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:252:1
+    |
+252 | / unsafe fn ipred_z2_upsample_edge<T: Pixel>(
+253 | |   o: *mut T, sz: c_int, i: *const T, m: c_int,
+254 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_z2_upsample_edge_16bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:257:12
+    |
+257 |     U16 => rav1e_ipred_z2_upsample_edge_16bpc_neon(o as _, sz, i as _, m),
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_z1_filter_edge_8bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:265:11
+    |
+265 |     U8 => rav1e_ipred_z1_filter_edge_8bpc_neon(o as _, sz, i as _, n, s),
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:261:1
+    |
+261 | / unsafe fn ipred_z1_filter_edge<T: Pixel>(
+262 | |   o: *mut T, sz: c_int, i: *const T, n: c_int, s: c_int,
+263 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_z1_filter_edge_16bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:266:12
+    |
+266 |     U16 => rav1e_ipred_z1_filter_edge_16bpc_neon(o as _, sz, i as _, n, s),
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_reverse_8bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:272:11
+    |
+272 |     U8 => rav1e_ipred_reverse_8bpc_neon(o as _, i as _, n),
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:270:1
+    |
+270 | unsafe fn ipred_reverse<T: Pixel>(o: *mut T, i: *const T, n: c_int) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::rav1e_ipred_reverse_16bpc_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:273:12
+    |
+273 |     U16 => rav1e_ipred_reverse_16bpc_neon(o as _, i as _, n),
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:289:13
+    |
+289 |       U8 => self.0[u](dst as _, stride, src as _, w, h, d, max_base),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:283:3
+    |
+283 | /   unsafe fn ipred_fill<T: Pixel>(
+284 | |     self, dst: *mut T, stride: ptrdiff_t, src: *const T, w: c_int, h: c_int,
+285 | |     d: c_int, max_base: c_int, upsample: bool,
+286 | |   ) {
+    | |___^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:290:14
+    |
+290 |       U16 => self.1[u](dst as _, stride, src as _, w, h, d, max_base),
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:316:13
+    |
+316 |       U8 => self.0[u](dst as _, stride, top as _, left as _, w, h, dx, dy),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:309:3
+    |
+309 | /   unsafe fn ipred_fill<T: Pixel>(
+310 | |     self, dst: *mut T, stride: ptrdiff_t, top: *const T, left: *const T,
+311 | |     w: c_int, h: c_int, dx: c_int, dy: c_int, upsample_above: bool,
+312 | |     upsample_left: bool,
+313 | |   ) {
+    | |___^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:317:14
+    |
+317 |       U16 => self.1[u](dst as _, stride, top as _, left as _, w, h, dx, dy),
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z1_upsample_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:345:5
+    |
+345 |     ipred_z1_upsample_edge(out, w + h, src, w + w.min(h), bd_max);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:334:1
+    |
+334 | / unsafe fn ipred_z1<T: Pixel>(
+335 | |   dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
+336 | |   h: c_int, bd_max: c_int, edge_filter: bool, smooth_filter: bool,
+337 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z1_filter_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:352:7
+    |
+352 |       ipred_z1_filter_edge(out, w + h, src, w + w.min(h), strength);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::copy_from_nonoverlapping` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:356:7
+    |
+356 |       out.copy_from_nonoverlapping(src.add(1), n as usize);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:356:36
+    |
+356 |       out.copy_from_nonoverlapping(src.add(1), n as usize);
+    |                                    ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:363:20
+    |
+363 |   let fill_pixel = out.add(max_base_x as usize).read();
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:363:20
+    |
+363 |   let fill_pixel = out.add(max_base_x as usize).read();
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:364:14
+    |
+364 |   let base = out.add(max_base_x as usize + 1);
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:366:5
+    |
+366 |     base.add(i).write(fill_pixel);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:366:5
+    |
+366 |     base.add(i).write(fill_pixel);
+    |     ^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::Fill::ipred_fill` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:369:3
+    |
+369 |   Z1.ipred_fill(dst, stride, out, w, h, dx, max_base_x, upsample_above);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:386:14
+    |
+386 |   let left = out.add(2 * (64 + 1));
+    |              ^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:372:1
+    |
+372 | / unsafe fn ipred_z2<T: Pixel>(
+373 | |   dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
+374 | |   h: c_int, max_w: c_int, max_h: c_int, bd_max: c_int, edge_filter: bool,
+375 | |   smooth_filter: bool,
+376 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:387:13
+    |
+387 |   let top = out.add(64 + 1);
+    |             ^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z2_upsample_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:390:5
+    |
+390 |     ipred_z2_upsample_edge(top, w, src, bd_max);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z1_filter_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:397:7
+    |
+397 |       ipred_z1_filter_edge(top.add(1), max_w.min(w), src, w, strength);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:397:28
+    |
+397 |       ipred_z1_filter_edge(top.add(1), max_w.min(w), src, w, strength);
+    |                            ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::copy_from_nonoverlapping` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:399:9
+    |
+399 | /         top.add((1 + max_w) as _).copy_from_nonoverlapping(
+400 | |           src.add((1 + max_w) as _),
+401 | |           (w - max_w) as _,
+402 | |         );
+    | |_________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:399:9
+    |
+399 |         top.add((1 + max_w) as _).copy_from_nonoverlapping(
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:400:11
+    |
+400 |           src.add((1 + max_w) as _),
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::copy_from_nonoverlapping` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:405:7
+    |
+405 |       top.add(1).copy_from_nonoverlapping(src.add(1), w as _);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:405:7
+    |
+405 |       top.add(1).copy_from_nonoverlapping(src.add(1), w as _);
+    |       ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:405:43
+    |
+405 |       top.add(1).copy_from_nonoverlapping(src.add(1), w as _);
+    |                                           ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:409:5
+    |
+409 |     flipped.write(src.read());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:409:19
+    |
+409 |     flipped.write(src.read());
+    |                   ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_reverse` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:410:5
+    |
+410 |     ipred_reverse(flipped.add(1), src, h);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:410:19
+    |
+410 |     ipred_reverse(flipped.add(1), src, h);
+    |                   ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z2_upsample_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:411:5
+    |
+411 |     ipred_z2_upsample_edge(left, h, flipped, bd_max);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:418:7
+    |
+418 |       flipped.write(src.read());
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:418:21
+    |
+418 |       flipped.write(src.read());
+    |                     ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_reverse` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:419:7
+    |
+419 |       ipred_reverse(flipped.add(1), src, h);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:419:21
+    |
+419 |       ipred_reverse(flipped.add(1), src, h);
+    |                     ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z1_filter_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:420:7
+    |
+420 |       ipred_z1_filter_edge(left.add(1), max_h.min(h), flipped, h, strength);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:420:28
+    |
+420 |       ipred_z1_filter_edge(left.add(1), max_h.min(h), flipped, h, strength);
+    |                            ^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::copy_from_nonoverlapping` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:422:9
+    |
+422 | /         left.add((1 + max_h) as _).copy_from_nonoverlapping(
+423 | |           flipped.add((1 + max_h) as _),
+424 | |           (h - max_h) as _,
+425 | |         );
+    | |_________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:422:9
+    |
+422 |         left.add((1 + max_h) as _).copy_from_nonoverlapping(
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:423:11
+    |
+423 |           flipped.add((1 + max_h) as _),
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_reverse` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:428:7
+    |
+428 |       ipred_reverse(left.add(1), src, h);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:428:21
+    |
+428 |       ipred_reverse(left.add(1), src, h);
+    |                     ^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:431:18
+    |
+431 |   let top_left = src.read();
+    |                  ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:432:3
+    |
+432 |   top.write(top_left);
+    |   ^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:433:3
+    |
+433 |   left.write(top_left);
+    |   ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::Fill2::ipred_fill` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:436:3
+    |
+436 |   Z2.ipred_fill(dst, stride, top, left, w, h, dx, dy, us_above, us_left);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:453:5
+    |
+453 |     tmp.write(src.read());
+    |     ^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/predict.rs:439:1
+    |
+439 | / unsafe fn ipred_z3<T: Pixel>(
+440 | |   dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
+441 | |   h: c_int, bd_max: c_int, edge_filter: bool, smooth_filter: bool,
+442 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:453:15
+    |
+453 |     tmp.write(src.read());
+    |               ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_reverse` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:454:5
+    |
+454 |     ipred_reverse(tmp.add(1), src, h + w.max(h));
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:454:19
+    |
+454 |     ipred_reverse(tmp.add(1), src, h + w.max(h));
+    |                   ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z1_upsample_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:455:5
+    |
+455 |     ipred_z1_upsample_edge(out, w + h, tmp, h + w.min(h), bd_max);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:462:7
+    |
+462 |       tmp.write(src.read());
+    |       ^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:462:17
+    |
+462 |       tmp.write(src.read());
+    |                 ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_reverse` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:463:7
+    |
+463 |       ipred_reverse(tmp.add(1), src, h + w.max(h));
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:463:21
+    |
+463 |       ipred_reverse(tmp.add(1), src, h + w.max(h));
+    |                     ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_z1_filter_edge` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:464:7
+    |
+464 |       ipred_z1_filter_edge(out, w + h, tmp, h + w.min(h), strength);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::ipred_reverse` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:468:7
+    |
+468 |       ipred_reverse(out, src, n);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::read` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:475:20
+    |
+475 |   let fill_pixel = out.add(max_base_y as usize).read();
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:475:20
+    |
+475 |   let fill_pixel = out.add(max_base_y as usize).read();
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:476:14
+    |
+476 |   let base = out.add(max_base_y as usize + 1);
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::write` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:478:5
+    |
+478 |     base.add(i).write(fill_pixel);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:478:5
+    |
+478 |     base.add(i).write(fill_pixel);
+    |     ^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::predict::Fill::ipred_fill` is unsafe and requires unsafe block
+   --> src/asm/aarch64/predict.rs:481:3
+    |
+481 |   Z3.ipred_fill(dst, stride, out, w, h, dy, max_base_y, upsample_left);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vdupq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:50:16
+   |
+50 |     let zero = vdupq_n_s32(0);
+   |                ^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/transform/forward.rs:49:3
+   |
+49 |   unsafe fn zero() -> Self {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:51:5
+   |
+51 |     I32X8::new(zero, zero)
+   |     ^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:56:5
+   |
+56 | /     I32X8::new(
+57 | |       vrshrq_n_s32(vmulq_n_s32(self.vec().0, mul), SHIFT),
+58 | |       vrshrq_n_s32(vmulq_n_s32(self.vec().1, mul), SHIFT),
+59 | |     )
+   | |_____^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/transform/forward.rs:55:3
+   |
+55 |   unsafe fn tx_mul<const SHIFT: i32>(self, mul: i32) -> Self {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vrshrq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:57:7
+   |
+57 |       vrshrq_n_s32(vmulq_n_s32(self.vec().0, mul), SHIFT),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmulq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:57:20
+   |
+57 |       vrshrq_n_s32(vmulq_n_s32(self.vec().0, mul), SHIFT),
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:57:32
+   |
+57 |       vrshrq_n_s32(vmulq_n_s32(self.vec().0, mul), SHIFT),
+   |                                ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vrshrq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:58:7
+   |
+58 |       vrshrq_n_s32(vmulq_n_s32(self.vec().1, mul), SHIFT),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmulq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:58:20
+   |
+58 |       vrshrq_n_s32(vmulq_n_s32(self.vec().1, mul), SHIFT),
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:58:32
+   |
+58 |       vrshrq_n_s32(vmulq_n_s32(self.vec().1, mul), SHIFT),
+   |                                ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:64:5
+   |
+64 | /     I32X8::new(
+65 | |       vhsubq_s32(
+66 | |         self.vec().0,
+67 | |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().0)),
+...  |
+72 | |       ),
+73 | |     )
+   | |_____^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/transform/forward.rs:63:3
+   |
+63 |   unsafe fn rshift1(self) -> Self {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vhsubq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:65:7
+   |
+65 | /       vhsubq_s32(
+66 | |         self.vec().0,
+67 | |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().0)),
+68 | |       ),
+   | |_______^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:66:9
+   |
+66 |         self.vec().0,
+   |         ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_s32_u32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:67:9
+   |
+67 |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().0)),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vcltzq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:67:31
+   |
+67 |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().0)),
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:67:42
+   |
+67 |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().0)),
+   |                                          ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vhsubq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:69:7
+   |
+69 | /       vhsubq_s32(
+70 | |         self.vec().1,
+71 | |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().1)),
+72 | |       ),
+   | |_______^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:70:9
+   |
+70 |         self.vec().1,
+   |         ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_s32_u32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:71:9
+   |
+71 |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().1)),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vcltzq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:71:31
+   |
+71 |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().1)),
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:71:42
+   |
+71 |         vreinterpretq_s32_u32(vcltzq_s32(self.vec().1)),
+   |                                          ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:78:5
+   |
+78 | /     I32X8::new(
+79 | |       vaddq_s32(self.vec().0, b.vec().0),
+80 | |       vaddq_s32(self.vec().1, b.vec().1),
+81 | |     )
+   | |_____^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/transform/forward.rs:77:3
+   |
+77 |   unsafe fn add(self, b: Self) -> Self {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vaddq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:79:7
+   |
+79 |       vaddq_s32(self.vec().0, b.vec().0),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:79:17
+   |
+79 |       vaddq_s32(self.vec().0, b.vec().0),
+   |                 ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:79:31
+   |
+79 |       vaddq_s32(self.vec().0, b.vec().0),
+   |                               ^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vaddq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:80:7
+   |
+80 |       vaddq_s32(self.vec().1, b.vec().1),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:80:17
+   |
+80 |       vaddq_s32(self.vec().1, b.vec().1),
+   |                 ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:80:31
+   |
+80 |       vaddq_s32(self.vec().1, b.vec().1),
+   |                               ^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:86:5
+   |
+86 | /     I32X8::new(
+87 | |       vsubq_s32(self.vec().0, b.vec().0),
+88 | |       vsubq_s32(self.vec().1, b.vec().1),
+89 | |     )
+   | |_____^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/transform/forward.rs:85:3
+   |
+85 |   unsafe fn sub(self, b: Self) -> Self {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vsubq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:87:7
+   |
+87 |       vsubq_s32(self.vec().0, b.vec().0),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:87:17
+   |
+87 |       vsubq_s32(self.vec().0, b.vec().0),
+   |                 ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:87:31
+   |
+87 |       vsubq_s32(self.vec().0, b.vec().0),
+   |                               ^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vsubq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:88:7
+   |
+88 |       vsubq_s32(self.vec().1, b.vec().1),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:88:17
+   |
+88 |       vsubq_s32(self.vec().1, b.vec().1),
+   |                 ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:88:31
+   |
+88 |       vsubq_s32(self.vec().1, b.vec().1),
+   |                               ^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:94:5
+   |
+94 | /     I32X8::new(
+95 | |       vhaddq_s32(self.vec().0, b.vec().0),
+96 | |       vhaddq_s32(self.vec().1, b.vec().1),
+97 | |     )
+   | |_____^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/asm/aarch64/transform/forward.rs:93:3
+   |
+93 |   unsafe fn add_avg(self, b: Self) -> Self {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vhaddq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:95:7
+   |
+95 |       vhaddq_s32(self.vec().0, b.vec().0),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:95:18
+   |
+95 |       vhaddq_s32(self.vec().0, b.vec().0),
+   |                  ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:95:32
+   |
+95 |       vhaddq_s32(self.vec().0, b.vec().0),
+   |                                ^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vhaddq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:96:7
+   |
+96 |       vhaddq_s32(self.vec().1, b.vec().1),
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+   |
+   = help: in order for the call to be safe, the context requires the following additional target feature: neon
+   = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:96:18
+   |
+96 |       vhaddq_s32(self.vec().1, b.vec().1),
+   |                  ^^^^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+  --> src/asm/aarch64/transform/forward.rs:96:32
+   |
+96 |       vhaddq_s32(self.vec().1, b.vec().1),
+   |                                ^^^^^^^ call to unsafe function
+   |
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:102:5
+    |
+102 | /     I32X8::new(
+103 | |       vhsubq_s32(self.vec().0, b.vec().0),
+104 | |       vhsubq_s32(self.vec().1, b.vec().1),
+105 | |     )
+    | |_____^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:101:3
+    |
+101 |   unsafe fn sub_avg(self, b: Self) -> Self {
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vhsubq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:103:7
+    |
+103 |       vhsubq_s32(self.vec().0, b.vec().0),
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:103:18
+    |
+103 |       vhsubq_s32(self.vec().0, b.vec().0),
+    |                  ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:103:32
+    |
+103 |       vhsubq_s32(self.vec().0, b.vec().0),
+    |                                ^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vhsubq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:104:7
+    |
+104 |       vhsubq_s32(self.vec().1, b.vec().1),
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:104:18
+    |
+104 |       vhsubq_s32(self.vec().1, b.vec().1),
+    |                  ^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:104:32
+    |
+104 |       vhsubq_s32(self.vec().1, b.vec().1),
+    |                                ^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_u32_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:111:16
+    |
+111 |   uint32x4x2_t(vreinterpretq_u32_s32(a.0), vreinterpretq_u32_s32(a.1))
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:110:1
+    |
+110 | unsafe fn vreinterpretq_u32_s32_x2(a: int32x4x2_t) -> uint32x4x2_t {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_u32_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:111:44
+    |
+111 |   uint32x4x2_t(vreinterpretq_u32_s32(a.0), vreinterpretq_u32_s32(a.1))
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_s64_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:116:11
+    |
+116 |   let a = vreinterpretq_s64_s32(a);
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:115:1
+    |
+115 | unsafe fn vtrnq_s64_to_s32(a: int32x4_t, b: int32x4_t) -> int32x4x2_t {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_s64_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:117:11
+    |
+117 |   let b = vreinterpretq_s64_s32(b);
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_s32_s64` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:119:5
+    |
+119 |     vreinterpretq_s32_s64(vtrn1q_s64(a, b)),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrn1q_s64` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:119:27
+    |
+119 |     vreinterpretq_s32_s64(vtrn1q_s64(a, b)),
+    |                           ^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpretq_s32_s64` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:120:5
+    |
+120 |     vreinterpretq_s32_s64(vtrn2q_s64(a, b)),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrn2q_s64` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:120:27
+    |
+120 |     vreinterpretq_s32_s64(vtrn2q_s64(a, b)),
+    |                           ^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:129:5
+    |
+129 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:125:1
+    |
+125 | / unsafe fn transpose_8x8_neon(
+126 | |   input: &[I32X8; 8], into: &mut [MaybeUninit<I32X8>; 8],
+127 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:129:15
+    |
+129 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:129:33
+    |
+129 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:130:5
+    |
+130 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:130:15
+    |
+130 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:130:33
+    |
+130 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:131:5
+    |
+131 |     vtrnq_s32(input[4].vec().0, input[5].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:131:15
+    |
+131 |     vtrnq_s32(input[4].vec().0, input[5].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:131:33
+    |
+131 |     vtrnq_s32(input[4].vec().0, input[5].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:132:5
+    |
+132 |     vtrnq_s32(input[6].vec().0, input[7].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:132:15
+    |
+132 |     vtrnq_s32(input[6].vec().0, input[7].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:132:33
+    |
+132 |     vtrnq_s32(input[6].vec().0, input[7].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:133:5
+    |
+133 |     vtrnq_s32(input[0].vec().1, input[1].vec().1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:133:15
+    |
+133 |     vtrnq_s32(input[0].vec().1, input[1].vec().1),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:133:33
+    |
+133 |     vtrnq_s32(input[0].vec().1, input[1].vec().1),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:134:5
+    |
+134 |     vtrnq_s32(input[2].vec().1, input[3].vec().1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:134:15
+    |
+134 |     vtrnq_s32(input[2].vec().1, input[3].vec().1),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:134:33
+    |
+134 |     vtrnq_s32(input[2].vec().1, input[3].vec().1),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:135:5
+    |
+135 |     vtrnq_s32(input[4].vec().1, input[5].vec().1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:135:15
+    |
+135 |     vtrnq_s32(input[4].vec().1, input[5].vec().1),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:135:33
+    |
+135 |     vtrnq_s32(input[4].vec().1, input[5].vec().1),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:136:5
+    |
+136 |     vtrnq_s32(input[6].vec().1, input[7].vec().1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:136:15
+    |
+136 |     vtrnq_s32(input[6].vec().1, input[7].vec().1),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:136:33
+    |
+136 |     vtrnq_s32(input[6].vec().1, input[7].vec().1),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:139:5
+    |
+139 |     vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:140:5
+    |
+140 |     vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:141:5
+    |
+141 |     vtrnq_s64_to_s32(stage1.2.0, stage1.3.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:142:5
+    |
+142 |     vtrnq_s64_to_s32(stage1.2.1, stage1.3.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:143:5
+    |
+143 |     vtrnq_s64_to_s32(stage1.4.0, stage1.5.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:144:5
+    |
+144 |     vtrnq_s64_to_s32(stage1.4.1, stage1.5.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:145:5
+    |
+145 |     vtrnq_s64_to_s32(stage1.6.0, stage1.7.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:146:5
+    |
+146 |     vtrnq_s64_to_s32(stage1.6.1, stage1.7.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:148:17
+    |
+148 |   into[0].write(I32X8::new(stage2.0.0, stage2.2.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:149:17
+    |
+149 |   into[1].write(I32X8::new(stage2.1.0, stage2.3.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:150:17
+    |
+150 |   into[2].write(I32X8::new(stage2.0.1, stage2.2.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:151:17
+    |
+151 |   into[3].write(I32X8::new(stage2.1.1, stage2.3.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:152:17
+    |
+152 |   into[4].write(I32X8::new(stage2.4.0, stage2.6.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:153:17
+    |
+153 |   into[5].write(I32X8::new(stage2.5.0, stage2.7.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:154:17
+    |
+154 |   into[6].write(I32X8::new(stage2.4.1, stage2.6.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:155:17
+    |
+155 |   into[7].write(I32X8::new(stage2.5.1, stage2.7.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:163:5
+    |
+163 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:159:1
+    |
+159 | / unsafe fn transpose_8x4_neon(
+160 | |   input: &[I32X8; 8], into: &mut [MaybeUninit<I32X8>; 4],
+161 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:163:15
+    |
+163 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:163:33
+    |
+163 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:164:5
+    |
+164 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:164:15
+    |
+164 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:164:33
+    |
+164 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:165:5
+    |
+165 |     vtrnq_s32(input[4].vec().0, input[5].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:165:15
+    |
+165 |     vtrnq_s32(input[4].vec().0, input[5].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:165:33
+    |
+165 |     vtrnq_s32(input[4].vec().0, input[5].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:166:5
+    |
+166 |     vtrnq_s32(input[6].vec().0, input[7].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:166:15
+    |
+166 |     vtrnq_s32(input[6].vec().0, input[7].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:166:33
+    |
+166 |     vtrnq_s32(input[6].vec().0, input[7].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:169:5
+    |
+169 |     vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:170:5
+    |
+170 |     vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:171:5
+    |
+171 |     vtrnq_s64_to_s32(stage1.2.0, stage1.3.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:172:5
+    |
+172 |     vtrnq_s64_to_s32(stage1.2.1, stage1.3.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:174:17
+    |
+174 |   into[0].write(I32X8::new(stage2.0.0, stage2.2.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:175:17
+    |
+175 |   into[1].write(I32X8::new(stage2.1.0, stage2.3.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:176:17
+    |
+176 |   into[2].write(I32X8::new(stage2.0.1, stage2.2.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:177:17
+    |
+177 |   into[3].write(I32X8::new(stage2.1.1, stage2.3.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:185:5
+    |
+185 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:181:1
+    |
+181 | / unsafe fn transpose_4x8_neon(
+182 | |   input: &[I32X8; 4], into: &mut [MaybeUninit<I32X8>; 8],
+183 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:185:15
+    |
+185 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:185:33
+    |
+185 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:186:5
+    |
+186 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:186:15
+    |
+186 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:186:33
+    |
+186 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:187:5
+    |
+187 |     vtrnq_s32(input[0].vec().1, input[1].vec().1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:187:15
+    |
+187 |     vtrnq_s32(input[0].vec().1, input[1].vec().1),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:187:33
+    |
+187 |     vtrnq_s32(input[0].vec().1, input[1].vec().1),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:188:5
+    |
+188 |     vtrnq_s32(input[2].vec().1, input[3].vec().1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:188:15
+    |
+188 |     vtrnq_s32(input[2].vec().1, input[3].vec().1),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:188:33
+    |
+188 |     vtrnq_s32(input[2].vec().1, input[3].vec().1),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:191:5
+    |
+191 |     vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:192:5
+    |
+192 |     vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:193:5
+    |
+193 |     vtrnq_s64_to_s32(stage1.2.0, stage1.3.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:194:5
+    |
+194 |     vtrnq_s64_to_s32(stage1.2.1, stage1.3.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::raw` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:196:17
+    |
+196 |   into[0].write(I32X8::raw(stage2.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::raw` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:197:17
+    |
+197 |   into[1].write(I32X8::raw(stage2.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:198:17
+    |
+198 |   into[2].write(I32X8::new(stage2.0.1, stage2.0.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:199:17
+    |
+199 |   into[3].write(I32X8::new(stage2.1.1, stage2.1.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::raw` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:200:17
+    |
+200 |   into[4].write(I32X8::raw(stage2.2));
+    |                 ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::raw` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:201:17
+    |
+201 |   into[5].write(I32X8::raw(stage2.3));
+    |                 ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:202:17
+    |
+202 |   into[6].write(I32X8::new(stage2.2.1, stage2.2.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:203:17
+    |
+203 |   into[7].write(I32X8::new(stage2.3.1, stage2.3.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:211:5
+    |
+211 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:207:1
+    |
+207 | / unsafe fn transpose_4x4_neon(
+208 | |   input: &[I32X8; 4], into: &mut [MaybeUninit<I32X8>; 4],
+209 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:211:15
+    |
+211 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:211:33
+    |
+211 |     vtrnq_s32(input[0].vec().0, input[1].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vtrnq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:212:5
+    |
+212 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:212:15
+    |
+212 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |               ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:212:33
+    |
+212 |     vtrnq_s32(input[2].vec().0, input[3].vec().0),
+    |                                 ^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:215:5
+    |
+215 |     vtrnq_s64_to_s32(stage1.0.0, stage1.1.0),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vtrnq_s64_to_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:216:5
+    |
+216 |     vtrnq_s64_to_s32(stage1.0.1, stage1.1.1),
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::raw` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:218:17
+    |
+218 |   into[0].write(I32X8::raw(stage2.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::raw` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:219:17
+    |
+219 |   into[1].write(I32X8::raw(stage2.1));
+    |                 ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:220:17
+    |
+220 |   into[2].write(I32X8::new(stage2.0.1, stage2.0.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:221:17
+    |
+221 |   into[3].write(I32X8::new(stage2.1.1, stage2.1.0));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vdupq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:226:15
+    |
+226 |   let shift = vdupq_n_s32(shift.into());
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:225:1
+    |
+225 | unsafe fn shift_left_neon(a: I32X8, shift: u8) -> I32X8 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:227:3
+    |
+227 |   I32X8::new(vrshlq_s32(a.vec().0, shift), vrshlq_s32(a.vec().1, shift))
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vrshlq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:227:14
+    |
+227 |   I32X8::new(vrshlq_s32(a.vec().0, shift), vrshlq_s32(a.vec().1, shift))
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:227:25
+    |
+227 |   I32X8::new(vrshlq_s32(a.vec().0, shift), vrshlq_s32(a.vec().1, shift))
+    |                         ^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vrshlq_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:227:44
+    |
+227 |   I32X8::new(vrshlq_s32(a.vec().0, shift), vrshlq_s32(a.vec().1, shift))
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:227:55
+    |
+227 |   I32X8::new(vrshlq_s32(a.vec().0, shift), vrshlq_s32(a.vec().1, shift))
+    |                                                       ^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:232:3
+    |
+232 |   I32X8::new(vrshrq_n_s32(a.vec().0, SHIFT), vrshrq_n_s32(a.vec().1, SHIFT))
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:231:1
+    |
+231 | unsafe fn shift_right_neon<const SHIFT: i32>(a: I32X8) -> I32X8 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vrshrq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:232:14
+    |
+232 |   I32X8::new(vrshrq_n_s32(a.vec().0, SHIFT), vrshrq_n_s32(a.vec().1, SHIFT))
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:232:27
+    |
+232 |   I32X8::new(vrshrq_n_s32(a.vec().0, SHIFT), vrshrq_n_s32(a.vec().1, SHIFT))
+    |                           ^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vrshrq_n_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:232:46
+    |
+232 |   I32X8::new(vrshrq_n_s32(a.vec().0, SHIFT), vrshrq_n_s32(a.vec().1, SHIFT))
+    |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:232:59
+    |
+232 |   I32X8::new(vrshrq_n_s32(a.vec().0, SHIFT), vrshrq_n_s32(a.vec().1, SHIFT))
+    |                                                           ^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::shift_right_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:248:20
+    |
+248 |           *chunk = shift_right_neon::<1>(*chunk)
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::shift_right_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:254:20
+    |
+254 |           *chunk = shift_right_neon::<2>(*chunk)
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::shift_left_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:264:18
+    |
+264 |         *chunk = shift_left_neon(*chunk, shift);
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::forward_transform_neon::load_columns` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:316:37
+    |
+316 |         *out_reg = MaybeUninit::new(load_columns(in_slice.as_ptr(), shift));
+    |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:271:1
+    |
+271 | / unsafe fn forward_transform_neon<T: Coefficient>(
+272 | |   input: &[i16], output: &mut [MaybeUninit<T>], stride: usize,
+273 | |   tx_size: TxSize, tx_type: TxType, bd: usize,
+274 | | ) {
+    | |_^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::forward_transform_neon::load_columns` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:322:37
+    |
+322 |         *out_reg = MaybeUninit::new(load_columns(in_slice.as_ptr(), shift));
+    |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `util::uninit::slice_assume_init_mut` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:326:22
+    |
+326 |     let col_coeffs = slice_assume_init_mut(col_coeffs);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:328:5
+    |
+328 |     txfm_func_col(col_coeffs);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::round_shift_array_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:329:5
+    |
+329 |     round_shift_array_neon(col_coeffs, -cfg.shift[1]);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::transpose_8x8_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:339:11
+    |
+339 |           transpose_8x8_neon(input, buf);
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::transpose_8x4_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:348:11
+    |
+348 |           transpose_8x4_neon(input, buf);
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::transpose_4x8_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:356:9
+    |
+356 |         transpose_4x8_neon(input, buf);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::transpose_4x4_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:362:9
+    |
+362 |         transpose_4x4_neon(input, buf);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `util::uninit::slice_assume_init_mut` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:367:13
+    |
+367 |   let buf = slice_assume_init_mut(buf);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:377:5
+    |
+377 |     txfm_func_row(row_coeffs);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::round_shift_array_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:378:5
+    |
+378 |     round_shift_array_neon(row_coeffs, -cfg.shift[2]);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:401:27
+    |
+401 |                 let vec = row_coeffs[c + cg].vec();
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::arch::aarch64::vst1_u16_x2` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:402:17
+    |
+402 | /                 vst1_u16_x2(
+403 | |                   output[c * output_stride..].as_mut_ptr() as *mut _,
+404 | |                   uint16x4x2_t(
+405 | |                     vreinterpret_u16_s16(vmovn_s32(vec.0)),
+406 | |                     vreinterpret_u16_s16(vmovn_s32(vec.1)),
+407 | |                   ),
+408 | |                 );
+    | |_________________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpret_u16_s16` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:405:21
+    |
+405 |                     vreinterpret_u16_s16(vmovn_s32(vec.0)),
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmovn_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:405:42
+    |
+405 |                     vreinterpret_u16_s16(vmovn_s32(vec.0)),
+    |                                          ^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vreinterpret_u16_s16` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:406:21
+    |
+406 |                     vreinterpret_u16_s16(vmovn_s32(vec.1)),
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmovn_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:406:42
+    |
+406 |                     vreinterpret_u16_s16(vmovn_s32(vec.1)),
+    |                                          ^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::arch::aarch64::vst1q_u32_x2` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:411:17
+    |
+411 | /                 vst1q_u32_x2(
+412 | |                   output[c * output_stride..].as_mut_ptr() as *mut _,
+413 | |                   vreinterpretq_u32_s32_x2(row_coeffs[c + cg].vec()),
+414 | |                 );
+    | |_________________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::vreinterpretq_u32_s32_x2` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:413:19
+    |
+413 |                   vreinterpretq_u32_s32_x2(row_coeffs[c + cg].vec()),
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:413:44
+    |
+413 |                   vreinterpretq_u32_s32_x2(row_coeffs[c + cg].vec()),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::arch::aarch64::vst1_s16` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:426:15
+    |
+426 | /               vst1_s16(
+427 | |                 output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+428 | |                 vmovn_s32(row_coeffs[c].vec().0),
+429 | |               );
+    | |_______________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmovn_s32` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:428:17
+    |
+428 |                 vmovn_s32(row_coeffs[c].vec().0),
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:428:27
+    |
+428 |                 vmovn_s32(row_coeffs[c].vec().0),
+    |                           ^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::arch::aarch64::vst1q_s32` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:432:15
+    |
+432 | /               vst1q_s32(
+433 | |                 output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+434 | |                 row_coeffs[c].vec().0,
+435 | |               );
+    | |_______________^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::vec` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:434:17
+    |
+434 |                 row_coeffs[c].vec().0,
+    |                 ^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `std::arch::aarch64::vld1q_s16` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:300:15
+    |
+300 |       let a = vld1q_s16(input_ptr);
+    |               ^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/asm/aarch64/transform/forward.rs:298:5
+    |
+298 |     unsafe fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::shift_left_neon` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:301:7
+    |
+301 | /       shift_left_neon(
+302 | |         I32X8::new(vmovl_s16(vget_low_s16(a)), vmovl_high_s16(a)),
+303 | |         shift,
+304 | |       )
+    | |_______^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to unsafe function `asm::aarch64::transform::forward::I32X8::new` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:302:9
+    |
+302 |         I32X8::new(vmovl_s16(vget_low_s16(a)), vmovl_high_s16(a)),
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmovl_s16` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:302:20
+    |
+302 |         I32X8::new(vmovl_s16(vget_low_s16(a)), vmovl_high_s16(a)),
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vget_low_s16` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:302:30
+    |
+302 |         I32X8::new(vmovl_s16(vget_low_s16(a)), vmovl_high_s16(a)),
+    |                              ^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+warning[E0133]: call to function `std::arch::aarch64::vmovl_high_s16` with `#[target_feature]` is unsafe and requires unsafe block
+   --> src/asm/aarch64/transform/forward.rs:302:48
+    |
+302 |         I32X8::new(vmovl_s16(vget_low_s16(a)), vmovl_high_s16(a)),
+    |                                                ^^^^^^^^^^^^^^^^^ call to function with `#[target_feature]`
+    |
+    = help: in order for the call to be safe, the context requires the following additional target feature: neon
+    = note: the neon target feature being enabled in the build configuration does not remove the requirement to list it in `#[target_feature]`
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+
+For more information about this error, try `rustc --explain E0133`.
+warning: `zenrav1e` (lib) generated 291 warnings (run `cargo fix --lib -p zenrav1e` to apply 28 suggestions)
+warning: unexpected `cfg` condition name: `asm_x86_64`
+  --> benches/tier_isolation.rs:85:20
+   |
+85 |     } else if cfg!(asm_x86_64) {
+   |                    ^^^^^^^^^^ help: there is a config with a similar name: `nasm_x86_64`
+   |
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(asm_x86_64)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(asm_x86_64)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: requested on the command line with `-W unexpected-cfgs`
+
+warning: `zenrav1e` (bench "tier_isolation") generated 1 warning
+    Finished `bench` profile [optimized + debuginfo] target(s) in 9.61s
+     Running benches/tier_isolation.rs (target/release/deps/tier_isolation-c8108577bad1c953)
+Gnuplot not found, using plotters backend
+[tier_isolation] built with: neon_asm
+Benchmarking encode_still/256x256/neon_asm
+Benchmarking encode_still/256x256/neon_asm: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 6.4s or enable flat sampling.
+Benchmarking encode_still/256x256/neon_asm: Collecting 10 samples in estimated 6.4241 s (55 iterations)
+Benchmarking encode_still/256x256/neon_asm: Analyzing
+encode_still/256x256/neon_asm
+                        time:   [116.08 ms 116.15 ms 116.19 ms]
+
+Benchmarking encode_still/512x512/neon_asm
+Benchmarking encode_still/512x512/neon_asm: Warming up for 3.0000 s
+Benchmarking encode_still/512x512/neon_asm: Collecting 10 samples in estimated 9.1484 s (20 iterations)
+Benchmarking encode_still/512x512/neon_asm: Analyzing
+encode_still/512x512/neon_asm
+                        time:   [457.04 ms 457.20 ms 457.38 ms]
+

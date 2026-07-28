@@ -1,0 +1,40 @@
+# zenrav1e NEON assembly vs pure-Rust fallback — first ARM measurement
+date:    2026-07-28
+host:    Apple M4 Pro (12 core), macOS, aarch64
+build:   release, NO -C target-cpu=native
+method:  COMPILE-TIME A/B. zenrav1e's ARM SIMD is hand-written NEON assembly
+         under src/arm/, selected by cfg(asm_neon) which build.rs emits when
+         the `asm` feature is on. There is no runtime token, so:
+           cargo bench --bench tier_isolation --features asm   # neon_asm
+           cargo bench --bench tier_isolation                  # rust_fallback
+         (cfg(asm_neon) confirmed emitted: target/release/build/zenrav1e-*/output)
+input:   noise+patches, still picture, 1 thread, q100, speed preset 8
+
+## Result
+
+| size    | NEON asm  | pure Rust | speedup |
+|---------|-----------|-----------|---------|
+| 256x256 | 116.15ms  | 156.25ms  |  1.35x  |
+| 512x512 | 457.20ms  | 615.55ms  |  1.35x  |
+
+Clean 1.35x, stable across both sizes. No regression.
+
+## Why this bench had to be written
+
+`benches/bench.rs` DOES NOT COMPILE against the current API. It is gated behind
+`required-features = ["bench"]`, so no CI job or default `cargo bench` builds
+it, and it has drifted:
+
+  error[E0061]: this method takes 7 arguments but 6 were supplied
+    --> benches/bench.rs:75  (ts.qc.update)
+  error[E0061]: this function takes 25 arguments but 22 were supplied
+    --> benches/bench.rs:97
+
+Pre-existing — nothing in this crate's src/ was touched. Until that is
+repaired, there was no working measurement of what the NEON assembly buys, on
+any architecture. benches/tier_isolation.rs uses only the public encode API, so
+it does not drift with internal signatures.
+
+NOT MEASURED: per-kernel attribution. This is whole-encode wall time; which of
+the mc / predict / dist / looprestoration assembly routines carry the 1.35x
+needs a profile.

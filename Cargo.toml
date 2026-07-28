@@ -226,6 +226,10 @@ bench = false
 bench = false
 
 [[bench]]
+name = "tier_isolation"
+harness = false
+
+[[bench]]
 name = "bench"
 path = "benches/bench.rs"
 required-features = ["bench"]
