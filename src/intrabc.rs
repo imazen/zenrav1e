@@ -75,7 +75,6 @@ pub fn dv_prediction(
 /// bound the tile in 4-px block units.
 ///
 /// `dv` is in 1/8 pel; `(mi_row, mi_col)` locate the block, tile-relative.
-#[allow(clippy::too_many_arguments)]
 pub fn is_dv_valid(
   dv: MotionVector, bsize: BlockSize, mi_row: usize, mi_col: usize,
   mi_rows: usize, mi_cols: usize, is_chroma_ref: bool, xdec: usize,

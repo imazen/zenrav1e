@@ -58,7 +58,6 @@ fn psnr(a: &[u8], b: &[u8]) -> f64 {
   }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn encode(
   sy: &[u8], su: &[u8], sv: &[u8], w: usize, h: usize, q: usize, speed: u8,
   intrabc: bool, cs: ChromaSampling,
@@ -66,7 +65,6 @@ fn encode(
   encode_hash(sy, su, sv, w, h, q, speed, intrabc, true, cs)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn encode_hash(
   sy: &[u8], su: &[u8], sv: &[u8], w: usize, h: usize, q: usize, speed: u8,
   intrabc: bool, intrabc_hash: bool, cs: ChromaSampling,

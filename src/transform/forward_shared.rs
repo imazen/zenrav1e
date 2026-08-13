@@ -182,7 +182,6 @@ macro_rules! impl_1d_tx {
 };
 
 ($m:meta, $($s:ident),*) => {
-  #[allow(clippy::missing_safety_doc)]
   pub trait TxOperations: Copy {
     $($s)* fn zero() -> Self;
 
@@ -1664,7 +1663,6 @@ $($s)* fn daala_fdst_iv_32_asym<T: TxOperations>(
   );
 }
 
-#[allow(clippy::identity_op)]
 #[$m]
   #[allow(unsafe_op_in_unsafe_fn)]
 $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {

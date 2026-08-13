@@ -13,7 +13,6 @@ pub struct SceneChangeDetector<T: Pixel> {
 }
 
 impl<T: Pixel> SceneChangeDetector<T> {
-  #[allow(clippy::too_many_arguments)]
   pub fn new(
     _dims: (usize, usize), _bit_depth: usize, _time_base: Rational32,
     _chroma_sampling: v_frame::prelude::ChromaSampling,

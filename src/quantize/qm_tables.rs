@@ -12,7 +12,6 @@
 //! Fundamental table data sourced from the AV1 specification via rav1d-safe.
 //! Derived tables are computed at compile time using const fn helpers.
 
-#![allow(clippy::all)]
 #![allow(dead_code)]
 
 use crate::transform::TxSize;

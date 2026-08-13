@@ -1278,8 +1278,6 @@ pub(crate) mod rust {
     pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
-  #[allow(clippy::collapsible_if)]
-  #[allow(clippy::collapsible_else_if)]
   #[allow(clippy::needless_return)]
   pub(crate) const fn select_ief_strength(
     width: usize, height: usize, smooth_filter: bool, angle_delta: isize,

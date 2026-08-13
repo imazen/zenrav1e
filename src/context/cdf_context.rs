@@ -832,7 +832,6 @@ pub struct ContextWriter<'a> {
 }
 
 impl<'a> ContextWriter<'a> {
-  #[allow(clippy::let_and_return)]
   pub fn new(fc: &'a mut CDFContext, bc: BlockContext<'a>) -> Self {
     let fc_log = CDFContextLog::default();
     #[allow(unused_mut)]
