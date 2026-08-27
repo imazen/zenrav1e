@@ -254,6 +254,39 @@ fn encode_cell(
   out
 }
 
+/// Decode a cell's concatenated packet bytes with rav1d-safe and require a
+/// frame of the expected size. Returns the failure reason on any miss.
+fn decodes_to_frame(bytes: &[u8], w: usize, h: usize) -> Result<(), String> {
+  // A decoder panic is a gate failure attributed to the cell, not an abort
+  // of the whole run (rav1d-safe 0.5.7 index-panics in its ARM loop-
+  // restoration SIMD on some cells — the gate must still report WHICH).
+  match std::panic::catch_unwind(|| decode_inner(bytes, w, h)) {
+    Ok(r) => r,
+    Err(payload) => {
+      let msg = payload
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+        .unwrap_or_else(|| "<non-string panic>".into());
+      Err(format!("decoder panicked: {msg}"))
+    }
+  }
+}
+
+fn decode_inner(bytes: &[u8], w: usize, h: usize) -> Result<(), String> {
+  let mut dec = rav1d_safe::Decoder::new().map_err(|e| format!("{e:?}"))?;
+  let mut fr = dec.decode(bytes).map_err(|e| format!("decode: {e:?}"))?;
+  if fr.is_none() {
+    fr = dec.flush().map_err(|e| format!("flush: {e:?}"))?.drain(..).next();
+  }
+  let frame = fr.ok_or_else(|| "no frame produced".to_string())?;
+  let got = (frame.width() as usize, frame.height() as usize);
+  if got != (w, h) {
+    return Err(format!("decoded {got:?}, expected {:?}", (w, h)));
+  }
+  Ok(())
+}
+
 fn fnv1a64(data: &[u8]) -> u64 {
   let mut h = 0xcbf2_9ce4_8422_2325u64;
   for &b in data {
@@ -658,6 +691,39 @@ fn main() {
   });
   let enc_secs = t0.elapsed().as_secs_f32();
 
+  // Decode gate (zenrav1e#41): a byte pin blesses whatever the encoder
+  // emitted — re-pinning after a desync would lock corrupt bytes forever
+  // (the zenjpeg#196 hash-lock failure). Every cell must at least decode to
+  // a frame of the right size before it is compared or pinned. This catches
+  // hard parse failures only; recon divergence (a decoder accepting a
+  // desynced stream) is gate-recon's job and stays the deeper local check.
+  let t1 = std::time::Instant::now();
+  let mut undecodable = 0usize;
+  for (i, job) in jobs.iter().enumerate() {
+    let img = &images[job.img];
+    if let Err(msg) = decodes_to_frame(results[i].get().unwrap(), img.w, img.h)
+    {
+      undecodable += 1;
+      println!("UNDECODABLE {}  {msg}", job.cell);
+      // GATE_IDENTITY_DUMP=<dir>: keep the offending bytes (raw OBU
+      // stream) for triage with an external decoder.
+      if let Some(dir) = std::env::var_os("GATE_IDENTITY_DUMP") {
+        let dir = Path::new(&dir);
+        fs::create_dir_all(dir).expect("create dump dir");
+        let arm = job.arm.map(|ai| arm_defs[ai].name).unwrap_or("base");
+        let name = format!("{}_{arm}.obu", job.cell.replace('/', "_"));
+        fs::write(dir.join(&name), results[i].get().unwrap())
+          .expect("write dump");
+      }
+    }
+  }
+  assert!(
+    undecodable == 0,
+    "gate_identity: {undecodable} cell(s) produced undecodable bitstreams — \
+     refusing to compare or pin them"
+  );
+  let dec_secs = t1.elapsed().as_secs_f32();
+
   // Index baseline and arm results, then check every arm's contract.
   let mut baselines: BTreeMap<&str, &Vec<u8>> = BTreeMap::new();
   let mut arm_bytes: BTreeMap<(usize, &str), &Vec<u8>> = BTreeMap::new();
@@ -800,10 +866,11 @@ fn main() {
     }
     fs::write(&path, out).expect("write pins");
     println!(
-      "pinned {} cells for {plat} -> {} ({:.1}s encode)",
+      "pinned {} cells for {plat} -> {} ({:.1}s encode, {:.1}s decode-gate)",
       new_rows.len(),
       path.display(),
-      enc_secs
+      enc_secs,
+      dec_secs
     );
     // Arm failures still fail a --pin run: pinning must not paper over a
     // broken neutral contract.
@@ -816,7 +883,8 @@ fn main() {
 
   println!(
     "gate-identity [{}{plat}]: {} baseline cells ({} pinned-ok, {} drift, \
-     {} unpinned), {} arm cells ({} ok, {} FAIL) in {:.1}s",
+     {} unpinned), {} arm cells ({} ok, {} FAIL), all decodable, in {:.1}s \
+     (+{:.1}s decode-gate)",
     if ci { "ci, " } else { "" },
     new_rows.len(),
     pinned_ok,
@@ -825,7 +893,8 @@ fn main() {
     arm_ok + arm_fail,
     arm_ok,
     arm_fail,
-    enc_secs
+    enc_secs,
+    dec_secs
   );
 
   if pins.is_empty() {

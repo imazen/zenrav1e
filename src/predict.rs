@@ -882,7 +882,7 @@ pub(crate) mod rust {
     for y in (0..height).step_by(2) {
       for x in (0..width).step_by(4) {
         // Gather 7 reference pixels for this 4x2 subblock
-        let p0: i32; // top-left of subblock
+         // top-left of subblock
         let p1: i32; // above[0]
         let p2: i32; // above[1]
         let p3: i32; // above[2]
@@ -904,15 +904,15 @@ pub(crate) mod rust {
         }
 
         // Top-left pixel
-        if x == 0 && y == 0 {
-          p0 = get_top_left();
+        let p0: i32 = if x == 0 && y == 0 {
+          get_top_left()
         } else if y == 0 {
-          p0 = get_above(x - 1);
+          get_above(x - 1)
         } else if x == 0 {
-          p0 = get_left(y - 1);
+          get_left(y - 1)
         } else {
-          p0 = dst[y - 1][x - 1].into();
-        }
+          dst[y - 1][x - 1].into()
+        };
 
         // Left pixels
         if x == 0 {

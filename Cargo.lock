@@ -1546,8 +1546,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5f921332331631dd8716a93d81aef9ac21245da74af62bc14000a4fd7fdbfd"
+source = "git+https://github.com/imazen/rav1d-safe?rev=91bf0e30d346a9236ac4a0013f2a8a713452d37b#91bf0e30d346a9236ac4a0013f2a8a713452d37b"
 dependencies = [
  "aligned",
  "aligned-vec",
@@ -1556,9 +1555,8 @@ dependencies = [
 
 [[package]]
 name = "rav1d-safe"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "717c3ef9a98101f3d2e33c4a8a4d1fd8b4fb0d39fa67a838e3308386ad9e7a1a"
+version = "0.6.0"
+source = "git+https://github.com/imazen/rav1d-safe?rev=91bf0e30d346a9236ac4a0013f2a8a713452d37b#91bf0e30d346a9236ac4a0013f2a8a713452d37b"
 dependencies = [
  "aligned",
  "archmage",
@@ -1567,6 +1565,7 @@ dependencies = [
  "bitflags",
  "cc",
  "cfg-if",
+ "enough",
  "nasm-rs",
  "parking_lot",
  "paste",
@@ -1575,6 +1574,7 @@ dependencies = [
  "safe_unaligned_simd",
  "strum",
  "to_method",
+ "whereat",
  "zerocopy",
 ]
 

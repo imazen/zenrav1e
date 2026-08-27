@@ -441,7 +441,7 @@ fn calc_indices_dim2(
   debug_assert_eq!(centroids.len() % 2, 0);
   let k = centroids.len() / 2;
   let mut dist = 0u64;
-  for (p, idx) in data.chunks_exact(2).zip(indices.iter_mut()) {
+  for (p, idx) in data.as_chunks::<2>().0.iter().zip(indices.iter_mut()) {
     let d2 = |j: usize| -> u32 {
       let du = i32::from(p[0]) - i32::from(centroids[2 * j]);
       let dv = i32::from(p[1]) - i32::from(centroids[2 * j + 1]);
@@ -471,7 +471,7 @@ fn calc_centroids_dim2(data: &[i16], centroids: &mut [i16], indices: &[u8]) {
   let mut count = [0u32; PALETTE_MAX_SIZE];
   let mut sum = [[0i64; 2]; PALETTE_MAX_SIZE];
   let mut rand_state = data[0] as u16 as u32;
-  for (p, &idx) in data.chunks_exact(2).zip(indices.iter()) {
+  for (p, &idx) in data.as_chunks::<2>().0.iter().zip(indices.iter()) {
     let idx = idx as usize;
     debug_assert!(idx < k);
     count[idx] += 1;
@@ -873,7 +873,7 @@ pub fn palette_candidates_uv(
     // of in-range data is already in range, this is the same safeguard).
     let mut colors_u_cand = PaletteColors::new();
     let mut colors_v_cand = PaletteColors::new();
-    for pair in centroids.chunks_exact(2) {
+    for pair in centroids.as_chunks::<2>().0.iter() {
       colors_u_cand.push(pair[0].clamp(0, max_px) as u16);
       colors_v_cand.push(pair[1].clamp(0, max_px) as u16);
     }

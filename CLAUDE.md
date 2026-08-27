@@ -60,6 +60,16 @@ in ../zenavif's justfile.
 
 ## Known Bugs
 
+- **rav1d-safe 0.5.7 (registry) index-panics in `safe_simd/looprestoration_arm.rs`
+  on conformant streams (aarch64 only).** Surfaced 2026-08-26 by
+  `gate_identity`'s decode gate: every `s2/q140` cell on Apple Silicon, all
+  images/tunes/arms; `aomdec` and `dav1d` decode the same bytes. Fixed on
+  rav1d-safe main (0.6.0-unreleased) — the dev-dep is git-pinned to
+  `91bf0e30d346a9236ac4a0013f2a8a713452d37b`. Return to a registry dep at the
+  rav1d-safe 0.6.0 publish. Local repro: `GATE_IDENTITY_DUMP=~/tmp/gate-dump
+  cargo run --release --example gate_identity -- --ci` with the dev-dep back
+  on `"0.5.7"`.
+
 (none currently open)
 
 ## Known Bugs (Fixed)

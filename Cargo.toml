@@ -193,7 +193,12 @@ assert_cmd = "2.0"
 criterion = "0.8"
 # Pure-Rust AV1 decoder; tests/trellis_roundtrip.rs uses it to verify that
 # enable_trellis (multi-level RDOQ) output is valid, decodable AV1.
-rav1d-safe = "0.5.7"
+# Git-pinned past 0.5.7: the registry release index-panics in its aarch64
+# Wiener loop-restoration SIMD on conformant streams (gate_identity's new
+# decode gate hit it on 30/98 cells — every s2/q140 cell — on an Apple
+# Silicon host; aomdec + dav1d decode the same bytes). Fixed on main,
+# unreleased. Return to a registry dep at the rav1d-safe 0.6.0 publish.
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "91bf0e30d346a9236ac4a0013f2a8a713452d37b" }
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"

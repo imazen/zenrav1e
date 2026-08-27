@@ -14,6 +14,24 @@
   field (plus the new `CoeffRdStack` config struct) in the same 0.2.0
   window, same exhaustive-construction impact.
 
+### Fixed
+- **`gate_identity` now decodes every cell with rav1d-safe before comparing or
+  pinning (zenrav1e#41, class-E sweep finding).** A byte pin blesses whatever
+  the encoder emitted, so a `--pin` after a desync would have locked corrupt
+  bytes forever (the zenjpeg#196 hash-lock failure). Every cell must decode
+  to a frame of the right size; a decoder panic is attributed to its cell,
+  and `GATE_IDENTITY_DUMP=<dir>` keeps offending bytes for external triage.
+  This is a parse-level floor — recon divergence stays gate-recon's job.
+  First run found a real defect: rav1d-safe 0.5.7 index-panics in its
+  aarch64 Wiener loop-restoration SIMD on 30/98 cells (every s2/q140 cell)
+  on Apple Silicon while aomdec and dav1d decode the same bytes. Fixed on
+  rav1d-safe main (unreleased) — the dev-dep is git-pinned to
+  `91bf0e30` until the 0.6.0 publish.
+- Clippy 1.98 wall cleared (`manual_slice_fill`, `manual_clear`,
+  `needless_late_init`, `chunks_exact_to_as_chunks`); `tier_isolation` bench
+  tested a never-declared `asm_x86_64` cfg (build.rs emits `nasm_x86_64`),
+  so its arm label could never read `x86_asm`.
+
 ### Added
 - **`cooptloop_trace` feature** (default-off, analysis-only): a per-RD-evaluation
   decision trace of the `(lambda, rate, distortion, cost)` currency that

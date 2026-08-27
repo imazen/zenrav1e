@@ -383,15 +383,11 @@ impl<'a> BlockContext<'a> {
   }
 
   fn reset_left_coeff_context(&mut self, plane: usize) {
-    for c in &mut self.left_coeff_context[plane] {
-      *c = 0;
-    }
+    self.left_coeff_context[plane].fill(0);
   }
 
   fn reset_left_partition_context(&mut self) {
-    for c in &mut self.left_partition_context {
-      *c = 0;
-    }
+    self.left_partition_context.fill(0);
   }
 
   pub fn update_tx_size_context(
@@ -421,9 +417,7 @@ impl<'a> BlockContext<'a> {
   }
 
   fn reset_left_tx_context(&mut self) {
-    for c in &mut self.left_tx_context {
-      *c = 0;
-    }
+    self.left_tx_context.fill(0);
   }
 
   pub fn reset_left_contexts(&mut self, planes: usize) {
