@@ -218,7 +218,7 @@ impl ContextWriter<'_> {
     }
 
     /* Pick CDF index based on number of matching/out-of-bounds segment IDs. */
-    
+
     let cdf_index: u8 = if prev_ul < 0 || prev_u < 0 || prev_l < 0 {
       /* Edge case */
       0
@@ -232,7 +232,7 @@ impl ContextWriter<'_> {
     };
 
     /* If 2 or more are identical returns that as predictor, otherwise prev_l. */
-    
+
     let r: i8 = if prev_u == -1 {
       /* edge case */
       if prev_l == -1 { 0 } else { prev_l }

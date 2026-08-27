@@ -882,7 +882,7 @@ pub(crate) mod rust {
     for y in (0..height).step_by(2) {
       for x in (0..width).step_by(4) {
         // Gather 7 reference pixels for this 4x2 subblock
-         // top-left of subblock
+        // top-left of subblock
         let p1: i32; // above[0]
         let p2: i32; // above[1]
         let p3: i32; // above[2]

@@ -31,6 +31,14 @@
   `needless_late_init`, `chunks_exact_to_as_chunks`); `tier_isolation` bench
   tested a never-declared `asm_x86_64` cfg (build.rs emits `nasm_x86_64`),
   so its arm label could never read `x86_asm`.
+- **ARM CI green again (zenrav1e#37).** The three ARM test jobs failed in
+  `intrabc_fires_and_roundtrips_both_samplings` with an overflow panic inside
+  the registry `rav1d-safe 0.5.7` aarch64 loop-restoration SIMD
+  (imazen/rav1d-safe#14, not a zenrav1e defect). The `91bf0e30` git pin above
+  (rav1d-safe 0.6.0, unreleased) is the recipe the issue asked for; CI run
+  33041346490 shows all three ARM legs passing on it. The last red job on
+  that run was `Format` (three whitespace hunks in `partition_unit.rs` /
+  `predict.rs`); fixed here. `.jj/` is now gitignored for colocated checkouts.
 
 ### Added
 - **`cooptloop_trace` feature** (default-off, analysis-only): a per-RD-evaluation
