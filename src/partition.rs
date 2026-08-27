@@ -1001,15 +1001,34 @@ pub fn has_tr(bo: TileBlockOffset, bsize: BlockSize) -> bool {
     bs <<= 1;
   }
 
-  /* The left hand of two vertical rectangles always has a top right (as the
-   * block above will have been decoded) */
-  if (target_n4_w < target_n4_h) && (bo.0.x & target_n4_w) == 0 {
+  // In a VERTICAL or VERTICAL_4 partition every rectangle before the LAST
+  // one has a top right (the block above it was decoded before it):
+  // libaom `is_last_vertical_rect = !((mi_col + width) & (height - 1))`
+  // (av1_set_mi_row_col), used by `has_top_right` in mvref_common.c, and
+  // dav1d's EDGE_I444_TOP_HAS_RIGHT edge flags. The former
+  // `(x & w) == 0` test only agrees for the 2:1 VERT shapes; for VERT_4
+  // it forced the availability on the 1st and 3rd 1:4 sliver only and left
+  // the 2nd/4th to the square rule below, which denies the top right to
+  // the 2nd sliver of a bottom-right-quadrant parent -- a spatial MV
+  // candidate the decoder does use.
+  if target_n4_w < target_n4_h
+    && ((bo.0.x + target_n4_w) & (target_n4_h - 1)) != 0
+  {
     has_tr = true;
   }
 
-  /* The bottom of two horizontal rectangles never has a top right (as the block
-   * to the right won't have been decoded) */
-  if (target_n4_w > target_n4_h) && (bo.0.y & target_n4_h) != 0 {
+  // In a HORIZONTAL or HORIZONTAL_4 partition every rectangle after the
+  // FIRST one has no top right (the block to its right is decoded later):
+  // libaom `is_first_horizontal_rect = !(mi_row & (width - 1))`. The
+  // former `(y & h) != 0` test only agrees for the 2:1 HORZ shapes; for
+  // HORZ_4 it cleared the flag on the 2nd and 4th 4:1 sliver only and let
+  // the 3rd keep the square rule's top right, adding a spatial MV
+  // candidate no decoder adds. Both mismatches shift the mv stack, hence
+  // the NEWMV/REFMV/GLOBALMV contexts, and desync the tile from the
+  // sliver's inter mode symbol on (rav1d-safe InvalidData, aomdec
+  // "Corrupted segment_ids", dav1d "Invalid argument" -- the known bug
+  // recorded against 64x64-parent non-square inter partitions).
+  if target_n4_w > target_n4_h && (bo.0.y & (target_n4_w - 1)) != 0 {
     has_tr = false;
   }
 
@@ -1091,6 +1110,96 @@ pub fn has_bl(bo: TileBlockOffset, bsize: BlockSize) -> bool {
 mod tests {
   use crate::partition::BlockSize::*;
   use crate::partition::{BlockSize, InvalidBlockSize};
+
+  /// `has_tr` (the spatial top-right MV candidate's availability) must
+  /// agree with libaom's `has_top_right` (mvref_common.c) -- with
+  /// `is_last_vertical_rect` / `is_first_horizontal_rect` exactly as
+  /// `av1_set_mi_row_col` derives them -- for every block size and every
+  /// partition-aligned position in a 64x64 superblock. The two used to
+  /// differ on the 4:1 / 1:4 slivers (HORZ_4/VERT_4), which desynced the
+  /// inter mode symbol of the 3rd HORZ_4 sliver (rav1d-safe InvalidData,
+  /// aomdec "Corrupted segment_ids"). Mutation-verified 2026-08-28: the
+  /// former `(x & w) == 0` / `(y & h) != 0` tests fail this (first at
+  /// BLOCK_4X16, mi column 5 of row 4).
+  #[test]
+  fn has_tr_matches_libaom_for_every_aligned_position() {
+    use crate::context::{BlockOffset, TileBlockOffset};
+    use crate::partition::has_tr;
+
+    // libaom `has_top_right`, transcribed (sb_mi_size = 16, no VERT_A).
+    fn libaom_has_top_right(
+      mi_row: usize, mi_col: usize, w: usize, h: usize,
+    ) -> bool {
+      let sb_mi_size = 16usize;
+      let mask_row = mi_row & (sb_mi_size - 1);
+      let mask_col = mi_col & (sb_mi_size - 1);
+      let mut bs = w.max(h);
+      if bs > 16 {
+        return false;
+      }
+      let mut has_tr = !((mask_row & bs) != 0 && (mask_col & bs) != 0);
+      while bs < sb_mi_size {
+        if mask_col & bs != 0 {
+          if (mask_col & (2 * bs)) != 0 && (mask_row & (2 * bs)) != 0 {
+            has_tr = false;
+            break;
+          }
+        } else {
+          break;
+        }
+        bs <<= 1;
+      }
+      let is_last_vertical_rect = w < h && ((mi_col + w) & (h - 1)) == 0;
+      let is_first_horizontal_rect = w > h && (mi_row & (w - 1)) == 0;
+      if w < h && !is_last_vertical_rect {
+        has_tr = true;
+      }
+      if w > h && !is_first_horizontal_rect {
+        has_tr = false;
+      }
+      has_tr
+    }
+
+    let sizes = [
+      BLOCK_4X4,
+      BLOCK_4X8,
+      BLOCK_8X4,
+      BLOCK_8X8,
+      BLOCK_8X16,
+      BLOCK_16X8,
+      BLOCK_16X16,
+      BLOCK_16X32,
+      BLOCK_32X16,
+      BLOCK_32X32,
+      BLOCK_32X64,
+      BLOCK_64X32,
+      BLOCK_64X64,
+      BLOCK_4X16,
+      BLOCK_16X4,
+      BLOCK_8X32,
+      BLOCK_32X8,
+      BLOCK_16X64,
+      BLOCK_64X16,
+    ];
+    let mut checked = 0usize;
+    for bsize in sizes {
+      let (w, h) = (bsize.width_mi(), bsize.height_mi());
+      // Two superblocks in each direction so SB-relative masks are
+      // exercised at non-zero SB origins too.
+      for y in (0..32).step_by(h) {
+        for x in (0..32).step_by(w) {
+          let bo = TileBlockOffset(BlockOffset { x, y });
+          assert_eq!(
+            has_tr(bo, bsize),
+            libaom_has_top_right(y, x, w, h),
+            "{bsize:?} at mi ({x}, {y})"
+          );
+          checked += 1;
+        }
+      }
+    }
+    assert!(checked > 1000, "{checked} positions checked");
+  }
 
   #[test]
   fn from_wh_matches_naive() {

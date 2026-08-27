@@ -15,6 +15,21 @@
   window, same exhaustive-construction impact.
 
 ### Fixed
+- **Inter frames with 4:1 / 1:4 partitions (HORZ_4/VERT_4 slivers) no
+  longer desync conforming decoders.** `has_tr` -- the availability of the
+  spatial top-right MV candidate -- encoded the VERT/HORZ rectangle rules
+  as `(x & w) == 0` / `(y & h) != 0`, which agree with libaom's
+  `is_last_vertical_rect` / `is_first_horizontal_rect` only for 2:1
+  shapes; the 3rd HORZ_4 sliver kept a candidate no decoder adds (and the
+  2nd VERT_4 sliver of a bottom-right parent lost one it has), shifting
+  the NEWMV/REFMV contexts and desyncing the tile from that sliver's inter
+  mode symbol (rav1d-safe InvalidData, dav1d "Invalid argument", aomdec
+  "Corrupted segment_ids"). Reachable from zenavif/ravif animated encodes
+  with a widened non-square threshold, not from the stock presets. Gated
+  by `has_tr_matches_libaom_for_every_aligned_position` and the
+  `Bands::Both` inter cases of `tests/sliver_64_tx_roundtrip.rs`, which
+  now also byte-compares aomdec's output against the encoder recon when
+  `SLIVER64_AOMDEC` is set (`just gate-sliver64`; CI "Gate A5" job).
 - **TX_64X16/TX_16X64 slivers now code correctly; the intra cap and the
   64x64-parent 4-way partition gate are gone (zenrav1e#28, zenrav1e#34).**
   Root cause: `encode_eob` selected the eob_pt CDF family from the nominal

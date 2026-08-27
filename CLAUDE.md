@@ -70,28 +70,35 @@ in ../zenavif's justfile.
   cargo run --release --example gate_identity -- --ci` with the dev-dep back
   on `"0.5.7"`.
 
-- **Inter frames with 64x64-parent non-square partitions can emit streams
-  that rav1d-safe, dav1d AND aomdec reject ("Corrupted segment_ids").**
-  Found 2026-08-27 while opening the TX_64X16/TX_16X64 path (#28); it is NOT
-  that path: it reproduces with the 64x64-parent HORZ_4/VERT_4 candidates
-  removed entirely, on a stream of 32x64 / 8x32 / square inter blocks with
-  `enable_inter_tx_split = false` — a configuration reachable before #28's
-  change. Content/neighbour dependent: `tests/sliver_64_tx_roundtrip.rs`
-  `Bands::Horizontal` and `Bands::Vertical` inter cases pass (both with and
-  without tx split, hundreds of 64x16/16x64 inter units), `Bands::Both`
-  fails at the third frame under tx split (`Case { chroma: Cs420, q: 100,
-  tx_select: false, frames: 3, inter_tx_split: true, bands: Both }` — add it
-  to `inter_slivers_with_and_without_tx_split` and set
-  `SLIVER64_DUMP_IVF=<dir>` for IVFs to feed aomdec/dav1d). Not reachable
-  from the stock presets (speed >= 2 sets
-  `non_square_partition_max_threshold = BLOCK_8X8`); needs a widened
-  threshold on a multi-frame encode. Next step: bisect the failing frame's
-  block list by disabling one candidate type at a time in
-  `encode_partition_topdown` (the 32x32-parent VERT_4 → 8x32 inter blocks in
-  4:2:0, whose chroma is 4x16, are the first suspect — the intra-only #35
-  fix covered the 16x4/4x16 chroma grid; inter is untested).
-
 ## Known Bugs (Fixed)
+
+### Inter 4:1 sliver top-right MV candidate desync (fixed: see master)
+Inter frames with HORZ_4/VERT_4 partitions (32x8 / 8x32 / 64x16 / 16x64 /
+16x4 / 4x16) could emit streams rav1d-safe, dav1d AND aomdec reject
+(rav1d-safe InvalidData, dav1d "Invalid argument", aomdec "Corrupted
+segment_ids" -- the segment_id read is just where the garbage surfaced).
+Root cause: `has_tr` (`src/partition.rs`, the spatial top-right MV
+candidate's availability in `setup_mvref_list`) encoded the VERT/HORZ
+rectangle rules as `(x & w) == 0` / `(y & h) != 0`, which agree with
+libaom's `is_last_vertical_rect = !((mi_col + w) & (h - 1))` /
+`is_first_horizontal_rect = !(mi_row & (w - 1))` only for the 2:1 shapes.
+For HORZ_4 the 3rd 4:1 sliver kept a top-right candidate no decoder adds
+(and for VERT_4 the 2nd 1:4 sliver of a bottom-right-quadrant parent lost
+one it has), shifting the mv stack and the NEWMV/REFMV/GLOBALMV contexts,
+so the tile desynced at that sliver's inter mode symbol. Located by
+aligning the encoder's per-symbol range trace against an instrumented
+dav1d (`DEBUG_BLOCK_INFO`): frame 2 of the `Bands::Both` case diverged
+exactly at the inter mode of the 32x8 at mi (16, 60), the 3rd HORZ_4
+sliver of the 32x32 parent at (16, 48). Not reachable from the stock
+presets (speed >= 2 caps `non_square_partition_max_threshold` at
+BLOCK_8X8; presets <= 1 are bottom-up), reachable from zenavif/ravif
+widened thresholds on animated encodes. Gates:
+`partition::tests::has_tr_matches_libaom_for_every_aligned_position` (all
+19 sizes x every aligned mi position over 2x2 superblocks vs a transcribed
+libaom rule) and `tests/sliver_64_tx_roundtrip.rs` (`Bands::Both` inter,
+both tx-split arms; rav1d-safe in-process and aomdec via
+`SLIVER64_AOMDEC` -- `just gate-sliver64`, CI "Gate A5"). Both
+mutation-verified against the pre-fix tests.
 
 ### TX_64X16/TX_16X64 eob CDF desync (issue #28, fixed: see master)
 Coding a BLOCK_64X16/16X64 sliver (HORZ_4/VERT_4 at a 64x64 parent) with

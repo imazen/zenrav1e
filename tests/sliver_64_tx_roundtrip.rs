@@ -13,12 +13,14 @@
 //! - intra, TX_MODE_LARGEST (`rdo_tx_decision = false`: no tx-size symbol,
 //!   the decoder derives TX_64X16/TX_16X64 itself);
 //! - intra, TX_MODE_SELECT (`rdo_tx_decision = true`: depth 0 written);
-//! - inter, with and without `enable_inter_tx_split`;
+//! - inter, with and without `enable_inter_tx_split`, on all three band
+//!   layouts (`Bands::Both` is the inter-frame `has_tr` desync repro);
 //! - 4:2:0 and 4:4:4 (4:4:4 slivers carry a 64x16 chroma block, coded as
 //!   two TX_32X16 units via `largest_chroma_tx_size`).
 //!
-//! The gate is exact: rav1d-safe's decoded frame must byte-equal the
-//! encoder's own reconstruction (`Packet::rec`) on every plane, so a parse
+//! The gate is exact: rav1d-safe's decoded frame (and aomdec's, when the
+//! caller sets `SLIVER64_AOMDEC`) must byte-equal the encoder's own
+//! reconstruction (`Packet::rec`) on every plane, so a parse
 //! desync AND a recon-side divergence (dequant / inverse transform) both
 //! fail. Liveness: the sliver-armed stream must differ from the
 //! sliver-free control, or HORZ_4/VERT_4 never fired and the gate is
@@ -326,6 +328,71 @@ fn run(case: Case) {
   }
   assert_decoder_matches_recon(&narrow, case, w, h, "control");
   assert_decoder_matches_recon(&wide, case, w, h, "slivers");
+  if let Ok(aomdec) = std::env::var("SLIVER64_AOMDEC") {
+    assert_aomdec_matches_recon(&aomdec, &narrow, case, w, h, "control");
+    assert_aomdec_matches_recon(&aomdec, &wide, case, w, h, "slivers");
+  }
+}
+
+/// Decodes the stream with libaom's `aomdec --rawvideo` and byte-compares
+/// its planar output against the encoder's reconstruction of every frame.
+/// Caller-selected via `SLIVER64_AOMDEC`; a failure to run the binary is a
+/// test failure, never a skip.
+fn assert_aomdec_matches_recon(
+  aomdec: &str, enc: &Encoded, case: Case, w: usize, h: usize, label: &str,
+) {
+  let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+  std::fs::create_dir_all(dir).unwrap();
+  let stem = format!(
+    "sliver64_{label}_{:?}_q{}_sel{}_f{}_split{}_{:?}",
+    case.chroma,
+    case.q,
+    case.tx_select,
+    case.frames,
+    case.inter_tx_split,
+    case.bands
+  );
+  let ivf_path = dir.join(format!("{stem}.ivf"));
+  let raw_path = dir.join(format!("{stem}.yuv"));
+  std::fs::write(&ivf_path, ivf(&enc.packets, w, h)).unwrap();
+  let out = std::process::Command::new(aomdec)
+    .arg("--rawvideo")
+    .arg("-o")
+    .arg(&raw_path)
+    .arg(&ivf_path)
+    .output()
+    .unwrap_or_else(|e| panic!("{label} {case:?}: running {aomdec}: {e}"));
+  let stderr = String::from_utf8_lossy(&out.stderr);
+  assert!(
+    out.status.success() && !stderr.contains("Corrupt"),
+    "{label} {case:?}: aomdec rejected {}: status {:?}\n{stderr}",
+    ivf_path.display(),
+    out.status
+  );
+  let raw = std::fs::read(&raw_path).unwrap();
+  let xdec = usize::from(case.chroma == ChromaSampling::Cs420);
+  let (cw, ch) = (w >> xdec, h >> xdec);
+  let mut expected = Vec::with_capacity(raw.len());
+  for (_, rec) in &enc.packets {
+    for (pi, (pw, ph)) in [(w, h), (cw, ch), (cw, ch)].into_iter().enumerate()
+    {
+      expected.extend(plane_pixels(&rec.planes[pi], pw, ph));
+    }
+  }
+  assert_eq!(
+    raw.len(),
+    expected.len(),
+    "{label} {case:?}: aomdec raw output size (frames decoded)"
+  );
+  if raw != expected {
+    let first = raw.iter().zip(&expected).position(|(a, b)| a != b).unwrap();
+    let mismatches = raw.iter().zip(&expected).filter(|(a, b)| a != b).count();
+    panic!(
+      "{label} {case:?}: aomdec output diverges from the encoder recon at \
+       byte {first} ({mismatches} of {} differ)",
+      raw.len()
+    );
+  }
 }
 
 fn ivf(
@@ -396,16 +463,23 @@ fn intra_slivers_444_both_tx_modes() {
 /// TX_64X16/TX_16X64 unit (no tx split) and as a var-tx tree split into two
 /// TX_32X16/TX_16X32 leaves (`enable_inter_tx_split`).
 ///
-/// `Bands::Both` is deliberately NOT in this inter matrix: that content
-/// produces a stream rav1d-safe, dav1d AND aomdec all reject at the third
-/// frame under tx split, and the same rejection reproduces with the 64x64-
-/// parent 4-way candidates removed entirely (a stream of 32x64 / 8x32 /
-/// square inter blocks, no 64-dim sliver in it) — i.e. a pre-existing,
-/// neighbour-dependent inter defect outside the TX_64X16/TX_16X64 path,
-/// reachable before that path was opened. See CLAUDE.md "Known Bugs".
+/// `Bands::Both` is the permanent reproduction of the inter-frame desync
+/// fixed 2026-08-28 (`has_tr` in `partition.rs`): its third frame codes a
+/// HORZ_4 32x32 parent whose 3rd 32x8 sliver was given a top-right spatial
+/// MV candidate no decoder adds (rav1e tested `(y & h) != 0` where libaom
+/// tests `(mi_row & (w - 1)) != 0`), shifting the NEWMV/REFMV contexts and
+/// desyncing the tile from that sliver's inter mode symbol on: rav1d-safe
+/// InvalidData, dav1d "Invalid argument", aomdec "Corrupted segment_ids".
+/// Mutation-verified: with the two pre-fix tests restored this case fails
+/// at packet 2 (the Horizontal/Vertical cases still pass).
+///
+/// Decoder oracles: rav1d-safe in-process (always), and aomdec when the
+/// caller sets `SLIVER64_AOMDEC=<path>` (the `gate-sliver64` justfile
+/// recipe and the CI "Gate A5" job do). No runtime skip: with the variable
+/// unset the aomdec leg is not part of the test.
 #[test]
 fn inter_slivers_with_and_without_tx_split() {
-  for bands in [Bands::Horizontal, Bands::Vertical] {
+  for bands in [Bands::Horizontal, Bands::Vertical, Bands::Both] {
     for inter_tx_split in [false, true] {
       run(Case {
         chroma: ChromaSampling::Cs420,
