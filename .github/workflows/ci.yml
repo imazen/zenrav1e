@@ -153,3 +153,16 @@ jobs:
       # runs only here. The full grid is `just gate-identity`.
       - name: gate-identity (--ci subset)
         run: cargo run --release --example gate_identity -- --ci
+
+  gate-sliver64:
+    name: Gate A5 (sliver roundtrip vs aomdec + rav1d-safe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get install -y nasm aom-tools
+      - uses: Swatinem/rust-cache@v2
+      # `SLIVER64_AOMDEC` is the caller-side switch for the aomdec leg (no
+      # runtime skip in the test); rav1d-safe always runs in-process.
+      - name: gate-sliver64
+        run: SLIVER64_AOMDEC="$(command -v aomdec)" cargo test --release --test sliver_64_tx_roundtrip

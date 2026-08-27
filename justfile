@@ -67,8 +67,16 @@ gate-recon:
     AOMDEC="${AOMDEC:-$(command -v aomdec || true)}" \
     bash scripts/gate_recon.sh
 
+# Gate A5, sliver subset: the 64-dim sliver + 4:1 inter partition
+# roundtrips (`tests/sliver_64_tx_roundtrip.rs`) against rav1d-safe
+# in-process AND aomdec (`aom-tools`; CI installs it). Fails, never skips,
+# when aomdec is missing.
+gate-sliver64:
+    SLIVER64_AOMDEC="${SLIVER64_AOMDEC:-$(command -v aomdec)}" \
+    cargo test --release --test sliver_64_tx_roundtrip
+
 # The CI-safe gate set (gate-recon and perf gates stay explicit local runs).
-gates: gate-identity
+gates: gate-identity gate-sliver64
 
 # Address sanitizer (requires nightly + clang)
 asan:
