@@ -926,31 +926,14 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
     tx_size = sub_tx_size_map[tx_size as usize]; // Always choose one level split size
   }
 
-  // TX_64X16/TX_16X64 -- reachable only for the 4:1 sliver blocks that
-  // HORZ_4/VERT_4 produce at BLOCK_64X64 parents -- have an unvalidated
-  // coefficient path: upstream rav1e can never emit those block sizes, and
-  // encodes using these transforms desync every conforming decoder (aomdec
-  // reports "Corrupted segment_ids"; bisected 2026-07-02). Cap to the
-  // one-level-split size (TX_32X16/TX_16X32), which the decoder follows via
-  // the written intra tx-size depth, until that path is validated. Inter
-  // slivers are prevented upstream in `encode_partition_topdown` instead
-  // (`write_tx_size_inter` could not signal this cap when
-  // `enable_inter_txfm_split` is off).
-  let sliver_cap =
-    !is_inter && matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64);
-  if sliver_cap {
-    // The cap is decoder-followable ONLY via the written tx-size depth,
-    // which exists only under TX_MODE_SELECT. Under TX_MODE_LARGEST the
-    // decoder derives the uncapped TX_64X16/TX_16X64 and the coefficient
-    // stream desyncs (zenrav1e#34) -- `encode_partition_topdown` must not
-    // offer 64x64-parent 4-way types without tx_mode_select. Hard assert
-    // in all builds: a silent violation is bitstream corruption.
-    assert!(
-      fi.tx_mode_select,
-      "intra 64-dim sliver TX cap requires TX_MODE_SELECT (zenrav1e#34)"
-    );
-    tx_size = sub_tx_size_map[tx_size as usize];
-  }
+  // TX_64X16/TX_16X64 (the 4:1 slivers HORZ_4/VERT_4 produce at BLOCK_64X64
+  // parents) are coded like any other max rect transform. They used to be
+  // capped to TX_32X16/TX_16X32 here (3fa735dc) because encodes using them
+  // desynced every conforming decoder; the cause was `encode_eob` keying
+  // the eob_pt CDF on the nominal 1024-coefficient area instead of the
+  // coded 512 (zenrav1e#28), fixed in `BlockContext::eob_multi_size`.
+  // `tests/sliver_64_tx_roundtrip.rs` gates the real path against
+  // rav1d-safe (encoder recon == decoder output).
 
   let mut best_tx_type = TxType::DCT_DCT;
   let mut best_tx_size = tx_size;
@@ -962,13 +945,12 @@ pub fn rdo_tx_size_type_with_filter_intra<T: Pixel>(
     && fi.config.speed_settings.transform.tx_size_rdo()
     && !is_inter;
   // The written intra tx-size symbol is a DEPTH from
-  // `max_txsize_rect_lookup[bsize]` with alphabet 0..=MAX_TX_DEPTH; the cap
-  // above already consumed one level, so shrink the search accordingly or the
-  // deepest candidate would encode depth 3 -- an out-of-alphabet symbol.
-  // `rdo_tx_size_depth` (None = full) can only shrink the walk further —
-  // shallower depths are always alphabet-legal.
+  // `max_txsize_rect_lookup[bsize]` with alphabet 0..=MAX_TX_DEPTH, so the
+  // walk starts at the block's max rect transform and never goes deeper
+  // than MAX_TX_DEPTH. `rdo_tx_size_depth` (None = full) can only shrink
+  // the walk further — shallower depths are always alphabet-legal.
   let rdo_tx_depth = if do_rdo_tx_size {
-    let full: u8 = if sliver_cap { 1 } else { 2 };
+    let full: u8 = 2;
     match fi.config.speed_settings.transform.rdo_tx_size_depth {
       Some(cap) => full.min(cap),
       None => full,
@@ -2011,16 +1993,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         // palette prediction is sparse/near-zero, so the largest legal
         // transform with DCT_DCT stands in for a per-candidate tx search
         // at a fraction of the cost.
-        let mut tx_size = max_txsize_rect_lookup[bsize as usize];
-        if matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64) {
-          // Same unvalidated-sliver-transform cap as `rdo_tx_size_type`,
-          // with the same TX_MODE_SELECT requirement (zenrav1e#34).
-          assert!(
-            fi.tx_mode_select,
-            "intra 64-dim sliver TX cap requires TX_MODE_SELECT (zenrav1e#34)"
-          );
-          tx_size = sub_tx_size_map[tx_size as usize];
-        }
+        let tx_size = max_txsize_rect_lookup[bsize as usize];
         let tx_type = TxType::DCT_DCT;
 
         let luma_mode = PredictionMode::DC_PRED;
@@ -2172,14 +2145,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
         if !uv_candidates.is_empty() {
           // Same fixed-transform policy as the luma palette trials.
-          let mut tx_size = max_txsize_rect_lookup[bsize as usize];
-          if matches!(tx_size, TxSize::TX_64X16 | TxSize::TX_16X64) {
-            assert!(
-              fi.tx_mode_select,
-              "intra 64-dim sliver TX cap requires TX_MODE_SELECT (zenrav1e#34)"
-            );
-            tx_size = sub_tx_size_map[tx_size as usize];
-          }
+          let tx_size = max_txsize_rect_lookup[bsize as usize];
           let tx_type = TxType::DCT_DCT;
 
           let luma_mode = PredictionMode::DC_PRED;

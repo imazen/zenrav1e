@@ -15,6 +15,28 @@
   window, same exhaustive-construction impact.
 
 ### Fixed
+- **TX_64X16/TX_16X64 slivers now code correctly; the intra cap and the
+  64x64-parent 4-way partition gate are gone (zenrav1e#28, zenrav1e#34).**
+  Root cause: `encode_eob` selected the eob_pt CDF family from the nominal
+  transform area (1024 → the 11-symbol 1024 CDF) while every conforming
+  decoder keys it on the coded coefficient count (512 → the 10-symbol 512
+  CDF), so the first sliver TU desynced the tile (aomdec "Corrupted
+  segment_ids"). TX_64X64/64X32/32X64 only escaped because their nominal
+  area ≥ 2048 lands on the same 1024 arm. `ContextWriter::eob_multi_size`
+  now keys on `av1_get_coded_tx_size`; the 3fa735dc TX_32X16/TX_16X32 cap,
+  the palette-trial caps and the `sliver_tx_safe` inter/TX_MODE_LARGEST gate
+  are removed, so BLOCK_64X16/16X64 code their real max rect transform under
+  both tx modes, intra and inter. Gated by a 19-size spec-table unit test
+  and `tests/sliver_64_tx_roundtrip.rs` (encoder recon must byte-equal
+  rav1d-safe's output: intra LARGEST/SELECT × 4:2:0/4:4:4 and inter ± tx
+  split; intra streams also verified with aomdec + dav1d). Stock presets
+  (speed ≥ 2, 4-way threshold BLOCK_8X8) never reach these sizes, so their
+  bytes are unchanged; `partition_range (4,64)` + threshold 64 encodes gain
+  the real 64-dim transforms. Not yet measured: the RD delta of the real
+  transforms vs the old cap on a corpus (the issue's remaining item). Found
+  along the way and left open: a pre-existing inter-frame desync with
+  64x64-parent non-square partitions that does not involve the 64-dim
+  slivers (CLAUDE.md "Known Bugs").
 - **`gate_identity` now decodes every cell with rav1d-safe before comparing or
   pinning (zenrav1e#41, class-E sweep finding).** A byte pin blesses whatever
   the encoder emitted, so a `--pin` after a desync would have locked corrupt

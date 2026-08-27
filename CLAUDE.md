@@ -70,9 +70,44 @@ in ../zenavif's justfile.
   cargo run --release --example gate_identity -- --ci` with the dev-dep back
   on `"0.5.7"`.
 
-(none currently open)
+- **Inter frames with 64x64-parent non-square partitions can emit streams
+  that rav1d-safe, dav1d AND aomdec reject ("Corrupted segment_ids").**
+  Found 2026-08-27 while opening the TX_64X16/TX_16X64 path (#28); it is NOT
+  that path: it reproduces with the 64x64-parent HORZ_4/VERT_4 candidates
+  removed entirely, on a stream of 32x64 / 8x32 / square inter blocks with
+  `enable_inter_tx_split = false` — a configuration reachable before #28's
+  change. Content/neighbour dependent: `tests/sliver_64_tx_roundtrip.rs`
+  `Bands::Horizontal` and `Bands::Vertical` inter cases pass (both with and
+  without tx split, hundreds of 64x16/16x64 inter units), `Bands::Both`
+  fails at the third frame under tx split (`Case { chroma: Cs420, q: 100,
+  tx_select: false, frames: 3, inter_tx_split: true, bands: Both }` — add it
+  to `inter_slivers_with_and_without_tx_split` and set
+  `SLIVER64_DUMP_IVF=<dir>` for IVFs to feed aomdec/dav1d). Not reachable
+  from the stock presets (speed >= 2 sets
+  `non_square_partition_max_threshold = BLOCK_8X8`); needs a widened
+  threshold on a multi-frame encode. Next step: bisect the failing frame's
+  block list by disabling one candidate type at a time in
+  `encode_partition_topdown` (the 32x32-parent VERT_4 → 8x32 inter blocks in
+  4:2:0, whose chroma is 4x16, are the first suspect — the intra-only #35
+  fix covered the 16x4/4x16 chroma grid; inter is untested).
 
 ## Known Bugs (Fixed)
+
+### TX_64X16/TX_16X64 eob CDF desync (issue #28, fixed: see master)
+Coding a BLOCK_64X16/16X64 sliver (HORZ_4/VERT_4 at a 64x64 parent) with
+its max rect transform desynced every conforming decoder. `encode_eob`
+picked the eob_pt CDF family from the nominal area (`tx_size.area_log2()`:
+1024 → the 11-symbol 1024 CDF) while decoders key it on the coded
+coefficient count (512 → the 10-symbol 512 CDF; dav1d `min(lw,3)+min(lh,3)`,
+libaom `txsize_log2_minus4`). TX_64X64/64X32/32X64 were unaffected only
+because their nominal area ≥ 2048 hits the same 1024 arm. Fix:
+`ContextWriter::eob_multi_size` keys on `av1_get_coded_tx_size`. The
+3fa735dc intra cap, the palette-trial caps, and the 64x64-parent 4-way
+partition gate (#34) are removed. Gates: `eob_multi_size_matches_spec_for_
+every_tx_size` (all 19 sizes vs the spec table) and
+`tests/sliver_64_tx_roundtrip.rs` (encoder recon == rav1d-safe output,
+intra LARGEST/SELECT × 4:2:0/4:4:4, inter ± tx split; the intra sliver
+streams also verified with aomdec + dav1d). Mutation-verified.
 
 ### CDEF dir-search debug_assert on 8-bit-in-u16 (issue #10, fixed: see master)
 `encode_decode_hbd` fuzz target crashed at `src/cdef.rs:95:9`

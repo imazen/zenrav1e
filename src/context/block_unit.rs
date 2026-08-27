@@ -2293,12 +2293,29 @@ impl ContextWriter<'_> {
     true
   }
 
+  /// Which `eob_pt` CDF family a transform block codes its end-of-block
+  /// position with: `log2(coded coefficient count) - 4`, i.e. 0 selects
+  /// the 16-coefficient CDF and 6 the 1024-coefficient one.
+  ///
+  /// Keyed on the CODED tx size (spec `Tx_Size_Sqr_Up`-clamped dims: a 64
+  /// dimension only ever codes 32 coefficients), not the nominal one. For
+  /// TX_64X64/64X32/32X64 the two agree by accident (nominal area >= 2048
+  /// hits the same 1024 arm), but TX_64X16/TX_16X64 code 512 coefficients
+  /// while their nominal area is 1024 -- keying on the nominal area wrote
+  /// `eob_pt` with the 11-symbol 1024 CDF where every conforming decoder
+  /// reads the 10-symbol 512 CDF, desyncing the tile from the first sliver
+  /// TU (zenrav1e#28: aomdec "Corrupted segment_ids").
+  #[inline]
+  pub(crate) const fn eob_multi_size(tx_size: TxSize) -> usize {
+    av1_get_coded_tx_size(tx_size).area_log2() - 4
+  }
+
   fn encode_eob<W: Writer>(
     &mut self, eob: u16, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
     plane_type: usize, w: &mut W,
   ) {
     let (eob_pt, eob_extra) = Self::get_eob_pos_token(eob);
-    let eob_multi_size: usize = tx_size.area_log2() - 4;
+    let eob_multi_size = Self::eob_multi_size(tx_size);
     let eob_multi_ctx: usize = usize::from(tx_class != TX_CLASS_2D);
 
     match eob_multi_size {
@@ -2448,5 +2465,48 @@ impl ContextWriter<'_> {
     BlockContext::set_dc_sign(&mut new_cul_level, i32::cast_from(coeffs[0]));
 
     new_cul_level
+  }
+}
+
+#[cfg(test)]
+mod eob_multi_size_tests {
+  use super::*;
+
+  /// The eob_pt CDF family per transform size, from the spec's coded
+  /// coefficient count (libaom `txsize_log2_minus4`, dav1d's
+  /// `min(lw, 3) + min(lh, 3)`): every 64 dimension codes 32 coefficients.
+  /// The sliver sizes are the only ones where nominal area (1024) and coded
+  /// area (512) disagree in a way that changes the arm (zenrav1e#28).
+  #[test]
+  fn eob_multi_size_matches_spec_for_every_tx_size() {
+    use TxSize::*;
+    let expected: [(TxSize, usize); 19] = [
+      (TX_4X4, 0),
+      (TX_8X8, 2),
+      (TX_16X16, 4),
+      (TX_32X32, 6),
+      (TX_64X64, 6),
+      (TX_4X8, 1),
+      (TX_8X4, 1),
+      (TX_8X16, 3),
+      (TX_16X8, 3),
+      (TX_16X32, 5),
+      (TX_32X16, 5),
+      (TX_32X64, 6),
+      (TX_64X32, 6),
+      (TX_4X16, 2),
+      (TX_16X4, 2),
+      (TX_8X32, 4),
+      (TX_32X8, 4),
+      (TX_16X64, 5),
+      (TX_64X16, 5),
+    ];
+    for (tx, want) in expected {
+      core::assert_eq!(
+        ContextWriter::eob_multi_size(tx),
+        want,
+        "{tx:?}: eob_pt CDF family must follow the coded coefficient count"
+      );
+    }
   }
 }
