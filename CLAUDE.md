@@ -76,6 +76,37 @@ in ../zenavif's justfile.
 
 ## Known Bugs (Fixed)
 
+### Inter 4:1 sliver joint-chroma prediction divergence (fixed: see master)
+`BLOCK_4X16` / `BLOCK_16X4` inter blocks reconstructed their chroma from a
+single motion vector, so the encoder's recon diverged from rav1d-safe,
+aomdec AND dav1d (which agree with each other) by up to ~60 levels over
+half of the joint chroma block -- 4:2:0 only, chroma planes only, and the
+drift then entered the reference frames. Root cause: in 4:2:0 a block one
+4-sample unit wide (or tall) shares one chroma block with its left (or
+upper) neighbour, and AV1 predicts each half from the corresponding
+block's MV (dav1d `is_sub8x8 = bw4 == ss_hor || bh4 == ss_ver`,
+`recon_tmpl.c`). `motion_compensate` (`src/encoder.rs`) selected that path
+with `bsize < BlockSize::BLOCK_8X8`, and `BlockSize`'s `PartialOrd` is
+*partial*: `BLOCK_4X16` / `BLOCK_16X4` compare as neither (4 < 8 on one
+axis, 16 > 8 on the other), so both fell through to the single-MV path
+that only 4:4:4 may use. Fix: `chroma_shared_with_neighbour` (a dimension
+test, not the ordinal `ge_8x8_ordinal`) plus the two missing sub-block
+predictions. Found by widening `tests/sliver_64_tx_roundtrip.rs` to four
+frames: 27 of 60 4:2:0 cases failed pre-fix (0 of 60 in 4:4:4, 0 of 36
+stock-preset configurations, which never reach the sizes); 0 of 120 after.
+Isolated by dumping the encoder's pre-LR planes and reproducing its SGR
+output bit-exactly with a libaom-derived reference, which showed the
+divergence was already in the pre-filter reconstruction, then mapping the
+differing chroma columns onto the 4-wide luma pairs. Gates:
+`encoder::test::chroma_sharing_matches_dav1d_sub8x8` (all 19 sizes vs the
+transcribed dav1d rule) and
+`inter_sliver_chroma_pairs_match_decoder` in `tests/sliver_64_tx_roundtrip.rs`
+(3 band layouts x q40/q60, 4 frames, rav1d-safe + aomdec). Both
+mutation-verified against the pre-fix test. Not reachable from the stock
+presets (speed >= 2 caps `non_square_partition_max_threshold` at
+BLOCK_8X8), reachable from zenavif/ravif widened thresholds on animated
+encodes -- the same reachability as the `has_tr` bug below.
+
 ### Inter 4:1 sliver top-right MV candidate desync (fixed: see master)
 Inter frames with HORZ_4/VERT_4 partitions (32x8 / 8x32 / 64x16 / 16x64 /
 16x4 / 4x16) could emit streams rav1d-safe, dav1d AND aomdec reject

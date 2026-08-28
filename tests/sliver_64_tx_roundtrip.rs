@@ -261,6 +261,16 @@ fn assert_decoder_matches_recon(
       if recon != *got {
         let first = recon.iter().zip(got).position(|(a, b)| a != b).unwrap();
         let mismatches = recon.iter().zip(got).filter(|(a, b)| a != b).count();
+        if std::env::var("SLIVER64_DUMP_IVF").is_ok() {
+          let positions: Vec<(usize, usize, u8, u8)> = recon
+            .iter()
+            .zip(got)
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .map(|(i, (a, b))| (i % pw, i / pw, *a, *b))
+            .collect();
+          eprintln!("MISMATCH {label} f{n} {name}: {positions:?}");
+        }
         panic!(
           "{label} {case:?}: frame {n} plane {name}: rav1d-safe output \
            diverges from the encoder recon at pixel {first} ({mismatches} \
@@ -495,6 +505,42 @@ fn inter_slivers_with_and_without_tx_split() {
         tx_select: false,
         frames: 3,
         inter_tx_split,
+        bands,
+      });
+    }
+  }
+}
+
+/// Four-frame 4:2:0 inter repro for the 4:1 / 1:4 sliver **chroma** pair
+/// divergence fixed 2026-08-28 (`chroma_shared_with_neighbour`,
+/// `src/encoder.rs`).
+///
+/// BLOCK_4X16 and BLOCK_16X4 share their chroma block with the block to
+/// their left / above, so the joint 4x8 (8x4) chroma block must be
+/// inter-predicted from both blocks' motion vectors. `motion_compensate`
+/// selected that path with `bsize < BlockSize::BLOCK_8X8`, and BlockSize's
+/// `PartialOrd` is partial: the slivers compare as neither, so they
+/// predicted the whole joint chroma block from their own MV. The
+/// encoder's reconstruction then diverged from rav1d-safe / aomdec /
+/// dav1d by up to ~60 levels over the neighbour's half of the chroma
+/// block (plane U/V only, 4:2:0 only), and the drift entered the
+/// reference frames.
+///
+/// Three frames were not enough to expose it (the stock
+/// `inter_slivers_with_and_without_tx_split` cases pass on the pre-fix
+/// encoder); four frames of accumulated inter prediction are. Measured
+/// pre-fix on the wider grid this subset is drawn from: 27 of 60 4:2:0
+/// cases failed, 0 of 60 4:4:4 cases.
+#[test]
+fn inter_sliver_chroma_pairs_match_decoder() {
+  for bands in [Bands::Horizontal, Bands::Vertical, Bands::Both] {
+    for q in [40usize, 60] {
+      run(Case {
+        chroma: ChromaSampling::Cs420,
+        q,
+        tx_select: false,
+        frames: 4,
+        inter_tx_split: false,
         bands,
       });
     }

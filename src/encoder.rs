@@ -3051,6 +3051,30 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   (has_coeff, tx_dist)
 }
 
+/// Does `bsize` share its chroma block with a neighbouring block, so that
+/// the joint chroma block has to be inter-predicted from both blocks'
+/// motion vectors?
+///
+/// dav1d: `is_sub8x8 = bw4 == ss_hor || bh4 == ss_ver` (`recon_tmpl.c`) --
+/// one 4-sample unit wide with x subsampling, or one tall with y
+/// subsampling. In 4:2:0 that is `BLOCK_4X4`, `BLOCK_4X8`, `BLOCK_8X4` and
+/// the 4:1 / 1:4 slivers `BLOCK_4X16` / `BLOCK_16X4`.
+///
+/// This is a *dimension* test, so it is deliberately not
+/// `!BlockSize::ge_8x8_ordinal()` (which is the ordinal libaom comparison
+/// for syntax gating, and excludes only the three classic sub-8x8 sizes).
+///
+/// The `motion_compensate` sub-block predictions are written for 4:2:0
+/// (they split the joint chroma block into 2-sample halves), which is also
+/// the only sampling rav1e codes inter frames for, so this returns false
+/// for 4:4:4 (no joint chroma exists there) and for 4:2:2.
+#[inline]
+fn chroma_shared_with_neighbour(
+  bsize: BlockSize, xdec: usize, ydec: usize,
+) -> bool {
+  xdec == 1 && ydec == 1 && (bsize.width_mi() == 1 || bsize.height_mi() == 1)
+}
+
 /// # Panics
 ///
 /// - If the block size is invalid for subsampling
@@ -3096,19 +3120,38 @@ pub fn motion_compensate<T: Pixel>(
     let tile_rect = luma_tile_rect.decimated(xdec, ydec);
 
     let area = Area::BlockStartingAt { bo: tile_bo.0 };
-    if p > 0 && bsize < BlockSize::BLOCK_8X8 {
+    // A block that is a single 4-sample unit wide (with x subsampling) or
+    // tall (with y subsampling) shares one chroma block with its neighbour,
+    // so that joint chroma block must be predicted from BOTH blocks' motion
+    // vectors -- dav1d's `is_sub8x8 = bw4 == ss_hor || bh4 == ss_ver`
+    // (recon_tmpl.c), libaom's equivalent in build_inter_predictors.
+    //
+    // This used to test `bsize < BlockSize::BLOCK_8X8`, and `BlockSize`'s
+    // `PartialOrd` is *partial*: BLOCK_4X16 and BLOCK_16X4 compare as
+    // neither (4 < 8 on one axis, 16 > 8 on the other), so the 4:1 / 1:4
+    // slivers fell through to the single-MV path below and predicted the
+    // whole joint chroma block from their own MV. Every conforming decoder
+    // predicts the other half from the neighbour, so the encoder's
+    // reconstruction diverged (chroma only, 4:2:0 only) and its reference
+    // frames drifted.
+    //
+    // The sub-block predictions below are 4:2:0-only (the halves are
+    // 2 samples wide/tall), which is also the only sampling rav1e supports
+    // for inter frames; 4:4:4 needs no joint chroma at all, and 4:2:2 has
+    // no such path (it used to reach the `assert!` below for BLOCK_4X8).
+    if p > 0 && chroma_shared_with_neighbour(bsize, u_xdec, u_ydec) {
+      let four_wide = bsize.width_mi() == 1;
+      let four_tall = bsize.height_mi() == 1;
       let mut some_use_intra = false;
-      if bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_4X8 {
+      if four_wide {
         some_use_intra |=
           cw.bc.blocks[tile_bo.with_offset(-1, 0)].mode.is_intra();
       };
-      if !some_use_intra && bsize == BlockSize::BLOCK_4X4
-        || bsize == BlockSize::BLOCK_8X4
-      {
+      if !some_use_intra && four_tall {
         some_use_intra |=
           cw.bc.blocks[tile_bo.with_offset(0, -1)].mode.is_intra();
       };
-      if !some_use_intra && bsize == BlockSize::BLOCK_4X4 {
+      if !some_use_intra && four_wide && four_tall {
         some_use_intra |=
           cw.bc.blocks[tile_bo.with_offset(-1, -1)].mode.is_intra();
       };
@@ -3246,6 +3289,72 @@ pub fn motion_compensate<T: Pixel>(
             &mut rec.subregion_mut(area3),
             2,
             4,
+            ref_frames,
+            mvs,
+            compound_buffer,
+          );
+        }
+        // The 1:4 sliver: like BLOCK_4X8 with twice the height. Its 4x8
+        // joint chroma block's left half belongs to the 4x16 block to the
+        // left (dav1d takes `r[0][bx - 1]` for the `bw4 == 1` case).
+        if bsize == BlockSize::BLOCK_4X16 {
+          let mv2 = cw.bc.blocks[tile_bo.with_offset(-1, 0)].mv;
+          let rf2 = cw.bc.blocks[tile_bo.with_offset(-1, 0)].ref_frames;
+          luma_mode.predict_inter(
+            fi,
+            tile_rect,
+            p,
+            po,
+            &mut rec.subregion_mut(area),
+            2,
+            8,
+            rf2,
+            mv2,
+            compound_buffer,
+          );
+          let po3 = PlaneOffset { x: po.x + 2, y: po.y };
+          let area3 = Area::StartingAt { x: po3.x, y: po3.y };
+          luma_mode.predict_inter(
+            fi,
+            tile_rect,
+            p,
+            po3,
+            &mut rec.subregion_mut(area3),
+            2,
+            8,
+            ref_frames,
+            mvs,
+            compound_buffer,
+          );
+        }
+        // The 4:1 sliver: like BLOCK_8X4 with twice the width. Its 8x4
+        // joint chroma block's top half belongs to the 16x4 block above
+        // (dav1d takes `r[-1][bx]` for the `bh4 == ss_ver` case).
+        if bsize == BlockSize::BLOCK_16X4 {
+          let mv1 = cw.bc.blocks[tile_bo.with_offset(0, -1)].mv;
+          let rf1 = cw.bc.blocks[tile_bo.with_offset(0, -1)].ref_frames;
+          luma_mode.predict_inter(
+            fi,
+            tile_rect,
+            p,
+            po,
+            &mut rec.subregion_mut(area),
+            8,
+            2,
+            rf1,
+            mv1,
+            compound_buffer,
+          );
+          let po3 = PlaneOffset { x: po.x, y: po.y + 2 };
+          let area3 = Area::StartingAt { x: po3.x, y: po3.y };
+          luma_mode.predict_inter(
+            fi,
+            tile_rect,
+            p,
+            po3,
+            &mut rec.subregion_mut(area3),
+            8,
+            2,
             ref_frames,
             mvs,
             compound_buffer,
@@ -5888,6 +5997,61 @@ pub fn update_rec_buffer<T: Pixel>(
 #[cfg(test)]
 mod test {
   use super::*;
+
+  /// `chroma_shared_with_neighbour` must agree with dav1d's
+  /// `is_sub8x8 = bw4 == ss_hor || bh4 == ss_ver` for every block size in
+  /// 4:2:0 -- including the 4:1 / 1:4 slivers BLOCK_4X16 / BLOCK_16X4,
+  /// which the former `bsize < BLOCK_8X8` test missed (BlockSize's
+  /// ordering is partial, so both compare as neither), leaving their
+  /// joint chroma block predicted from a single MV and diverging from
+  /// every decoder. 4:4:4 shares no chroma block at all.
+  #[test]
+  fn chroma_sharing_matches_dav1d_sub8x8() {
+    use BlockSize::*;
+    let sizes = [
+      BLOCK_4X4,
+      BLOCK_4X8,
+      BLOCK_8X4,
+      BLOCK_8X8,
+      BLOCK_8X16,
+      BLOCK_16X8,
+      BLOCK_16X16,
+      BLOCK_16X32,
+      BLOCK_32X16,
+      BLOCK_32X32,
+      BLOCK_32X64,
+      BLOCK_64X32,
+      BLOCK_64X64,
+      BLOCK_4X16,
+      BLOCK_16X4,
+      BLOCK_8X32,
+      BLOCK_32X8,
+      BLOCK_16X64,
+      BLOCK_64X16,
+    ];
+    let mut shared_420 = Vec::new();
+    for bsize in sizes {
+      // dav1d, 4:2:0 (ss_hor = ss_ver = 1).
+      let (bw4, bh4) = (bsize.width_mi(), bsize.height_mi());
+      let dav1d_sub8x8 = bw4 == 1 || bh4 == 1;
+      assert_eq!(
+        chroma_shared_with_neighbour(bsize, 1, 1),
+        dav1d_sub8x8,
+        "{bsize:?} in 4:2:0"
+      );
+      // 4:4:4 subsamples nothing, so no block shares its chroma.
+      assert!(!chroma_shared_with_neighbour(bsize, 0, 0), "{bsize:?} 4:4:4");
+      if dav1d_sub8x8 {
+        shared_420.push(bsize);
+      }
+    }
+    assert_eq!(
+      shared_420,
+      vec![BLOCK_4X4, BLOCK_4X8, BLOCK_8X4, BLOCK_4X16, BLOCK_16X4],
+      "every size taking the joint-chroma path needs a handler in \
+       motion_compensate"
+    );
+  }
 
   #[test]
   fn check_partition_types_order() {

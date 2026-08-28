@@ -15,6 +15,27 @@
   window, same exhaustive-construction impact.
 
 ### Fixed
+- **`BLOCK_4X16` / `BLOCK_16X4` inter blocks no longer reconstruct their
+  chroma from a single motion vector (4:2:0 chroma corruption).** In 4:2:0
+  a block one 4-sample unit wide (or tall) shares one chroma block with
+  its left (or upper) neighbour, and each half is predicted from the
+  corresponding block's MV (dav1d `is_sub8x8 = bw4 == ss_hor || bh4 ==
+  ss_ver`). `motion_compensate` selected that path with `bsize <
+  BlockSize::BLOCK_8X8`; `BlockSize`'s `PartialOrd` is partial, so the 4:1
+  slivers compared as neither and took the single-MV path. The encoder's
+  reconstruction then differed from rav1d-safe / aomdec / dav1d by up to
+  ~60 levels over the neighbour's half of the chroma block, and the drift
+  entered the reference frames of every following inter frame. Chroma
+  planes only, 4:2:0 only, and only where 4:1 partitions are reachable
+  (widened `non_square_partition_max_threshold`, as zenavif/ravif use for
+  animated encodes) -- the stock presets cap that at BLOCK_8X8 and are
+  byte-unchanged. The same change stops 4:4:4 inter blocks from reaching a
+  4:2:0-only `assert!`. Gated by
+  `encoder::test::chroma_sharing_matches_dav1d_sub8x8` and
+  `inter_sliver_chroma_pairs_match_decoder`
+  (`tests/sliver_64_tx_roundtrip.rs`, four frames, rav1d-safe + aomdec);
+  both mutation-verified. Measured: 27 of 60 four-frame 4:2:0 cases failed
+  pre-fix, 0 of 60 in 4:4:4, 0 of 120 after.
 - **Inter frames with 4:1 / 1:4 partitions (HORZ_4/VERT_4 slivers) no
   longer desync conforming decoders.** `has_tr` -- the availability of the
   spatial top-right MV candidate -- encoded the VERT/HORZ rectangle rules
