@@ -24,7 +24,11 @@ cargo check --features threading
 `just gate-identity` (A1 off-state byte-exactness, pinned fingerprints in
 `tests/gate_identity_pins.tsv`; CI runs the `--ci` subset) and
 `just gate-recon` (A5 encoder-recon vs conforming decoders) before AND after
-any change touching coding paths. Re-pin with `just gate-identity-pin` only
+any change touching coding paths. `just gate-sliver64` is the A5 subset CI
+runs on every push ("Gate A5"): the 64-dim sliver and 4:1/1:4 inter
+partition roundtrips against rav1d-safe in-process AND aomdec, recon
+byte-exact. `SLIVER64_DUMP_IVF=<dir>` on that test writes all 28 streams
+for an external dav1d/aomdec sweep. Re-pin with `just gate-identity-pin` only
 for intentional byte movement, committing the TSV diff in the same commit.
 zenavif's halves (`gate-determinism`/`gate-conformance`/`gate-ladder`) live
 in ../zenavif's justfile.
@@ -98,7 +102,13 @@ widened thresholds on animated encodes. Gates:
 libaom rule) and `tests/sliver_64_tx_roundtrip.rs` (`Bands::Both` inter,
 both tx-split arms; rav1d-safe in-process and aomdec via
 `SLIVER64_AOMDEC` -- `just gate-sliver64`, CI "Gate A5"). Both
-mutation-verified against the pre-fix tests.
+mutation-verified against the pre-fix tests. Re-verified independently
+2026-08-28: restoring both pre-fix rules fails
+`has_tr_matches_libaom_for_every_aligned_position` at BLOCK_4X16 mi (5, 4)
+and fails the named case (`Cs420, q 100, tx_select false, frames 3,
+inter_tx_split true, Bands::Both`) at packet 2 with rav1d-safe
+`InvalidData`; with the fix that case passes and all 28 IVFs dumped by
+`SLIVER64_DUMP_IVF` decode under aomdec and dav1d 1.5.4.
 
 ### TX_64X16/TX_16X64 eob CDF desync (issue #28, fixed: see master)
 Coding a BLOCK_64X16/16X64 sliver (HORZ_4/VERT_4 at a 64x64 parent) with

@@ -319,9 +319,17 @@ fn run(case: Case) {
   // (aomdec / dav1d conformance checks). Never gates or skips anything.
   if let Ok(dir) = std::env::var("SLIVER64_DUMP_IVF") {
     for (name, enc) in [("control", &narrow), ("slivers", &wide)] {
+      // The band layout is part of the stem: without it the three
+      // `Bands` variants of an otherwise identical case overwrite each
+      // other and the external-decoder sweep silently loses streams.
       let path = format!(
-        "{dir}/sliver64_{name}_{:?}_q{}_sel{}_f{}_split{}.ivf",
-        case.chroma, case.q, case.tx_select, case.frames, case.inter_tx_split
+        "{dir}/sliver64_{name}_{:?}_q{}_sel{}_f{}_split{}_{:?}.ivf",
+        case.chroma,
+        case.q,
+        case.tx_select,
+        case.frames,
+        case.inter_tx_split,
+        case.bands
       );
       std::fs::write(path, ivf(&enc.packets, w, h)).unwrap();
     }

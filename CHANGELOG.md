@@ -48,10 +48,11 @@
   (speed ≥ 2, 4-way threshold BLOCK_8X8) never reach these sizes, so their
   bytes are unchanged; `partition_range (4,64)` + threshold 64 encodes gain
   the real 64-dim transforms. Not yet measured: the RD delta of the real
-  transforms vs the old cap on a corpus (the issue's remaining item). Found
-  along the way and left open: a pre-existing inter-frame desync with
-  64x64-parent non-square partitions that does not involve the 64-dim
-  slivers (CLAUDE.md "Known Bugs").
+  transforms vs the old cap on a corpus (the issue's remaining item). The
+  separate inter-frame desync found along the way (recorded then as a
+  pre-existing bug against 64x64-parent non-square partitions) turned out
+  to be the `has_tr` 4:1/1:4 rule above, and is fixed in the same window —
+  the entry above supersedes that note.
 - **`gate_identity` now decodes every cell with rav1d-safe before comparing or
   pinning (zenrav1e#41, class-E sweep finding).** A byte pin blesses whatever
   the encoder emitted, so a `--pin` after a desync would have locked corrupt
