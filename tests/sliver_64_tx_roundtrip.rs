@@ -18,6 +18,15 @@
 //! - 4:2:0 and 4:4:4 (4:4:4 slivers carry a 64x16 chroma block, coded as
 //!   two TX_32X16 units via `largest_chroma_tx_size`).
 //!
+//! It has since grown two more inter-frame reproductions of bugs found
+//! through it, both fixed and both mutation-verified here: the `has_tr`
+//! top-right MV candidate desync (`Bands::Both` in
+//! `inter_slivers_with_and_without_tx_split`) and the BLOCK_4X16 /
+//! BLOCK_16X4 joint-chroma prediction divergence
+//! (`inter_sliver_chroma_pairs_match_decoder`, which needs four frames of
+//! accumulated inter prediction and also covers 4:4:4 plus two frame
+//! sizes that are not a whole number of superblocks).
+//!
 //! The gate is exact: rav1d-safe's decoded frame (and aomdec's, when the
 //! caller sets `SLIVER64_AOMDEC`) must byte-equal the encoder's own
 //! reconstruction (`Packet::rec`) on every plane, so a parse
