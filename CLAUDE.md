@@ -111,6 +111,15 @@ recovery in these tests starts taking its branch and the frame-count
 assertions in `tests/segmentation_resignal_roundtrip.rs` and
 `tests/sliver_64_tx_roundtrip.rs` become live checks on the drain.
 
+There are **ten** decoder `flush()` sites in three shapes, not the nine the
+literal string `dec.flush()` finds — eight recovery, one
+`raw_frames.extend(dec.flush()…)` in `segmentation_resignal_roundtrip.rs`, and
+one `for frame in dec.flush()…` wrapped across
+`sliver_64_tx_roundtrip.rs:252`. The two non-recovery sites are the ones a
+change to drain semantics can actually move, so count them separately.
+Evidence for both claims and the rest of the `66f58fa6` bump:
+`benchmarks/strict_decoder_corpus_2026-08-29.md`.
+
 ## Known Bugs (Fixed)
 
 ### Inter 4:1 sliver joint-chroma prediction divergence (fixed: see master)

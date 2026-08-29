@@ -77,8 +77,32 @@ unreachable at any thread count and `decode()` returns each single-temporal-unit
 packet synchronously. The eight `if fr.is_none() { fr = dec.flush() }` recovery
 sites never take the branch; the two collect-everything sites
 (`tests/segmentation_resignal_roundtrip.rs`, `tests/sliver_64_tx_roundtrip.rs`)
-drain zero frames under both the old and the new semantics. Their frame-count
-assertions are the instrument, and both still pass unchanged.
+drain zero frames under both the old and the new semantics.
+
+The paired runs prove it rather than merely arguing it, because the old
+semantics were the mutation:
+
+* **The recovery branch was never taken.** Old `flush()` reset first and
+  therefore returned an empty `Vec`, so a taken branch would leave `fr` as
+  `None` and the following `.expect("no decoded frame")` would panic. The suite
+  was green at `91bf0e30`, so the branch was not reached — no experiment
+  needed.
+* **The drain returns nothing.** Both collect-everything sites assert an exact
+  frame count (`raw_frames.len() == frames`, `decoded.len() ==
+  enc.packets.len()`). Under the old semantics `flush()` contributed zero, so
+  the `decode()` loop already supplied the full count; if the new drain
+  produced even one extra frame the assertion would now fail high. It does not.
+
+Counts are byte-identical across the two runs for all fourteen test binaries
+(`3/197/0/0/3/0/3/6/1/5/1/2/0/6+6ign`).
+
+Note for anyone reading the earlier brief for this bump: it described nine
+`dec.flush()` sites, all in the recovery shape. There are **ten**, in three
+shapes — eight recovery, one `raw_frames.extend(dec.flush()…)`, and one
+`for frame in dec.flush()…`. The literal string `dec.flush()` appears nine
+times only because `tests/sliver_64_tx_roundtrip.rs:252` wraps the call across
+two lines. The two non-recovery sites are exactly the ones that could have
+moved, so the distinction matters.
 
 ## Host and versions
 
