@@ -73,3 +73,6 @@ fuzz-*.log
 
 # Jujutsu (colocated) metadata
 .jj/
+
+# Python bytecode from benchmarks/bdrate.py
+__pycache__/

@@ -75,6 +75,24 @@ gate-sliver64:
     SLIVER64_AOMDEC="${SLIVER64_AOMDEC:-$(command -v aomdec)}" \
     cargo test --release --test sliver_64_tx_roundtrip
 
+# Gate A5, corpus half of zenrav1e#28: encode a real-image corpus in the
+# only configuration that reaches BLOCK_64X16/16X64 (top-down, 4..64
+# partition range, non-square threshold 64) and require aomdec AND dav1d --
+# plus rav1d-safe when IVF_RAW points at zenavif's ivf_raw example, the same
+# optional leg gate-recon uses -- to decode every stream byte-identically to
+# the encoder's own reconstruction.
+# Needs a manifest of raw 8-bit RGB stills; see benchmarks/sliver64_rd_*.md
+# for the corpus recipe. Local-only (external decoders + corpus).
+gate-sliver64-corpus manifest speed="2" qs="80,130,205":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dump="${SLIVER64_RD_DUMP:-$HOME/tmp/sliver64-corpus}"
+    rm -rf "$dump"
+    cargo build --release --example sliver64_rd
+    SLIVER64_RD_DUMP="$dump" ./target/release/examples/sliver64_rd \
+      "{{manifest}}" "{{speed}}" "{{qs}}" deep > "$dump.tsv"
+    IVF_RAW="${IVF_RAW:-}" bash scripts/sliver64_corpus_decode.sh "$dump"
+
 # The CI-safe gate set (gate-recon and perf gates stay explicit local runs).
 gates: gate-identity gate-sliver64
 
