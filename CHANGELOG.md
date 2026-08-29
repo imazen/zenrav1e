@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+### Changed
+- **Third-party lockfile refreshed within the existing requirements** (`e881365`).
+  `Cargo.lock` only — no manifest requirement moved, so every version stays
+  inside the range the manifests already declare. 70 packages advanced, notably
+  `libc` 0.2.186 → 0.2.189, `cc` 1.2.64 → 1.4.4, `zerocopy` 0.8.52 → 0.8.56,
+  `thiserror` 2.0.18 → 2.0.20, `criterion` 0.8.0 → 0.8.2, `clap` 4.6.1 → 4.6.6,
+  `regex` 1.12.4 → 1.13.1, `libgit2-sys` 0.18.5+1.9.4 → 0.18.8+1.9.7 and the
+  crossbeam family. `getrandom` 0.4.2 → 0.4.3 drops its `wit-bindgen` / `wasm-*`
+  backend subtree (13 packages leave the graph); `flate2` 1.1.10 pulls in
+  `zlib-rs` 0.6.7. `rand` moves 0.10.1 → 0.10.2, still clear of the
+  GHSA-cq8v-f236-94qc fix line noted below.
+  `archmage` / `archmage-macros` were deliberately **held** at 0.9.26 (0.9.28 is
+  available) so this refresh does not move the zen-family graph, and the
+  `rav1d-safe` git dependency stays pinned at rev `66f58fa6`.
+  Verified on aarch64-apple-darwin: 227/227 workspace tests, the three
+  feature-permutation legs, clippy `-D warnings`, `cargo fmt --check`, MSRV via
+  `cargo hack check --rust-version` (under rustup 1.89), and `gate-sliver64`
+  5/5 — the sliver / 4:1-inter roundtrips still byte-agree with `aomdec`.
+  `gate-identity` reported 360/360 arm cells and **0 drift**; its byte-fingerprint
+  half is `linux-x86_64`-pinned and so is CI's `gate-identity --ci` job, not
+  reproducible on this host. No pins were added for macos-aarch64.
+
+### Deferred (needs a manifest bump — owner decision)
+These are blocked by the declared requirements, and every one is a semver-breaking
+0.x bump on a crate that touches encode behaviour or test-input generation, so
+none was taken as part of a routine dependency refresh:
+`av-scenechange` 0.14.1 → 0.23.0, `av1-grain` 0.2.5 → 0.4.2, `v_frame` 0.3.9 →
+0.5.2, `itertools` 0.14.0 → 0.15.0, `num-derive` 0.4.2 → 0.5.1, `pastey` 0.1.1 →
+0.2.3, and `rand` / `rand_chacha` 0.9 → 0.10 (dev- and `cfg(fuzzing)`-only, but a
+0.9 → 0.10 move changes generated test inputs). Note the ceilings shown are what
+`rust-version = "1.89"` allows: crates.io currently has `av-scenechange` 0.24.1,
+`av1-grain` 0.5.0 and `v_frame` 0.7.0, all of which need a newer MSRV.
+
 ### Notes
 - **The failed `Dependabot Updates` run from 2026-04-14 is stale, and nothing here
   is broken.** Investigated 2026-08-29 as part of a workspace-wide sweep of six
