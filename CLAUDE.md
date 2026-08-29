@@ -74,10 +74,42 @@ in ../zenavif's justfile.
   `gate_identity`'s decode gate: every `s2/q140` cell on Apple Silicon, all
   images/tunes/arms; `aomdec` and `dav1d` decode the same bytes. Fixed on
   rav1d-safe main (0.6.0-unreleased) — the dev-dep is git-pinned to
-  `91bf0e30d346a9236ac4a0013f2a8a713452d37b`. Return to a registry dep at the
-  rav1d-safe 0.6.0 publish. Local repro: `GATE_IDENTITY_DUMP=~/tmp/gate-dump
-  cargo run --release --example gate_identity -- --ci` with the dev-dep back
-  on `"0.5.7"`.
+  `66f58fa6a64c689998721cc5cdb16a4698e26eec` (2026-08-29; was `91bf0e30`).
+  Return to a registry dep at the rav1d-safe 0.6.0 publish. Local repro:
+  `GATE_IDENTITY_DUMP=~/tmp/gate-dump cargo run --release --example
+  gate_identity -- --ci` with the dev-dep back on `"0.5.7"`.
+
+## Decoder oracle: rav1d-safe is Strict by default
+
+Since the `66f58fa6` pin, `rav1d_safe::Decoder::new()` uses
+`Strictness::Strict` (rav1d-safe `2e0f7e8`): the AV1 §6.10.8 `segment_id`
+bound and dav1d's `strict_std_compliance` checks are `Error::InvalidData`
+instead of concealment. All ten `Decoder::new()` sites here (six round-trip
+tests + `examples/gate_identity.rs`) inherit it; none passes `with_settings`.
+
+**A round trip that fails under Strict is an encoder bug this suite was
+hiding, not a decoder regression.** rav1d-safe#422 was found exactly that
+way, through zenrav1e#35. Reduce it to the smallest failing configuration
+and fix the encoder. Do **not** set `Strictness::Lenient`, and do not pin
+back — either move silences the oracle.
+
+Reaching the enum from a consumer is awkward at this rev: `Strictness` is not
+re-exported from rav1d-safe's crate root (its `lib.rs` `pub use
+src::managed::{…}` omits it, and the committed
+`docs/public-api/rav1d-safe.txt` shows only `src::managed::Strictness`),
+while `Settings` is `#[non_exhaustive]`. So a deliberate Lenient decode has
+to be written as `let mut s = rav1d_safe::Settings::default(); s.strictness =
+rav1d_safe::src::managed::Strictness::Lenient;` — tracked as
+imazen/rav1d-safe#525.
+
+Frame threading is unreachable here, which is why rav1d-safe `59eb17b`
+(`flush()` drains before it resets) changed no frame counts: the dev-dep
+resolves `default` (`bitdepth_8` + `bitdepth_16`) with no `unchecked`, and
+`get_num_threads` has `#[cfg(not(feature = "unchecked"))] let n_fc = 1`. If
+that feature is ever enabled, the `if fr.is_none() { fr = dec.flush() }`
+recovery in these tests starts taking its branch and the frame-count
+assertions in `tests/segmentation_resignal_roundtrip.rs` and
+`tests/sliver_64_tx_roundtrip.rs` become live checks on the drain.
 
 ## Known Bugs (Fixed)
 

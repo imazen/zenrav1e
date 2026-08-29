@@ -14,6 +14,57 @@
   field (plus the new `CoeffRdStack` config struct) in the same 0.2.0
   window, same exhaustive-construction impact.
 
+### Changed
+- **The `rav1d-safe` dev-dependency moved from `91bf0e30` to `66f58fa6`** (22
+  commits), the rev zenavif and ravif already pin. This repo is where that
+  range bites hardest: rav1d-safe is the decoder oracle for six round-trip
+  tests and `examples/gate_identity.rs`, across ten `Decoder::new()` call
+  sites and no `with_settings`, so every one of them picks up the new
+  `Settings::default()`.
+  - **`Decoder::new()` is now `Strictness::Strict`** (rav1d-safe `2e0f7e8`):
+    the AV1 §6.10.8 `segment_id` bound plus dav1d's `strict_std_compliance`
+    checks are errors instead of concealment. **It rejected nothing we
+    emit.** `cargo test --workspace` is green with per-binary counts
+    identical to the pre-bump run (3/197/0/0/3/0/3/6/1/5/1/2/0/6+6ign), and
+    `gate_identity`'s decode gate accepted all 441 cells of the full grid
+    (3 images x 3 speeds x 3 quantizers x 2 tunes, plus every neutral and
+    armed-path arm). Positive control that Strict is genuinely armed at this
+    rev under our feature set: rav1d-safe's committed zenrav1e#35 desync
+    vector is `Err(InvalidData)` from `Decoder::new()` and `Ok(Some(frame))`
+    under `Strictness::Lenient`. If a round trip ever does fail under
+    Strict, it is an encoder bug this suite was hiding — reduce and file it;
+    do **not** set `Lenient` or pin back.
+  - **`Decoder::flush()` drains owed frames before it resets** (rav1d-safe
+    `59eb17b`). Inert for this repo as configured, and verified so rather
+    than assumed: the dev-dep resolves `rav1d-safe` with `default`
+    (`bitdepth_8` + `bitdepth_16`) and no `unchecked`, and
+    `get_num_threads`'s `#[cfg(not(feature = "unchecked"))] let n_fc = 1`
+    makes frame threading unreachable at any thread count, so `decode()`
+    returns each single-temporal-unit packet synchronously. The eight
+    `if fr.is_none() { fr = dec.flush() }` recovery sites never take the
+    branch, and the two collect-everything sites drain zero frames under
+    both old and new semantics. Their frame-count assertions —
+    `raw_frames.len() == frames` in `tests/segmentation_resignal_roundtrip.rs`
+    and `decoded.len() == enc.packets.len()` in
+    `tests/sliver_64_tx_roundtrip.rs` — are the instrument, and both still
+    pass unchanged.
+  - **Encoded bytes did not move**, measured rather than assumed: the 81
+    `gate_identity` baseline and armed-path fingerprints (length +
+    fnv1a64 per cell) produced by a new-pin build are identical to the 81
+    captured from an old-pin build, 0 drift, with all 360 neutral-arm
+    equality contracts holding. The `Cargo.lock` delta is exactly the two
+    `source =` lines for `rav1d-safe` and `rav1d-disjoint-mut`; no
+    transitive version moved.
+  - Also in the range and relevant to this repo's CI rather than this host:
+    `ee07356` (16bpc AVX2 horizontal 8-tap source over-read) and `3426ebf`
+    (x86_64 loopfilter H window reading one column past the picture row,
+    rav1d-safe#524) are x86_64-only, and `6f6081f` (16bpc bilinear MC
+    source slice) is the aarch64 sibling of the aarch64 Wiener panic this
+    dep is git-pinned for. `08245d9` and `0266093` are unreachable here —
+    the first needs a c-ffi allocator returning a negative stride, the
+    second a `DisjointMut` element wider than a byte, and this decoder uses
+    neither.
+
 ### Fixed
 - **The `Fuzz` workflow's push trigger named a branch that does not exist**, so
   it never fired on a push. `on.push.branches` was `[main]` while this repo's

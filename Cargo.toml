@@ -191,14 +191,32 @@ criterion = { version = "0.8", default-features = false }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 assert_cmd = "2.0"
 criterion = "0.8"
-# Pure-Rust AV1 decoder; tests/trellis_roundtrip.rs uses it to verify that
-# enable_trellis (multi-level RDOQ) output is valid, decodable AV1.
+# Pure-Rust AV1 decoder — the conformance oracle for this encoder. Six
+# round-trip tests plus examples/gate_identity.rs decode what we emit and
+# byte-compare it against the encoder's own reconstruction, so the rev this
+# points at decides how hard the oracle pushes back.
+#
 # Git-pinned past 0.5.7: the registry release index-panics in its aarch64
-# Wiener loop-restoration SIMD on conformant streams (gate_identity's new
+# Wiener loop-restoration SIMD on conformant streams (gate_identity's
 # decode gate hit it on 30/98 cells — every s2/q140 cell — on an Apple
 # Silicon host; aomdec + dav1d decode the same bytes). Fixed on main,
 # unreleased. Return to a registry dep at the rav1d-safe 0.6.0 publish.
-rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "91bf0e30d346a9236ac4a0013f2a8a713452d37b" }
+#
+# 66f58fa6 is the workspace-wide alignment rev (zenavif and ravif pin the
+# same one). Two changes in 91bf0e30..66f58fa6 alter what this repo's
+# oracle does, both deliberately kept:
+#   * 2e0f7e8 — `Settings::strictness` defaults to `Strict`, so every
+#     `Decoder::new()` here now rejects what libaom rejects (AV1 §6.10.8
+#     segment_id bounds plus dav1d's strict_std_compliance checks) instead
+#     of concealing it. A round trip that fails under Strict is an encoder
+#     bug this suite was hiding — rav1d-safe#422 was found exactly that way,
+#     via zenrav1e#35. Do NOT set `Strictness::Lenient` to make a case pass.
+#   * 59eb17b — `Decoder::flush()` drains owed frames BEFORE it resets, so
+#     the `if fr.is_none() { fr = dec.flush() }` recovery in these tests can
+#     now actually recover a frame, and the two collect-everything call
+#     sites (segmentation_resignal, sliver_64_tx) see every temporal unit
+#     left unparsed in the last chunk.
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "66f58fa6a64c689998721cc5cdb16a4698e26eec" }
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"
