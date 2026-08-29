@@ -545,4 +545,17 @@ fn inter_sliver_chroma_pairs_match_decoder() {
       });
     }
   }
+  // 4:4:4 subsamples nothing, so no block shares a chroma block and the
+  // pair path must stay off: `chroma_shared_with_neighbour` returns false,
+  // and these blocks take the single-MV path (which is what the spec asks
+  // for here, and which the pre-fix `bsize < BLOCK_8X8` test would have
+  // routed into a 4:2:0-only `assert!` for BLOCK_4X4/4X8/8X4).
+  run(Case {
+    chroma: ChromaSampling::Cs444,
+    q: 60,
+    tx_select: false,
+    frames: 4,
+    inter_tx_split: false,
+    bands: Bands::Both,
+  });
 }
