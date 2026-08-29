@@ -25,7 +25,10 @@
 # coverage rides the s2/s6 presets (prediction_modes >= ComplexKeyframes).
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORK="${WORK:-/tmp/zenrav1e_gate_recon.$$}"
+# Scratch under $HOME/tmp, not /tmp: /tmp is wiped at unpredictable times on
+# these dev boxes, and this script writes the y4m inputs, the IVFs and every
+# decoder's raw output there. Override with WORK=<dir>.
+WORK="${WORK:-$HOME/tmp/zenrav1e_gate_recon.$$}"
 IVF_RAW="${IVF_RAW:-}"
 AOMDEC="${AOMDEC:-}"
 

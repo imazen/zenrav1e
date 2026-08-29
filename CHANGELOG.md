@@ -66,6 +66,13 @@
     neither.
 
 ### Fixed
+- **`scripts/gate_recon.sh` defaulted its scratch directory to `/tmp`.** The
+  gate writes its y4m inputs, every probed IVF and every decoder's raw output
+  under `$WORK`, and `/tmp` is wiped at unpredictable times on these dev
+  boxes — a mid-run wipe loses the evidence a `RECONFAIL` line points at. Now
+  `$HOME/tmp/zenrav1e_gate_recon.$$`; `WORK=<dir>` still overrides. Verified
+  by running the gate on the new default: 54 cells, 0 failures, aomdec leg,
+  and the `EXIT` trap cleans the directory up.
 - **The `Fuzz` workflow's push trigger named a branch that does not exist**, so
   it never fired on a push. `on.push.branches` was `[main]` while this repo's
   default branch is `master` (`ci.yml` has always said `master`). Every `Fuzz`
