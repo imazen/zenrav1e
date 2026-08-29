@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### Notes
+- **The failed `Dependabot Updates` run from 2026-04-14 is stale, and nothing here
+  is broken.** Investigated 2026-08-29 as part of a workspace-wide sweep of six
+  repos showing the same red workflow. The finding for this repo is "no action":
+  - The two failed runs (`24379344413`, `24375270332`, both `event: dynamic` —
+    GitHub-side jobs, there is no workflow file and no `.github/dependabot.yml`
+    here) were triggered by a single advisory, **GHSA-cq8v-f236-94qc** on `rand`,
+    opened `2026-04-14T01:05Z` against `Cargo.lock` (vulnerable `= 0.10.0`, fixed
+    in `0.10.1`). That alert reached **`state: fixed` on 2026-04-16** — two days
+    later — and this repo has **zero open Dependabot alerts** today.
+  - Their logs are past GitHub's 90-day retention (`/actions/runs/24379344413/logs`
+    → HTTP 410), so the exact error text is unrecoverable. What *is* checkable is
+    whether the condition still exists, and it does not: `cargo metadata` in a
+    **fresh standalone clone** of `master` exits 0. That is the environment
+    Dependabot runs in — a lone checkout with no sibling repositories — so a run
+    today would resolve fine.
+  - Unlike zenavif/zenmetrics (which fail because workspace members depend on
+    sibling repos via `../` paths that Dependabot's lone checkout cannot see) and
+    unlike zenpipe (stale lockfiles committed inside workspace members), this repo
+    has neither problem: no path dependency escapes the repository root, and the
+    only other tracked lockfile, `apidoc/Cargo.lock`, belongs to a directory that
+    declares its own `[workspace]`, so cargo genuinely owns it.
+  - **Decision: leave Dependabot enabled and change nothing.** The red mark is the
+    residue of one advisory that was resolved four months ago, not a broken
+    integration. Adding a `.github/dependabot.yml` would not have prevented it
+    (security updates need no config file) and would only stand up a second
+    version-update bot.
+
 ### QUEUED BREAKING CHANGES
 - `EncoderConfig` gained three public fields (`variance_boost_strength`,
   `variance_boost_deep`, `quant_rounding_bias`) — breaking for exhaustive
