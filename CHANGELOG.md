@@ -68,8 +68,19 @@
   split; intra streams also verified with aomdec + dav1d). Stock presets
   (speed ≥ 2, 4-way threshold BLOCK_8X8) never reach these sizes, so their
   bytes are unchanged; `partition_range (4,64)` + threshold 64 encodes gain
-  the real 64-dim transforms. Not yet measured: the RD delta of the real
-  transforms vs the old cap on a corpus (the issue's remaining item). The
+  the real 64-dim transforms. **Measured** (`benchmarks/sliver64_rd_2026-08-28.md`,
+  47 corpus cells × 9 quantizers against a build of `e4883037^`): the real
+  transforms are worth **−0.076 % BD-rate(Y)** (−0.084 % over the 43 cells
+  that place a sliver block; best −0.83 %, worst +0.39 %; −0.034 % coded
+  bytes at matched q) and are 1.4 % *faster* in a controlled serial A/B
+  (run-to-run spread ≤ 0.11 %), so the fix's value
+  is correctness rather than compression — and the 206 rows that place no
+  sliver block in either arm are byte-identical, which is what confines the
+  change to that path. The same corpus also closes the roundtrip half of the
+  issue: 141/141 dumped streams decode under aomdec 3.14.1, dav1d 1.5.4
+  **and** rav1d-safe byte-identically to the encoder's reconstruction
+  (`scripts/sliver64_corpus_decode.sh`, `just gate-sliver64-corpus`;
+  mutation-verified against a flipped stream bit and a flipped recon byte). The
   separate inter-frame desync found along the way (recorded then as a
   pre-existing bug against 64x64-parent non-square partitions) turned out
   to be the `has_tr` 4:1/1:4 rule above, and is fixed in the same window —
@@ -100,6 +111,20 @@
   `predict.rs`); fixed here. `.jj/` is now gitignored for colocated checkouts.
 
 ### Added
+- **`examples/sliver64_rd.rs` + `benchmarks/bdrate.py` + `scripts/sliver64_corpus_decode.sh`**
+  — the in-repo RD/conformance harness for the 64-dim sliver transforms
+  (zenrav1e#28). The example sweeps a raw-RGB still corpus over a quantizer
+  grid in the only configuration that reaches `BLOCK_64X16`/`BLOCK_16X64`
+  (top-down, 4..64 partition range, non-square threshold 64 — the `deep`
+  mode; `stock` is the control that must show zero sliver pixels), reporting
+  bytes, PSNR, encode time and per-sliver-size pixel counts, and with
+  `SLIVER64_RD_DUMP=<dir>` also dumping each stream plus the encoder's
+  reconstruction. `bdrate.py` BD-rates two such TSVs (pure stdlib);
+  `sliver64_corpus_decode.sh` (`just gate-sliver64-corpus <manifest>`)
+  requires aomdec **and** dav1d — plus rav1d-safe when `IVF_RAW` points at
+  zenavif's `ivf_raw`, the same optional leg `gate_recon.sh` uses — to decode
+  every dumped stream byte-identically to that reconstruction. Results:
+  `benchmarks/sliver64_rd_2026-08-28.md`.
 - **`cooptloop_trace` feature** (default-off, analysis-only): a per-RD-evaluation
   decision trace of the `(lambda, rate, distortion, cost)` currency that
   `compute_rd_cost` combines — the dataset generator for the COOPT_LOOP joint

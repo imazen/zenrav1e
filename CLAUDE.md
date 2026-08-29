@@ -28,7 +28,12 @@ any change touching coding paths. `just gate-sliver64` is the A5 subset CI
 runs on every push ("Gate A5"): the 64-dim sliver and 4:1/1:4 inter
 partition roundtrips against rav1d-safe in-process AND aomdec, recon
 byte-exact. `SLIVER64_DUMP_IVF=<dir>` on that test writes all 28 streams
-for an external dav1d/aomdec sweep. Re-pin with `just gate-identity-pin` only
+for an external dav1d/aomdec sweep. `just gate-sliver64-corpus <manifest>`
+is the corpus half (local-only: external decoders + a raw-RGB still
+corpus) — `examples/sliver64_rd.rs` encodes the corpus in the only
+configuration that reaches BLOCK_64X16/16X64 and
+`scripts/sliver64_corpus_decode.sh` requires aomdec AND dav1d to decode
+every stream byte-identically to the encoder recon. Re-pin with `just gate-identity-pin` only
 for intentional byte movement, committing the TSV diff in the same commit.
 zenavif's halves (`gate-determinism`/`gate-conformance`/`gate-ladder`) live
 in ../zenavif's justfile.
@@ -158,7 +163,17 @@ partition gate (#34) are removed. Gates: `eob_multi_size_matches_spec_for_
 every_tx_size` (all 19 sizes vs the spec table) and
 `tests/sliver_64_tx_roundtrip.rs` (encoder recon == rav1d-safe output,
 intra LARGEST/SELECT × 4:2:0/4:4:4, inter ± tx split; the intra sliver
-streams also verified with aomdec + dav1d). Mutation-verified.
+streams also verified with aomdec + dav1d). Mutation-verified. Corpus
+half of the same gate: `just gate-sliver64-corpus` — 141/141 streams
+(47 images × q80/130/205, 73 of them sliver-live) decode under aomdec
+3.14.1, dav1d 1.5.4 and rav1d-safe (the `IVF_RAW` leg) byte-identically
+to the recon. **RD payoff
+measured** (`benchmarks/sliver64_rd_2026-08-28.md`, 47 cells × 9
+quantizers vs a build of `e4883037^`): −0.076 % BD-rate(Y) and 1.4 % faster
+in a serial A/B — the real transforms are RD-neutral, so this was a correctness fix,
+not a compression win. Do not re-litigate it as an RD feature; the 206
+rows placing no sliver in either arm are byte-identical, which is the
+evidence that the change is confined to that path.
 
 ### CDEF dir-search debug_assert on 8-bit-in-u16 (issue #10, fixed: see master)
 `encode_decode_hbd` fuzz target crashed at `src/cdef.rs:95:9`

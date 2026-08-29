@@ -32,11 +32,14 @@ shows why.
 | `issue6-bottomup-qm-2026-06-13.md` | Bottom-up vs top-down partition × QM | **negative** — bottom-up never beats top-down; workaround stays |
 | `issue6-{photo,scifig}-clean-2026-06-13.tsv`, `issue6-probe-*.tsv` | Bottom-up proving sweep data | — |
 | `stage2_rdo_estimate_2026-06-18.md` | Closed-form RDO coeff-rate estimate | RD-neutral but only ~5% faster — large-speedup premise falsified |
+| `sliver64_rd_2026-08-28.md` | Real `TX_64X16`/`TX_16X64` vs the 3fa735dc cap (zenrav1e#28) | **−0.076%** BD-rate(Y), 47 cells, no time cost — the fix is a correctness fix, not an RD win |
 
 Each `.md` records its own corpus, exact zenrav1e commit, metric build, and the
 harness used (the RD harnesses live in `zenavif`'s `encode_sweep` example and in
 `/mnt/v/output/...` measurement dirs, pinned via `[patch.crates-io]` to the
-local zenrav1e under test). Re-deriving a verdict means re-running that file's
+local zenrav1e under test; `sliver64_rd_2026-08-28.md` is the exception — its
+harness is in-repo, `examples/sliver64_rd.rs` plus `benchmarks/bdrate.py`, and
+reproduces from this checkout alone). Re-deriving a verdict means re-running that file's
 stated harness against the listed commit; the committed `.tsv` is the recorded
 output.
 
