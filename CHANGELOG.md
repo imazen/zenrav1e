@@ -7,9 +7,10 @@
   `Cargo.lock` only — no manifest requirement moved, so every version stays
   inside the range the manifests already declare. 70 packages advanced, notably
   `libc` 0.2.186 → 0.2.189, `cc` 1.2.64 → 1.4.4, `zerocopy` 0.8.52 → 0.8.56,
-  `thiserror` 2.0.18 → 2.0.20, `criterion` 0.8.0 → 0.8.2, `clap` 4.6.1 → 4.6.6,
+  `thiserror` 2.0.18 → 2.0.20, `serde` 1.0.228 → 1.0.229, `clap` 4.6.1 → 4.6.6,
   `regex` 1.12.4 → 1.13.1, `libgit2-sys` 0.18.5+1.9.4 → 0.18.8+1.9.7 and the
-  crossbeam family. `getrandom` 0.4.2 → 0.4.3 drops its `wit-bindgen` / `wasm-*`
+  crossbeam family (`-channel` 0.5.15 → 0.5.16, `-deque`, `-epoch`, `-queue`,
+  `-utils`). `getrandom` 0.4.2 → 0.4.3 drops its `wit-bindgen` / `wasm-*`
   backend subtree (13 packages leave the graph); `flate2` 1.1.10 pulls in
   `zlib-rs` 0.6.7. `rand` moves 0.10.1 → 0.10.2, still clear of the
   GHSA-cq8v-f236-94qc fix line noted below.
