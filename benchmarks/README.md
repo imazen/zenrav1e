@@ -1,6 +1,6 @@
 # zenrav1e benchmarks
 
-Two kinds of measurement live here:
+Three kinds of measurement live here:
 
 1. **Compression (RD) results** — BD-rate of zenrav1e's still-image features
    versus upstream rav1e, the numbers quoted in the top-level README. These come
@@ -8,6 +8,9 @@ Two kinds of measurement live here:
    committed as `.tsv` so the verdicts are auditable.
 2. **Kernel microbenchmarks** — the in-repo `../benches/` Criterion suite, fully
    reproducible from this repo.
+3. **Conformance sweeps** — decoder-agreement records: how many streams an
+   independent decoder accepted, and whether its pixels byte-equal the
+   encoder's own reconstruction. These carry no RD verdict.
 
 All numbers here are **measured, not estimated**. No `-C target-cpu=native` is
 used (runtime SIMD dispatch is what ships). Negative results are kept on purpose:
@@ -42,6 +45,18 @@ harness is in-repo, `examples/sliver64_rd.rs` plus `benchmarks/bdrate.py`, and
 reproduces from this checkout alone). Re-deriving a verdict means re-running that file's
 stated harness against the listed commit; the committed `.tsv` is the recorded
 output.
+
+## Conformance sweeps
+
+| File | What it measures | Headline |
+|------|------------------|----------|
+| `strict_decoder_corpus_2026-08-29.md` | Whether the newly-`Strict` rav1d-safe (`66f58fa6`) rejects anything this encoder emits, and whether its pixels byte-equal the recon | **0 rejections, 0 mismatches** — 141 corpus streams (73 sliver-live) under rav1d-safe + aomdec + dav1d, 54 recon-grid cells, 441 gate_identity cells; encoded bytes unmoved (81/81 fingerprints, 0 drift) |
+| `strict_decoder_corpus_2026-08-29.tsv` | Per-cell encode side of that sweep | 141 rows, `px_64x16`/`px_16x64` record sliver liveness |
+
+A conformance sweep passes only on byte-equality with the encoder's
+reconstruction — a decoder that merely *accepts* a stream does not clear it,
+because the failure mode being watched for is an encoder that optimized against
+a reconstruction no conforming decoder produces.
 
 ## Kernel microbenchmarks (`../benches/`)
 
