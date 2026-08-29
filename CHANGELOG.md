@@ -20,7 +20,9 @@
   range bites hardest: rav1d-safe is the decoder oracle for six round-trip
   tests and `examples/gate_identity.rs`, across ten `Decoder::new()` call
   sites and no `with_settings`, so every one of them picks up the new
-  `Settings::default()`.
+  `Settings::default()`. Full record, including the widest leg (141 corpus
+  streams under three decoders) and the positive control:
+  `benchmarks/strict_decoder_corpus_2026-08-29.md` (831e04b2).
   - **`Decoder::new()` is now `Strictness::Strict`** (rav1d-safe `2e0f7e8`):
     the AV1 §6.10.8 `segment_id` bound plus dav1d's `strict_std_compliance`
     checks are errors instead of concealment. **It rejected nothing we
