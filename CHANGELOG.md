@@ -14,6 +14,23 @@
   field (plus the new `CoeffRdStack` config struct) in the same 0.2.0
   window, same exhaustive-construction impact.
 
+### Added
+- **`examples/ivf_raw.rs`** — decodes an IVF or bare-OBU stream with
+  rav1d-safe and writes the raw planar pixels of its last frame, byte-compatible
+  with `aomdec --rawvideo`. This makes the rav1d-safe leg of `just gate-recon`
+  and `just gate-sliver64-corpus` self-contained: both take the binary through
+  `IVF_RAW`, and the only implementation used to be zenavif's example, so
+  running the leg meant building inside a sibling checkout — which is why
+  `gate-recon`'s rav1d-safe leg was usually just left off. rav1d-safe is
+  already a dev-dependency here for the round-trip tests, so this costs
+  nothing extra. It decodes at `Decoder::new()`'s defaults, which since the
+  `66f58fa6` pin means `Strictness::Strict`; passing `Lenient` would conceal
+  exactly the desyncs these gates exist to catch. Both justfile recipes now
+  build it and wire `IVF_RAW` to it, so the leg is on by default instead of
+  opt-in. Verified byte-identical to zenavif's example and to
+  `aomdec --i420` on a corpus stream, and both gates re-run green through it
+  (54 recon cells, 141 corpus streams).
+
 ### Changed
 - **The `rav1d-safe` dev-dependency moved from `91bf0e30` to `66f58fa6`** (22
   commits), the rev zenavif and ravif already pin. This repo is where that

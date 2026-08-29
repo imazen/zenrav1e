@@ -12,9 +12,10 @@
 # Only the frame payload is compared -- each decoder writes its own y4m
 # header text (frame rate, chroma siting), which is not part of the pixels.
 #
-# A third leg decodes with rav1d-safe when `IVF_RAW` points at zenavif's
-# `ivf_raw` example (same convention as scripts/gate_recon.sh); it is skipped
-# when unset, since that binary lives in a sibling repo.
+# A third leg decodes with rav1d-safe when `IVF_RAW` points at an ivf_raw
+# binary (same convention as scripts/gate_recon.sh). `just
+# gate-sliver64-corpus` builds this repo's examples/ivf_raw and wires it, so
+# the leg is on by default; it is skipped only when a caller clears IVF_RAW.
 #
 # usage: scripts/sliver64_corpus_decode.sh <dump-dir>
 set -uo pipefail

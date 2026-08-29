@@ -7,15 +7,16 @@
 # Drives examples/recon_probe.rs over the pinned gate images (emitted by
 # examples/gate_identity.rs --emit-y4m, so recon and identity gates probe
 # identical content), then decodes each IVF with:
-#   - rav1d-safe, via zenavif's ivf_raw example (IVF_RAW), and/or
-#   - libaom's reference decoder (AOMDEC, `aomdec --rawvideo`),
+#   - rav1d-safe, via an ivf_raw binary (IVF_RAW) — this repo's
+#     examples/ivf_raw, which the justfile builds and wires by default, or
+#     zenavif's equivalent example, and/or
 # and byte-compares each decode against the encoder's own reconstruction.
 # Any difference is an encoder bug (the encoder optimized against a
 # reconstruction no conforming decoder produces).
 #
-# Decoder legs are env-selected — the CALLER decides what runs (justfile
-# defaults wire the rav1d-safe leg from the zenavif sibling checkout):
-#   IVF_RAW   path to zenavif's ivf_raw example        (leg skipped if unset)
+# Decoder legs are env-selected — the CALLER decides what runs (the justfile
+# builds examples/ivf_raw and wires the rav1d-safe leg to it):
+#   IVF_RAW   path to an ivf_raw binary                (leg skipped if unset)
 #   AOMDEC    path to aomdec                            (leg skipped if unset)
 # At least ONE leg is required; zero legs is a loud failure, never a pass.
 #
@@ -34,9 +35,9 @@ AOMDEC="${AOMDEC:-}"
 
 if [ -z "$IVF_RAW" ] && [ -z "$AOMDEC" ]; then
   echo "gate-recon: FATAL — no decoder leg configured." >&2
-  echo "  Set IVF_RAW=path/to/zenavif ivf_raw example (build it with:" >&2
-  echo "    cargo build --release --example ivf_raw   # in ../zenavif)" >&2
-  echo "  and/or AOMDEC=path/to/aomdec." >&2
+  echo "  Set IVF_RAW=path/to/ivf_raw (build it with:" >&2
+  echo "    cargo build --release --example ivf_raw)" >&2
+  echo "  and/or AOMDEC=path/to/aomdec. \`just gate-recon\` does both." >&2
   exit 2
 fi
 [ -n "$IVF_RAW" ] && [ ! -x "$IVF_RAW" ] && {

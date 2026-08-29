@@ -58,12 +58,16 @@ gate-identity-pin:
     cargo run --release --example gate_identity -- --pin
 
 # Gate A5: encoder recon byte-agrees with conforming decoders (the #32/#33
-# desync class). Local-only. Decoder legs are env-selected; the default
-# wires rav1d-safe via the zenavif sibling's ivf_raw example (build it
-# first: `cargo build --release --example ivf_raw` in ../zenavif), and
-# aomdec from PATH when present. At least one leg must resolve.
+# desync class). Local-only. Decoder legs are env-selected; the rav1d-safe
+# leg is this repo's own `examples/ivf_raw` (built here, decoding at
+# Decoder::new()'s Strict default), and aomdec comes from PATH when present.
+# At least one leg must resolve. IVF_RAW= overrides, e.g. to point at
+# zenavif's equivalent example.
 gate-recon:
-    IVF_RAW="${IVF_RAW:-{{justfile_directory()}}/../zenavif/target/release/examples/ivf_raw}" \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --example ivf_raw
+    IVF_RAW="${IVF_RAW:-{{justfile_directory()}}/target/release/examples/ivf_raw}" \
     AOMDEC="${AOMDEC:-$(command -v aomdec || true)}" \
     bash scripts/gate_recon.sh
 
@@ -77,21 +81,23 @@ gate-sliver64:
 
 # Gate A5, corpus half of zenrav1e#28: encode a real-image corpus in the
 # only configuration that reaches BLOCK_64X16/16X64 (top-down, 4..64
-# partition range, non-square threshold 64) and require aomdec AND dav1d --
-# plus rav1d-safe when IVF_RAW points at zenavif's ivf_raw example, the same
-# optional leg gate-recon uses -- to decode every stream byte-identically to
-# the encoder's own reconstruction.
+# partition range, non-square threshold 64) and require aomdec AND dav1d AND
+# rav1d-safe (this repo's `examples/ivf_raw`, the same leg gate-recon uses)
+# to decode every stream byte-identically to the encoder's own
+# reconstruction.
 # Needs a manifest of raw 8-bit RGB stills; see benchmarks/sliver64_rd_*.md
-# for the corpus recipe. Local-only (external decoders + corpus).
+# for the corpus recipe, and benchmarks/strict_decoder_corpus_2026-08-29.md
+# for the last full run. Local-only (external decoders + corpus).
 gate-sliver64-corpus manifest speed="2" qs="80,130,205":
     #!/usr/bin/env bash
     set -euo pipefail
     dump="${SLIVER64_RD_DUMP:-$HOME/tmp/sliver64-corpus}"
     rm -rf "$dump"
-    cargo build --release --example sliver64_rd
+    cargo build --release --example sliver64_rd --example ivf_raw
     SLIVER64_RD_DUMP="$dump" ./target/release/examples/sliver64_rd \
       "{{manifest}}" "{{speed}}" "{{qs}}" deep > "$dump.tsv"
-    IVF_RAW="${IVF_RAW:-}" bash scripts/sliver64_corpus_decode.sh "$dump"
+    IVF_RAW="${IVF_RAW:-{{justfile_directory()}}/target/release/examples/ivf_raw}" \
+      bash scripts/sliver64_corpus_decode.sh "$dump"
 
 # The CI-safe gate set (gate-recon and perf gates stay explicit local runs).
 gates: gate-identity gate-sliver64
