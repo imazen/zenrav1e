@@ -15,6 +15,19 @@
   window, same exhaustive-construction impact.
 
 ### Fixed
+- **The `Fuzz regression` CI job silently skipped itself when the corpus was
+  missing.** The step was wrapped in
+  `if [ -d fuzz/regression ] && [ "$(ls fuzz/regression/ | wc -l)" -gt 0 ]`,
+  so a missing or partial checkout skipped the whole suite and reported green —
+  a runtime self-skip invisible to the caller chain, which the repo rules
+  forbid. Unlike the sibling zen codecs this repo never had the `|| echo`
+  swallow, so a failing seed did already turn the job red; the hole was the
+  skip. The guard is gone (the harness asserts the corpus itself, making it
+  redundant), and the harness's `!entries.is_empty()` check is now a pinned
+  `>= MIN_SEEDS` (6) so a gutted corpus fails instead of replaying whatever
+  survived. Mutation-verified: cutting the corpus to one seed fails the count
+  assertion (the old `>0` check passed it), and a panic injected into
+  `replay_seed` fails the suite — both exit 101.
 - **`BLOCK_4X16` / `BLOCK_16X4` inter blocks no longer reconstruct their
   chroma from a single motion vector (4:2:0 chroma corruption).** In 4:2:0
   a block one 4-sample unit wide (or tall) shares one chroma block with

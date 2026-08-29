@@ -87,10 +87,17 @@ fn fuzz_regression_seeds_do_not_panic() {
     .collect();
   entries.sort();
 
+  // A count, not just non-empty: a partial checkout or a bulk delete that left
+  // one seed behind would otherwise still report a pass over a gutted corpus.
+  // Raise MIN_SEEDS when seeds are added; only lower it when deleting seeds on
+  // purpose.
+  const MIN_SEEDS: usize = 6;
   assert!(
-    !entries.is_empty(),
-    "fuzz/regression/ has no .bin seeds — at least the committed crash seeds \
-     should be present"
+    entries.len() >= MIN_SEEDS,
+    "fuzz/regression/ has {} .bin seeds, expected at least {MIN_SEEDS} — the \
+     committed crash seeds are missing or were renamed, and replaying a gutted \
+     corpus would still report a pass",
+    entries.len()
   );
 
   for path in entries {
