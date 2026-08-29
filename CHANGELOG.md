@@ -85,6 +85,17 @@
     neither.
 
 ### Fixed
+- **Pushes to `master` now cancel their superseded CI runs.** `ci.yml` keyed its
+  concurrency group on `${{ github.head_ref || github.run_id }}`.
+  `github.head_ref` is populated only for `pull_request` events, so on a push it
+  was empty and the group fell through to `github.run_id` — unique per run, so no
+  two pushes ever shared a group and `cancel-in-progress` could never fire. Every
+  push started a full matrix that ran to completion even when several commits
+  landed seconds apart. Now keyed on `${{ github.ref }}`, which is set for both
+  event types (`refs/heads/master` on push, `refs/pull/N/merge` on a PR), so PR
+  cancellation is unchanged and consecutive pushes supersede each other.
+  `fuzz.yml` keeps its deliberately separate `fuzz-${{ github.ref }}` group, so
+  the fuzz and CI workflows still never cancel one another.
 - **`scripts/gate_recon.sh` defaulted its scratch directory to `/tmp`.** The
   gate writes its y4m inputs, every probed IVF and every decoder's raw output
   under `$WORK`, and `/tmp` is wiped at unpredictable times on these dev
