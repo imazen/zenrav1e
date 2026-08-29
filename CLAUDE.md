@@ -101,8 +101,11 @@ differing chroma columns onto the 4-wide luma pairs. Gates:
 `encoder::test::chroma_sharing_matches_dav1d_sub8x8` (all 19 sizes vs the
 transcribed dav1d rule) and
 `inter_sliver_chroma_pairs_match_decoder` in `tests/sliver_64_tx_roundtrip.rs`
-(3 band layouts x q40/q60, 4 frames, rav1d-safe + aomdec). Both
-mutation-verified against the pre-fix test. Not reachable from the stock
+(4 frames, rav1d-safe + aomdec: 3 band layouts x q40/q60 at 256x256, one
+4:4:4 case pinning that the pair path stays off there, and 320x240 q100 +
+200x136 q200 for the partial superblocks at the frame edge, where the
+pre-fix encoder broke BOTH chroma planes). Both gates mutation-verified
+against the pre-fix test, the non-square sizes individually. Not reachable from the stock
 presets (speed >= 2 caps `non_square_partition_max_threshold` at
 BLOCK_8X8), reachable from zenavif/ravif widened thresholds on animated
 encodes -- the same reachability as the `has_tr` bug below.

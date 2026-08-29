@@ -299,7 +299,13 @@ fn luma_psnr(rec: &Plane<u8>, src: &[u8], w: usize, h: usize) -> f64 {
 }
 
 fn run(case: Case) {
-  let (w, h) = (256usize, 256usize);
+  run_dims(case, 256, 256);
+}
+
+/// `run` at an explicit frame size. Sizes that are not a multiple of the
+/// 64x64 superblock exercise the partial superblocks at the right/bottom
+/// edge, where the 4:1 sliver chroma pairs sit on the frame boundary.
+fn run_dims(case: Case, w: usize, h: usize) {
   let narrow = encode(case, w, h, BlockSize::BLOCK_8X8);
   let wide = encode(case, w, h, BlockSize::BLOCK_64X64);
   let narrow_bytes: usize = narrow.packets.iter().map(|p| p.0.len()).sum();
@@ -333,7 +339,7 @@ fn run(case: Case) {
       // `Bands` variants of an otherwise identical case overwrite each
       // other and the external-decoder sweep silently loses streams.
       let path = format!(
-        "{dir}/sliver64_{name}_{:?}_q{}_sel{}_f{}_split{}_{:?}.ivf",
+        "{dir}/sliver64_{name}_{w}x{h}_{:?}_q{}_sel{}_f{}_split{}_{:?}.ivf",
         case.chroma,
         case.q,
         case.tx_select,
@@ -362,7 +368,7 @@ fn assert_aomdec_matches_recon(
   let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
   std::fs::create_dir_all(dir).unwrap();
   let stem = format!(
-    "sliver64_{label}_{:?}_q{}_sel{}_f{}_split{}_{:?}",
+    "sliver64_{label}_{w}x{h}_{:?}_q{}_sel{}_f{}_split{}_{:?}",
     case.chroma,
     case.q,
     case.tx_select,
@@ -558,4 +564,28 @@ fn inter_sliver_chroma_pairs_match_decoder() {
     inter_tx_split: false,
     bands: Bands::Both,
   });
+  // Frame sizes that are not a multiple of the superblock: the partial
+  // superblocks at the right/bottom edge put sliver chroma pairs on the
+  // frame boundary. Pre-fix these failed in BOTH chroma planes (the
+  // 256x256 cases above only surfaced U), 5 of 15 configurations over
+  // {192x192, 240x176, 320x240, 200x130, 130x200} x q{40,100,200}.
+  // Frame sizes that are not a whole number of 64x64 superblocks: the
+  // partial superblocks at the right/bottom edge put the sliver chroma
+  // pairs on the frame boundary. Both cases are mutation-verified (they
+  // fail on the pre-fix `bsize < BLOCK_8X8` test), and pre-fix they broke
+  // BOTH chroma planes where the 256x256 cases above only surfaced U.
+  for (w, h, q) in [(320usize, 240usize, 100usize), (200, 136, 200)] {
+    run_dims(
+      Case {
+        chroma: ChromaSampling::Cs420,
+        q,
+        tx_select: false,
+        frames: 4,
+        inter_tx_split: false,
+        bands: Bands::Both,
+      },
+      w,
+      h,
+    );
+  }
 }
