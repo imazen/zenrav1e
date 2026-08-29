@@ -1,8 +1,15 @@
 name: Fuzz
 
 on:
+  # `master`, not `main`: this repo's default branch is `master` (ci.yml has
+  # always said so). Until 2026-08-29 this said `main`, a branch that does not
+  # exist here, so the push trigger never fired once — every "Fuzz" run in this
+  # repo's history came from the nightly schedule or a manual dispatch. That
+  # made the whole workflow, regression gate included, unable to report on the
+  # commit that broke it: a failure surfaced the next morning against `master`
+  # rather than against the push that caused it.
   push:
-    branches: [main]
+    branches: [master]
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:

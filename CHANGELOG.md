@@ -15,6 +15,13 @@
   window, same exhaustive-construction impact.
 
 ### Fixed
+- **The `Fuzz` workflow's push trigger named a branch that does not exist**, so
+  it never fired on a push. `on.push.branches` was `[main]` while this repo's
+  default branch is `master` (`ci.yml` has always said `master`). Every `Fuzz`
+  run in the repo's history therefore came from the nightly schedule or a manual
+  dispatch — including the `Fuzz regression` gate, which could only ever report
+  against whatever `master` looked like at 03:00 UTC, never against the push
+  that broke it. Now `[master]`.
 - **The `Fuzz regression` CI job silently skipped itself when the corpus was
   missing.** The step was wrapped in
   `if [ -d fuzz/regression ] && [ "$(ls fuzz/regression/ | wc -l)" -gt 0 ]`,
