@@ -4472,6 +4472,15 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     return rdo_output;
   }
 
+  // Poll the cancellation token once per partition node — a single 64x64
+  // superblock at slow speed tiers takes hundreds of ms, far past any
+  // acceptable check cadence. On fire the walk early-returns a partial
+  // (INVALID) result; the caller's propagating check discards it, so the
+  // partial walk never reaches the bitstream.
+  if fi.check_stop().is_err() {
+    return rdo_output;
+  }
+
   let is_square = bsize.is_sqr();
   let hbs = bsize.width_mi() / 2;
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
@@ -4775,6 +4784,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   parent_partition: PartitionType,
 ) {
   if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
+    return;
+  }
+  // Same per-node cadence as encode_partition_bottomup — the walk
+  // early-returns on fire and the caller's propagating check discards the
+  // partial result before it reaches the bitstream.
+  if fi.check_stop().is_err() {
     return;
   }
   let is_square = bsize.is_sqr();
@@ -5657,6 +5672,9 @@ fn encode_tile<'a, T: Pixel>(
           PartitionType::PARTITION_NONE,
         );
       }
+      // The partition walk early-returns a partial result on cancellation;
+      // propagate before its bookkeeping feeds the CDEF/LRU queues.
+      fi.check_stop()?;
 
       if fi.delta_q_present {
         // Advance the delta-q predictor exactly like a decoder: only if the
