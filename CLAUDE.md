@@ -122,6 +122,20 @@ Evidence for both claims and the rest of the `66f58fa6` bump:
 
 ## Known Bugs (Fixed)
 
+### Lossless skip and small sequence frames (2026-09-27)
+
+Quantizer zero did not guarantee exact source pixels for inter skip trials:
+weighted distortion could accept a one-code error (reproduced on 17×17 4:4:4,
+preset 6, reordered frame 2). Lossless skip now compares visible prediction to
+source exactly, including shared chroma and partial edges, before RD admission.
+Do not replace this check with weighted-distortion equality or zero lambda.
+Sequence dimensions now accept 1..65535, matching the still dimension domain;
+backend padding is not exposed as larger signaled dimensions. The regression
+`tests/small_video_roundtrip.rs` covers 1,044 configurations / 5,220 presentations
+at presets 2/6/10, lossless/lossy, low-latency/reordering, all AV1 depths/layouts.
+It passes with and without `scenechange`. Baseline identity pins are unchanged.
+See `benchmarks/small_video_2026-09-27.md` for exact gate scope and provenance.
+
 ### Sub-8 inter partitions and partial chroma distortion (2026-09-07)
 
 Forced 4x4 mono/444 inter partitions hit contradictory must-split/can-split
