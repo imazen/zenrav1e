@@ -40,7 +40,7 @@
 use std::io::Write as _;
 use std::process::ExitCode;
 
-use rav1d_safe::src::managed::{Decoder, Frame, PixelLayout, Planes};
+use rav1d_safe::{Decoder, Frame, PixelLayout, Planes};
 
 /// Feeds the whole input and returns the last frame decoded.
 ///
