@@ -823,7 +823,7 @@ pub struct QualityMetrics {
   pub ciede: Option<f64>,
   /// Aligned Peak Signal-to-Noise Ratio for Y, U, and V planes
   pub apsnr: Option<PlanarMetrics>,
-  /// Netflix's Video Multimethod Assessment Fusion
+  /// Video Multimethod Assessment Fusion (VMAF)
   pub vmaf: Option<f64>,
 }
 
