@@ -713,7 +713,7 @@ impl<const ENTRY_LEN: usize> CDFContextLogPartition<ENTRY_LEN> {
     // so an unconditional const assert here would fire for the
     // unreachable small-partition instantiations.)
     debug_assert!(CDF_LEN + 2 <= ENTRY_LEN);
-    debug_assert!(cdf.offset <= u16::MAX.into());
+    debug_assert!(cdf.offset <= <u16>::MAX.into());
     // SAFETY: Maintain an invariant of non-zero spare capacity, so that
     // branching may be deferred until writes are issued. Benchmarks indicate
     // this is faster than first testing capacity and possibly reallocating.
@@ -802,7 +802,7 @@ impl CDFContextLog {
             CDF_LEN_MAX + 2
           }
       );
-      assert!(size_of::<CDFContext>() <= u16::MAX as usize);
+      assert!(size_of::<CDFContext>() <= <u16>::MAX as usize);
     }
     if CDF_LEN <= CDF_LEN_SMALL {
       self.small.push(fc, cdf)
