@@ -121,5 +121,12 @@ miri:
 
 # Separate builds: compiled ARM assembly versus default Rust fallback.
 arm-tiers-macos features="threading":
-    mkdir -p "$HOME/tmp"
-    CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 TMPDIR="$HOME/tmp" nice -n 19 /usr/bin/time -l cargo bench --locked -p zenrav1e --bench tier_isolation --features {{features}} -- --format=llm > "$HOME/tmp/zenrav1e-arm-{{features}}.log" 2>&1
+    #!/usr/bin/env bash
+    set -euo pipefail
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    artifact_dir="$HOME/tmp/zenrav1e-arm-{{features}}-$stamp"
+    log="$HOME/tmp/zenrav1e-arm-{{features}}-$stamp.log"
+    mkdir -p "$artifact_dir"
+    ZENRAV1E_BENCH_ARTIFACT_DIR="$artifact_dir" CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 TMPDIR="$HOME/tmp" \
+      nice -n 19 /usr/bin/time -l cargo bench -p zenrav1e --bench tier_isolation --features {{features}} -- --cpu-policy=unrestricted --format=llm > "$log" 2>&1
+    printf 'Benchmark log: %s\nBitstreams: %s\n' "$log" "$artifact_dir"

@@ -123,8 +123,12 @@ fn bench_encode(suite: &mut Suite) {
     let planes = synth(w, h);
     let packet = encode_once(w, h, &planes, 8);
     verify_recon(&packet, w, h);
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("../../codec-artifacts/zenrav1e-arm-audit");
+    let root = std::env::var_os("ZENRAV1E_BENCH_ARTIFACT_DIR")
+      .map(std::path::PathBuf::from)
+      .unwrap_or_else(|| {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+          .join("../../codec-artifacts/zenrav1e-arm-audit")
+      });
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join(format!("{label}-{arm}.obu")), &packet.data)
       .unwrap();
