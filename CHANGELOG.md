@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Reject lossless inter skip candidates unless every visible predicted sample exactly equals the source; a small weighted error must not beat an exact residual. This fixes one-code errors on reordered 17×17 4:4:4 edges.
+- Accept 1–15-pixel sequence dimensions, with strict decode/reconstruction coverage through 1×1 across 8/10/12-bit and all chroma layouts.
 - Preserve visible shared-chroma error and partial weighted-SSE chunks at frame edges; permit forced 4x4 inter partitions for monochrome and 4:4:4. See `benchmarks/sub8_inter_2026-09-07.md`.
 - Preserve exact lossless WHT coefficients when trellis is requested, covering both still and sequence encoding. Source-exact decoder regression spans 8/10/12-bit and monochrome/420/444.
 
