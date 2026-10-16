@@ -318,3 +318,11 @@ Recommended config:
 - **Quality priority**: `enable_qm: true` + force `rdo_tx_decision: true`
   (-10.3% BD-Rate, ~3x encode time)
 - Everything else default/off.
+
+### Partition cancellation propagation (PR #43 review)
+
+The bottom-up and top-down walks return `Result` all the way to `encode_tile`.
+A token may fail only once, so discarding its error and polling again can let
+an incomplete partition walk continue. `tests/partition_cancellation.rs` tests
+both walks with one-shot failures. The CI identity subset and 54-cell recon
+gate passed before and after this change with rav1d-safe and aomdec.
