@@ -35,7 +35,7 @@ pub use crate::tiling::TilingInfo;
 /// [`Config::new_context`], the channel constructors, [`Config::tiling_info`]).
 ///
 /// The error is a bare [`InvalidConfig`]: each variant names the exact setting
-/// it rejected (e.g. `InvalidWidth(8)`), so it is self-describing and a stack
+/// it rejected (e.g. `InvalidWidth(0)`), so it is self-describing and a stack
 /// trace would only point back into `validate()` — which the variant already
 /// implies. Errors whose origin is genuinely non-obvious carry a [`whereat`]
 /// `At<>` instead: see [`RateControlError`] (a summary-parsing error). The hot
@@ -47,10 +47,10 @@ pub type ConfigResult<T> = Result<T, InvalidConfig>;
 #[non_exhaustive]
 pub enum InvalidConfig {
   /// The width is invalid.
-  #[error("invalid width {0} (expected >= 16, <= 65535)")]
+  #[error("invalid width {0} (expected >= 1, <= 65535)")]
   InvalidWidth(usize),
   /// The height is invalid.
-  #[error("invalid height {0} (expected >= 16, <= 65535)")]
+  #[error("invalid height {0} (expected >= 1, <= 65535)")]
   InvalidHeight(usize),
   /// Aspect ratio numerator is invalid.
   #[error("invalid aspect ratio numerator {0} (expected > 0)")]
@@ -404,16 +404,10 @@ impl Config {
       return Err(InvalidBitDepth(config.bit_depth));
     }
 
-    if (config.still_picture && config.width < 1)
-      || (!config.still_picture && config.width < 16)
-      || config.width > u16::MAX as usize
-    {
+    if config.width < 1 || config.width > u16::MAX as usize {
       return Err(InvalidWidth(config.width));
     }
-    if (config.still_picture && config.height < 1)
-      || (!config.still_picture && config.height < 16)
-      || config.height > u16::MAX as usize
-    {
+    if config.height < 1 || config.height > u16::MAX as usize {
       return Err(InvalidHeight(config.height));
     }
 

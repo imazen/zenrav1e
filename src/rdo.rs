@@ -269,6 +269,48 @@ pub const fn clip_visible_bsize(
   (visible_w, visible_h)
 }
 
+// Lossless skip is legal only when the visible prediction already equals the
+// source. A weighted perceptual cost can round a one-code error to zero, and
+// even a nonzero small error can be cheaper than coding its residual. Neither
+// is admissible for an explicit lossless request. Padding is not source data.
+fn prediction_matches_source<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
+  is_chroma_block: bool, tile_bo: TileBlockOffset,
+) -> bool {
+  let count = if is_chroma_block
+    && fi.sequence.chroma_sampling != ChromaSampling::Cs400
+  {
+    3
+  } else {
+    1
+  };
+  let area = Area::BlockStartingAt { bo: tile_bo.0 };
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
+  for p in 0..count {
+    let cfg = &ts.input.planes[p].cfg;
+    let origin = frame_bo.plane_offset(cfg);
+    let plane_bsize = bsize.subsampled_size(cfg.xdec, cfg.ydec).unwrap();
+    let (w, h) = clip_visible_bsize(
+      (fi.width + cfg.xdec) >> cfg.xdec,
+      (fi.height + cfg.ydec) >> cfg.ydec,
+      plane_bsize,
+      origin.x as usize,
+      origin.y as usize,
+    );
+    if w == 0 || h == 0 {
+      continue;
+    }
+    let input = ts.input_tile.planes[p].subregion(area);
+    let rec = ts.rec.planes[p].subregion(area);
+    for (input, rec) in input.rows_iter().zip(rec.rows_iter()).take(h) {
+      if input[..w] != rec[..w] {
+        return false;
+      }
+    }
+  }
+  true
+}
+
 // Compute the pixel-domain distortion for an encode
 fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
@@ -1133,6 +1175,20 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           None,
           PartitionType::PARTITION_NONE,
         );
+
+        if skip
+          && fi.is_lossless()
+          && !prediction_matches_source(
+            fi,
+            ts,
+            bsize,
+            is_chroma_block,
+            tile_bo,
+          )
+        {
+          cw.rollback(cw_checkpoint);
+          continue;
+        }
 
         let rate = wr.tell_frac() - tell;
         let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
