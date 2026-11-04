@@ -84,7 +84,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub frame: Arc<Frame<T>>,
   pub input_hres: Arc<Plane<T>>,
   pub input_qres: Arc<Plane<T>>,
-  pub cdfs: CDFContext,
+  pub cdfs: Box<CDFContext>,
   pub frame_me_stats: RefMEStats,
   pub output_frameno: u64,
   pub segmentation: SegmentationState,
@@ -736,7 +736,7 @@ pub struct FrameState<T: Pixel> {
   pub input_hres: Arc<Plane<T>>, // half-resolution version of input luma
   pub input_qres: Arc<Plane<T>>, // quarter-resolution version of input luma
   pub rec: Arc<Frame<T>>,
-  pub cdfs: CDFContext,
+  pub cdfs: Box<CDFContext>,
   pub context_update_tile_id: usize, // tile id used for the CDFontext
   pub max_tile_size_bytes: u32,
   pub deblock: DeblockState,
@@ -779,7 +779,7 @@ impl<T: Pixel> FrameState<T> {
       input_hres: Arc::new(hres),
       input_qres: Arc::new(qres),
       rec,
-      cdfs: CDFContext::new(0),
+      cdfs: Box::new(CDFContext::new(0)),
       context_update_tile_id: 0,
       max_tile_size_bytes: 0,
       deblock: Default::default(),
@@ -810,7 +810,7 @@ impl<T: Pixel> FrameState<T> {
         luma_height,
         fi.sequence.chroma_sampling,
       )),
-      cdfs: CDFContext::new(0),
+      cdfs: Box::new(CDFContext::new(0)),
       context_update_tile_id: 0,
       max_tile_size_bytes: 0,
       deblock: Default::default(),
@@ -5283,17 +5283,17 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   }
 }
 
-fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
+fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> Box<CDFContext> {
   let cdf = if fi.primary_ref_frame == PRIMARY_REF_NONE {
     None
   } else {
     let ref_frame_idx = fi.ref_frames[fi.primary_ref_frame as usize] as usize;
     let ref_frame = fi.rec_buffer.frames[ref_frame_idx].as_ref();
-    ref_frame.map(|rec| rec.cdfs)
+    ref_frame.map(|rec| rec.cdfs.clone())
   };
 
   // return the retrieved instance if any, a new one otherwise
-  cdf.unwrap_or_else(|| CDFContext::new(fi.base_q_idx))
+  cdf.unwrap_or_else(|| Box::new(CDFContext::new(fi.base_q_idx)))
 }
 
 #[profiling::function]
@@ -5315,7 +5315,7 @@ fn encode_tile_group<T: Pixel>(
 
   let initial_cdf = get_initial_cdfcontext(fi);
   // dynamic allocation: once per frame
-  let mut cdfs = vec![initial_cdf; ti.tile_count()];
+  let mut cdfs = vec![*initial_cdf; ti.tile_count()];
 
   let (raw_tiles, stats): (Vec<_>, Vec<_>) = ti
     .tile_iter_mut(fs, &mut blocks)
@@ -5410,7 +5410,7 @@ fn encode_tile_group<T: Pixel>(
   if !fi.disable_frame_end_update_cdf {
     // use the biggest tile (in bytes) for CDF update
     fs.context_update_tile_id = idx_max;
-    fs.cdfs = cdfs[idx_max];
+    *fs.cdfs = cdfs[idx_max];
     fs.cdfs.reset_counts();
   }
 
@@ -5981,7 +5981,7 @@ pub fn update_rec_buffer<T: Pixel>(
     frame: fs.rec.clone(),
     input_hres: fs.input_hres.clone(),
     input_qres: fs.input_qres.clone(),
-    cdfs: fs.cdfs,
+    cdfs: fs.cdfs.clone(),
     frame_me_stats: fs.frame_me_stats.clone(),
     output_frameno,
     segmentation: fs.segmentation,
