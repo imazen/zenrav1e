@@ -89,7 +89,12 @@ impl Crc32c {
   const POLY: u32 = 0x82F6_3B78;
 
   fn new() -> Self {
-    let mut table = Box::new([[0u32; 256]; 8]);
+    // Heap-first: `Box::new([[0; 256]; 8])` would materialize the 8 KiB
+    // table on the stack before copying it to the heap.
+    let mut table: Box<[[u32; 256]; 8]> = vec![[0u32; 256]; 8]
+      .into_boxed_slice()
+      .try_into()
+      .unwrap_or_else(|_| unreachable!());
     for n in 0..256u32 {
       let mut crc = n;
       for _ in 0..8 {
