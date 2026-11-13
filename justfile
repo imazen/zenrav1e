@@ -76,7 +76,8 @@ gate-recon:
     #!/usr/bin/env bash
     set -euo pipefail
     cargo build --release --example ivf_raw
-    IVF_RAW="${IVF_RAW:-{{justfile_directory()}}/target/release/examples/ivf_raw}" \
+    gate_recon_target="${CARGO_TARGET_DIR:-{{justfile_directory()}}/target}"
+    IVF_RAW="${IVF_RAW:-$gate_recon_target/release/examples/ivf_raw}" \
     AOMDEC="${AOMDEC:-$(command -v aomdec || true)}" \
     bash scripts/gate_recon.sh
 

@@ -26,6 +26,11 @@
 # coverage rides the s2/s6 presets (prediction_modes >= ComplexKeyframes).
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GATE_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+case "$GATE_TARGET_DIR" in
+  /*) ;;
+  *) GATE_TARGET_DIR="$ROOT/$GATE_TARGET_DIR" ;;
+esac
 # Scratch under $HOME/tmp, not /tmp: /tmp is wiped at unpredictable times on
 # these dev boxes, and this script writes the y4m inputs, the IVFs and every
 # decoder's raw output there. Override with WORK=<dir>.
@@ -55,11 +60,15 @@ echo "[gate-recon] legs: rav1d-safe=$leg_r aomdec=$leg_a"
 
 cargo build --release --example recon_probe --example gate_identity \
   || exit 2
-PROBE="$ROOT/target/release/examples/recon_probe"
-GATEID="$ROOT/target/release/examples/gate_identity"
+PROBE="$GATE_TARGET_DIR/release/examples/recon_probe"
+GATEID="$GATE_TARGET_DIR/release/examples/gate_identity"
 
+if [ -e "$WORK" ]; then
+  echo "gate-recon: FATAL — WORK must be a fresh path: $WORK" >&2
+  exit 2
+fi
 mkdir -p "$WORK"
-trap 'rm -rf "$WORK"' EXIT
+echo "[gate-recon] retaining all cell artifacts in $WORK"
 "$GATEID" --emit-y4m "$WORK/y4m" > /dev/null || exit 2
 
 # image -> "w h" (must match examples/gate_identity.rs generators)
@@ -84,31 +93,33 @@ for img in photo screen mixed; do
         read -r cdef lrf <<< "$filt"
         cells=$((cells + 1))
         tag="$img/s$s/q$q/cdef$cdef-lrf$lrf"
-        ivf="$WORK/c.ivf"; recon="$WORK/c.y4m"
+        cell="$WORK/cells/$tag"
+        mkdir -p "$cell"
+        ivf="$cell/c.ivf"; recon="$cell/c.y4m"
         if ! "$PROBE" "$WORK/y4m/$img.y4m" "$ivf" "$recon" \
-          "$q" "$s" "$cdef" "$lrf" 2> /dev/null; then
+          "$q" "$s" "$cdef" "$lrf" > "$cell/probe.log" 2>&1; then
           echo "RECONFAIL $tag probe-error"; fail=$((fail + 1)); continue
         fi
-        tail -c "$paylen" "$recon" > "$WORK/recon.raw"
-        rmd5=$(md5sum < "$WORK/recon.raw" | cut -d' ' -f1)
+        tail -c "$paylen" "$recon" > "$cell/recon.raw"
+        rmd5=$(md5sum < "$cell/recon.raw" | cut -d' ' -f1)
         if [ -n "$IVF_RAW" ]; then
-          if ! "$IVF_RAW" "$ivf" "$WORK/rav1d.raw" > /dev/null 2>&1; then
+          if ! "$IVF_RAW" "$ivf" "$cell/rav1d.raw" > "$cell/rav1d.log" 2>&1; then
             echo "RECONFAIL $tag rav1d-decode-error"; fail=$((fail + 1))
             continue
           fi
-          dmd5=$(md5sum < "$WORK/rav1d.raw" | cut -d' ' -f1)
+          dmd5=$(md5sum < "$cell/rav1d.raw" | cut -d' ' -f1)
           if [ "$rmd5" != "$dmd5" ]; then
             echo "RECONFAIL $tag recon!=rav1d-safe"; fail=$((fail + 1))
             continue
           fi
         fi
         if [ -n "$AOMDEC" ]; then
-          if ! "$AOMDEC" --rawvideo -o "$WORK/aom.raw" "$ivf" \
-            > /dev/null 2>&1; then
+          if ! "$AOMDEC" --rawvideo -o "$cell/aom.raw" "$ivf" \
+            > "$cell/aom.log" 2>&1; then
             echo "RECONFAIL $tag aomdec-rejects"; fail=$((fail + 1))
             continue
           fi
-          amd5=$(md5sum < "$WORK/aom.raw" | cut -d' ' -f1)
+          amd5=$(md5sum < "$cell/aom.raw" | cut -d' ' -f1)
           if [ "$rmd5" != "$amd5" ]; then
             echo "RECONFAIL $tag recon!=aomdec"; fail=$((fail + 1))
             continue

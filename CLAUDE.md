@@ -331,3 +331,10 @@ The decision trace is byte-identical for this witness. This fixes the example's
 color interpretation, not native encoder RD policy. Old PPM-generated IVF
 outputs retain their original range flag and need correct interpretation before
 reuse in perceptual scoring; existing records are preserved.
+
+
+The reconstruction gate now honors CARGO_TARGET_DIR and requires a fresh WORK
+path. It preserves every cell's IVF, encoder reconstruction, independent raw
+decodes and logs. It no longer overwrites prior cells or deletes WORK on exit.
+The unchanged 54-cell grid passes with both strict rav1d-safe and aomdec after
+this harness repair. Existing numerical and identity expectations are unchanged.

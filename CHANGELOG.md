@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Retain every reconstruction-gate cell and decoder log, refuse reused output directories, and honor CARGO_TARGET_DIR for the gate binaries.
 - Signal full-range AV1 samples in the cooptloop trace example, matching its PPM conversion and synthetic source; independently check the emitted range and full decode.
 - Preserve visible shared-chroma error and partial weighted-SSE chunks at frame edges; permit forced 4x4 inter partitions for monochrome and 4:4:4. See `benchmarks/sub8_inter_2026-09-07.md`.
 - Preserve exact lossless WHT coefficients when trellis is requested, covering both still and sequence encoding. Source-exact decoder regression spans 8/10/12-bit and monochrome/420/444.
