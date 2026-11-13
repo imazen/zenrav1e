@@ -60,7 +60,7 @@ fn main() {
 
   let mut args = std::env::args().skip(1);
   let out = args.next().unwrap_or_else(|| {
-    eprintln!("usage: cooptloop_trace_dump OUT.tsv [INPUT.png] [--speed N] [--quantizer N]");
+    eprintln!("usage: cooptloop_trace_dump OUT.tsv [INPUT.ppm] [--speed N] [--quantizer N]");
     std::process::exit(2);
   });
   let mut input: Option<String> = None;
@@ -154,6 +154,8 @@ fn main() {
     height: h,
     bit_depth: 8,
     chroma_sampling: ChromaSampling::Cs420,
+    // PPM conversion and synthetic samples both use full-range code values.
+    pixel_range: PixelRange::Full,
     still_picture: true,
     low_latency: true,
     quantizer,

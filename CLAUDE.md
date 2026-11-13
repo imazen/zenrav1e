@@ -318,3 +318,16 @@ Recommended config:
 - **Quality priority**: `enable_qm: true` + force `rdo_tx_decision: true`
   (-10.3% BD-Rate, ~3x encode time)
 - Everything else default/off.
+
+
+## Known bugs: trace example range signaling (fixed 2026-11-13)
+
+`cooptloop_trace_dump` converts PPM with full-range BT.601 and synthesizes
+full-range code values, but inherited limited-range signaling. The example now
+sets PixelRange::Full. `just trace-range-check <fresh-dir>` checks a real 16x16
+black/white PPM encode through ffprobe and a full independent ffmpeg decode.
+The failing-first control reports `tv`; the repaired output reports `pc`.
+The decision trace is byte-identical for this witness. This fixes the example's
+color interpretation, not native encoder RD policy. Old PPM-generated IVF
+outputs retain their original range flag and need correct interpretation before
+reuse in perceptual scoring; existing records are preserved.

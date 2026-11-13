@@ -130,3 +130,12 @@ arm-tiers-macos features="threading":
     ZENRAV1E_BENCH_ARTIFACT_DIR="$artifact_dir" CARGO_BUILD_JOBS=4 RAYON_NUM_THREADS=4 OMP_NUM_THREADS=4 TMPDIR="$HOME/tmp" \
       nice -n 19 /usr/bin/time -l cargo bench -p zenrav1e --bench tier_isolation --features {{features}} -- --cpu-policy=unrestricted --format=llm > "$log" 2>&1
     printf 'Benchmark log: %s\nBitstreams: %s\n' "$log" "$artifact_dir"
+
+
+# Independent AV1 range signaling and full decode; output must be fresh.
+trace-range-check out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --locked --example cooptloop_trace_dump --features cooptloop_trace
+    trace_target_dir="${CARGO_TARGET_DIR:-target}"
+    python3 scripts/check_trace_range.py "$trace_target_dir/debug/examples/cooptloop_trace_dump" {{quote(out)}}
