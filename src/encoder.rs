@@ -5283,7 +5283,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   }
 }
 
-fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> Box<CDFContext> {
+fn get_initial_cdfcontext<T: Pixel>(
+  fi: &FrameInvariants<T>,
+) -> Box<CDFContext> {
   let cdf = if fi.primary_ref_frame == PRIMARY_REF_NONE {
     None
   } else {
