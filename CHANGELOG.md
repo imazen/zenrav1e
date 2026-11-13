@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Preserve the intraBC predicate while satisfying Rust 1.100 needless_bool; unchanged identity pins and reconstruction gates pass.
+
 ### Fixed
 - Retain every reconstruction-gate cell and decoder log, refuse reused output directories, and honor CARGO_TARGET_DIR for the gate binaries.
 - Signal full-range AV1 samples in the cooptloop trace example, matching its PPM conversion and synthetic source; independently check the emitted range and full decode.

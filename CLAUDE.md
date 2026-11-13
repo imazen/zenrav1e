@@ -338,3 +338,5 @@ path. It preserves every cell's IVF, encoder reconstruction, independent raw
 decodes and logs. It no longer overwrites prior cells or deletes WORK on exit.
 The unchanged 54-cell grid passes with both strict rav1d-safe and aomdec after
 this harness repair. Existing numerical and identity expectations are unchanged.
+
+Validation 2026-11-13: before and after the equivalent intraBC predicate rewrite, identity CI matched all 18 pinned cells and passed 80 arms; reconstruction passed all 54 cells with rav1d-safe and aomdec. Rust 1.100 all-target workspace clippy passed. Artifacts retained outside the repository.
