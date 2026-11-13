@@ -4458,7 +4458,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, ref_rd_cost: f64,
   inter_cfg: &InterConfig, enc_stats: &mut EncoderStats,
-) -> PartitionGroupParameters {
+) -> Result<PartitionGroupParameters, EncoderStatus> {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = f64::MAX;
   let mut best_rd = f64::MAX;
@@ -4469,8 +4469,14 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   };
 
   if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
-    return rdo_output;
+    return Ok(rdo_output);
   }
+
+  // Poll the cancellation token once per partition node — a single 64x64
+  // superblock at slow speed tiers takes hundreds of ms, far past any
+  // acceptable check cadence. Propagate rather than early-return: the
+  // partial (INVALID) result must never reach the bitstream.
+  fi.check_stop()?;
 
   let is_square = bsize.is_sqr();
   let hbs = bsize.width_mi() / 2;
@@ -4652,7 +4658,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           best_rd,
           inter_cfg,
           enc_stats,
-        );
+        )?;
         let cost = child_rdo_output.rd_cost;
         assert!(cost >= 0.0);
 
@@ -4754,7 +4760,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   if best_partition != PartitionType::PARTITION_NONE {
     rdo_output.part_modes.clear();
   }
-  rdo_output
+  Ok(rdo_output)
 }
 
 fn encode_partition_topdown<T: Pixel, W: Writer>(
@@ -4773,10 +4779,11 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   // superblock, where there is no enclosing split). See
   // `encode_block_post_cdef`'s doc comment (zenrav1e#27).
   parent_partition: PartitionType,
-) {
+) -> Result<(), EncoderStatus> {
   if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
-    return;
+    return Ok(());
   }
+  fi.check_stop()?;
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
   let hbs = bsize.width_mi() / 2;
@@ -5174,7 +5181,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             inter_cfg,
             enc_stats,
             partition,
-          );
+          )?;
         }
       } else {
         debug_assert!(must_split);
@@ -5197,7 +5204,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         ];
         let partitions = get_sub_partitions(&four_partitions, partition);
 
-        partitions.iter().for_each(|&offset| {
+        partitions.iter().try_for_each(|&offset| {
           encode_partition_topdown(
             fi,
             ts,
@@ -5212,8 +5219,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             // Always PARTITION_SPLIT here (see `debug_assert!(must_split)`
             // above; `must_split` only ever selects SPLIT).
             partition,
-          );
-        });
+          )
+        })?;
       }
     }
     _ => unreachable!(),
@@ -5281,6 +5288,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       }
     }
   }
+
+  Ok(())
 }
 
 fn get_initial_cdfcontext<T: Pixel>(
@@ -5642,7 +5651,7 @@ fn encode_tile<'a, T: Pixel>(
           f64::MAX,
           inter_cfg,
           &mut enc_stats,
-        );
+        )?;
       } else {
         encode_partition_topdown(
           fi,
@@ -5657,7 +5666,7 @@ fn encode_tile<'a, T: Pixel>(
           &mut enc_stats,
           // Top of the superblock: no enclosing split.
           PartitionType::PARTITION_NONE,
-        );
+        )?;
       }
 
       if fi.delta_q_present {
